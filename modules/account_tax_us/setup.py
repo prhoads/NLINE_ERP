@@ -72,7 +72,7 @@ setup(name=name,
     package_data={
         'trytond.modules.account_tax_us': (info.get('xml', [])
             + ['tryton.cfg', 'view/*.xml', 'locale/*.po', 'tests/*.rst',
-                'tests/*.csv']),
+                'tests/*.csv', 'tests/*.txt']),
         },
     classifiers=[
         'Development Status :: 5 - Production/Stable',
