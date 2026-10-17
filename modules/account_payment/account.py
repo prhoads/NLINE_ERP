@@ -136,7 +136,10 @@ class MoveLine(metaclass=PoolMeta):
             .join(account_type, condition=account.type == account_type.id)
             .select(table.id,
                 where=(account_type.payable | account_type.receivable),
-                group_by=(table.id, table.second_currency),
+                # Columns functionally dependent on id are grouped for
+                # databases without this feature
+                group_by=(table.id, table.second_currency,
+                    table.credit, table.debit, table.amount_second_currency),
                 having=Operator(amount, value)
                 ))
         return [('id', 'in', query)]

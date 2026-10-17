@@ -1185,7 +1185,9 @@ class Origin(origin_mixin(_states), ModelSQL, ModelView):
             .select(table.id,
                 having=Operator(
                     table.amount - Coalesce(Sum(line.amount), 0), value),
-                group_by=table.id))
+                # amount is functionally dependent on id but grouped for
+                # databases without this feature
+                group_by=[table.id, table.amount]))
         return [('id', 'in', query)]
 
     @classmethod
