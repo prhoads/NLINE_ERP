@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data grouped="1">
+        <record model="ir.message" id="msg_threshold_unique">
+            <field name="text">Only one threshold is allowed by box and year.</field>
+        </record>
+        <record model="ir.message" id="msg_amount_unique">
+            <field name="text">Only one 1099 amount is allowed by recipient, box and year.</field>
+        </record>
+        <record model="ir.message" id="msg_payer_tin_missing">
+            <field name="text">To file Forms 1099, you must add an Employer Identification Number to the party of company "%(company)s".</field>
+        </record>
+        <record model="ir.message" id="msg_tin_missing">
+            <field name="text">To file Form 1099, you must add a taxpayer identification number (EIN, SSN, ITIN or ATIN) to party "%(party)s".</field>
+        </record>
+        <record model="ir.message" id="msg_tin_invalid">
+            <field name="text">The taxpayer identification number of party "%(party)s" must have 9 digits.</field>
+        </record>
+        <record model="ir.message" id="msg_address_missing">
+            <field name="text">To file Form 1099, you must set a complete address (street, city and postal code) on party "%(party)s".</field>
+        </record>
+    </data>
+</tryton>

@@ -1,0 +1,244 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data>
+        <record model="ir.ui.view" id="account_view_form">
+            <field name="model">account.account</field>
+            <field name="inherit" ref="account.account_view_form"/>
+            <field name="name">account_form</field>
+        </record>
+        <record model="ir.ui.view" id="party_view_form">
+            <field name="model">party.party</field>
+            <field name="inherit" ref="party.party_view_form"/>
+            <field name="name">party_form</field>
+        </record>
+
+        <menuitem
+            name="Forms 1099"
+            parent="account.menu_reporting"
+            sequence="60"
+            id="menu_us_1099"/>
+
+        <record model="ir.ui.view" id="amount_view_form">
+            <field name="model">account.us.1099</field>
+            <field name="type">form</field>
+            <field name="name">amount_form</field>
+        </record>
+        <record model="ir.ui.view" id="amount_view_list">
+            <field name="model">account.us.1099</field>
+            <field name="type">tree</field>
+            <field name="name">amount_list</field>
+        </record>
+        <record model="ir.action.act_window" id="act_amount_form">
+            <field name="name">1099 Amounts</field>
+            <field name="res_model">account.us.1099</field>
+            <field name="domain"
+                eval="[('company', '=', Eval('context', {}).get('company', -1))]"
+                pyson="1"/>
+        </record>
+        <record model="ir.action.act_window.view" id="act_amount_form_view1">
+            <field name="sequence" eval="10"/>
+            <field name="view" ref="amount_view_list"/>
+            <field name="act_window" ref="act_amount_form"/>
+        </record>
+        <record model="ir.action.act_window.view" id="act_amount_form_view2">
+            <field name="sequence" eval="20"/>
+            <field name="view" ref="amount_view_form"/>
+            <field name="act_window" ref="act_amount_form"/>
+        </record>
+        <menuitem
+            parent="menu_us_1099"
+            action="act_amount_form"
+            sequence="20"
+            id="menu_amount_form"/>
+        <record model="ir.ui.view" id="compute_start_view_form">
+            <field name="model">account.us.1099.compute.start</field>
+            <field name="type">form</field>
+            <field name="name">compute_start_form</field>
+        </record>
+        <record model="ir.action.wizard" id="wizard_compute">
+            <field name="name">Compute 1099 Amounts</field>
+            <field name="wiz_name">account.us.1099.compute</field>
+        </record>
+        <record model="ir.action-res.group" id="wizard_compute_group_account_admin">
+            <field name="action" ref="wizard_compute"/>
+            <field name="group" ref="account.group_account_admin"/>
+        </record>
+        <menuitem
+            parent="menu_us_1099"
+            action="wizard_compute"
+            sequence="10"
+            id="menu_compute"/>
+        <record model="ir.ui.view" id="export_start_view_form">
+            <field name="model">account.us.1099.export.start</field>
+            <field name="type">form</field>
+            <field name="name">export_start_form</field>
+        </record>
+        <record model="ir.ui.view" id="export_result_view_form">
+            <field name="model">account.us.1099.export.result</field>
+            <field name="type">form</field>
+            <field name="name">export_result_form</field>
+        </record>
+        <record model="ir.action.wizard" id="wizard_export">
+            <field name="name">Export 1099 for IRIS</field>
+            <field name="wiz_name">account.us.1099.export</field>
+        </record>
+        <record model="ir.action-res.group" id="wizard_export_group_account_admin">
+            <field name="action" ref="wizard_export"/>
+            <field name="group" ref="account.group_account_admin"/>
+        </record>
+        <menuitem
+            parent="menu_us_1099"
+            action="wizard_export"
+            sequence="30"
+            id="menu_export"/>
+        <record model="ir.action.report" id="report_recipient">
+            <field name="name">Form 1099 Copy B</field>
+            <field name="model">account.us.1099</field>
+            <field name="report_name">account.us.1099.recipient</field>
+            <field name="extension">pdf</field>
+            <field name="template_extension">odt</field>
+        </record>
+        <record model="ir.action.keyword" id="report_recipient_keyword">
+            <field name="keyword">form_print</field>
+            <field name="model">account.us.1099,-1</field>
+            <field name="action" ref="report_recipient"/>
+        </record>
+
+        <record model="ir.ui.view" id="threshold_view_list">
+            <field name="model">account.us.1099.threshold</field>
+            <field name="type">tree</field>
+            <field name="name">threshold_list</field>
+        </record>
+        <record model="ir.action.act_window" id="act_threshold_form">
+            <field name="name">1099 Thresholds</field>
+            <field name="res_model">account.us.1099.threshold</field>
+        </record>
+        <record model="ir.action.act_window.view" id="act_threshold_form_view1">
+            <field name="sequence" eval="10"/>
+            <field name="view" ref="threshold_view_list"/>
+            <field name="act_window" ref="act_threshold_form"/>
+        </record>
+        <menuitem
+            parent="account.menu_account_configuration"
+            action="act_threshold_form"
+            sequence="60"
+            id="menu_threshold_form"/>
+
+        <record model="ir.model.access" id="access_amount">
+            <field name="model" search="[('model', '=', 'account.us.1099')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_amount_account_admin">
+            <field name="model" search="[('model', '=', 'account.us.1099')]"/>
+            <field name="group" ref="account.group_account_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_threshold">
+            <field name="model" search="[('model', '=', 'account.us.1099.threshold')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_threshold_account_admin">
+            <field name="model" search="[('model', '=', 'account.us.1099.threshold')]"/>
+            <field name="group" ref="account.group_account_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+
+        <record model="ir.rule.group" id="rule_group_amount_companies">
+            <field name="name">User in companies</field>
+            <field name="model" search="[('model', '=', 'account.us.1099')]"/>
+            <field name="global_p" eval="True"/>
+        </record>
+        <record model="ir.rule" id="rule_amount_companies">
+            <field name="domain"
+                eval="[('company', 'in', Eval('companies', []))]"
+                pyson="1"/>
+            <field name="rule_group" ref="rule_group_amount_companies"/>
+        </record>
+    </data>
+    <data noupdate="1">
+        <record model="account.us.1099.threshold" id="threshold_nec_1_2000">
+            <field name="box">nec_1</field>
+            <field name="start_year" eval="2000"/>
+            <field name="amount" eval="Decimal('600')"/>
+        </record>
+        <record model="account.us.1099.threshold" id="threshold_nec_1_2026">
+            <field name="box">nec_1</field>
+            <field name="start_year" eval="2026"/>
+            <field name="amount" eval="Decimal('2000')"/>
+        </record>
+        <record model="account.us.1099.threshold" id="threshold_misc_1_2000">
+            <field name="box">misc_1</field>
+            <field name="start_year" eval="2000"/>
+            <field name="amount" eval="Decimal('600')"/>
+        </record>
+        <record model="account.us.1099.threshold" id="threshold_misc_1_2026">
+            <field name="box">misc_1</field>
+            <field name="start_year" eval="2026"/>
+            <field name="amount" eval="Decimal('2000')"/>
+        </record>
+        <record model="account.us.1099.threshold" id="threshold_misc_3_2000">
+            <field name="box">misc_3</field>
+            <field name="start_year" eval="2000"/>
+            <field name="amount" eval="Decimal('600')"/>
+        </record>
+        <record model="account.us.1099.threshold" id="threshold_misc_3_2026">
+            <field name="box">misc_3</field>
+            <field name="start_year" eval="2026"/>
+            <field name="amount" eval="Decimal('2000')"/>
+        </record>
+        <record model="account.us.1099.threshold" id="threshold_misc_6_2000">
+            <field name="box">misc_6</field>
+            <field name="start_year" eval="2000"/>
+            <field name="amount" eval="Decimal('600')"/>
+        </record>
+        <record model="account.us.1099.threshold" id="threshold_misc_6_2026">
+            <field name="box">misc_6</field>
+            <field name="start_year" eval="2026"/>
+            <field name="amount" eval="Decimal('2000')"/>
+        </record>
+        <record model="account.us.1099.threshold" id="threshold_misc_9_2000">
+            <field name="box">misc_9</field>
+            <field name="start_year" eval="2000"/>
+            <field name="amount" eval="Decimal('600')"/>
+        </record>
+        <record model="account.us.1099.threshold" id="threshold_misc_9_2026">
+            <field name="box">misc_9</field>
+            <field name="start_year" eval="2026"/>
+            <field name="amount" eval="Decimal('2000')"/>
+        </record>
+        <record model="account.us.1099.threshold" id="threshold_misc_11_2000">
+            <field name="box">misc_11</field>
+            <field name="start_year" eval="2000"/>
+            <field name="amount" eval="Decimal('600')"/>
+        </record>
+        <record model="account.us.1099.threshold" id="threshold_misc_11_2026">
+            <field name="box">misc_11</field>
+            <field name="start_year" eval="2026"/>
+            <field name="amount" eval="Decimal('2000')"/>
+        </record>
+        <record model="account.us.1099.threshold" id="threshold_misc_2_2000">
+            <field name="box">misc_2</field>
+            <field name="start_year" eval="2000"/>
+            <field name="amount" eval="Decimal('10')"/>
+        </record>
+        <record model="account.us.1099.threshold" id="threshold_misc_10_2000">
+            <field name="box">misc_10</field>
+            <field name="start_year" eval="2000"/>
+            <field name="amount" eval="Decimal('600')"/>
+        </record>
+    </data>
+</tryton>

@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<form>
+    <label name="company"/>
+    <field name="company"/>
+    <label name="year"/>
+    <field name="year"/>
+    <label name="party"/>
+    <field name="party"/>
+    <label name="box"/>
+    <field name="box"/>
+    <label name="computed_amount"/>
+    <field name="computed_amount"/>
+    <label name="adjustment"/>
+    <field name="adjustment"/>
+    <label name="amount"/>
+    <field name="amount"/>
+    <label name="federal_withheld"/>
+    <field name="federal_withheld"/>
+    <label name="reportable"/>
+    <field name="reportable"/>
+</form>

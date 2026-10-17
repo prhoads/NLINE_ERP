@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<data>
+    <xpath expr="/form/notebook" position="inside">
+        <page string="1099" id="us_1099">
+            <label name="us_1099_box"/>
+            <field name="us_1099_box"/>
+            <label name="us_1099_tin"/>
+            <field name="us_1099_tin"/>
+            <label name="us_tax_classification"/>
+            <field name="us_tax_classification"/>
+            <label name="us_w9_date"/>
+            <field name="us_w9_date"/>
+            <label name="us_1099_second_tin_notice"/>
+            <field name="us_1099_second_tin_notice"/>
+        </page>
+    </xpath>
+</data>
