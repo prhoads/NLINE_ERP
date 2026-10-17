@@ -206,7 +206,7 @@ class Transaction(object):
             Flavor.set(backend.Database.flavor)
             self.database = database
             self.connection = database.get_connection(readonly=readonly,
-                autocommit=autocommit)
+                autocommit=autocommit, ddl=extras.get('_ddl', False))
             count = 0
             while True:
                 if count:

@@ -255,7 +255,7 @@ class Database(DatabaseInterface):
     def connect(self):
         return self
 
-    def get_connection(self, autocommit=False, readonly=False):
+    def get_connection(self, autocommit=False, readonly=False, ddl=False):
         retry = max(config.getint('database', 'retry'), _maxconn)
         for count in range(retry, -1, -1):
             try:

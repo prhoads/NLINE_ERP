@@ -378,10 +378,12 @@ def load_modules(
                 Module.update_list()
 
     if not Transaction().connection:
-        with Transaction().start(database_name, 0, readonly=not update):
+        with Transaction().start(
+                database_name, 0, readonly=not update, _ddl=bool(update)):
             _load_modules(update)
     else:
-        with Transaction().new_transaction(readonly=not update), \
+        with Transaction().new_transaction(
+                readonly=not update, _ddl=bool(update)), \
                 Transaction().set_user(0), \
                 Transaction().reset_context():
             _load_modules(update)

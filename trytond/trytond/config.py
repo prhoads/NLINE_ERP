@@ -11,7 +11,7 @@ __all__ = ['config', 'get_hostname', 'get_port', 'split_netloc',
 logger = logging.getLogger(__name__)
 
 # Needed so urlunsplit to always set netloc
-for backend_name in ['postgresql', 'sqlite']:
+for backend_name in ['postgresql', 'sqlite', 'mssql']:
     if backend_name not in urllib.parse.uses_netloc:
         urllib.parse.uses_netloc.append(backend_name)
 

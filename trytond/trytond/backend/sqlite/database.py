@@ -446,7 +446,7 @@ class Database(DatabaseInterface):
         db_uri = urllib.parse.urlunparse(db_uri)
         return db_uri.replace('sqlite', 'file', 1)
 
-    def get_connection(self, autocommit=False, readonly=False):
+    def get_connection(self, autocommit=False, readonly=False, ddl=False):
         if self._conn is None:
             self.connect()
         if autocommit:

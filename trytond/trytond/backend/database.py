@@ -26,7 +26,11 @@ class DatabaseInterface(object):
     def connect(self):
         raise NotImplementedError
 
-    def get_connection(self, autocommit=False, readonly=False):
+    def get_connection(self, autocommit=False, readonly=False, ddl=False):
+        '''
+        Return a connection
+        ddl is True when the transaction may modify the schema
+        '''
         raise NotImplementedError
 
     def put_connection(self, connection, close=False):
