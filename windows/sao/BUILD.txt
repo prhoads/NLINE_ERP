@@ -1,0 +1,14 @@
+Tryton sao 7.0 built from the sao folder of this repository.
+
+    cd sao
+    npm install --ignore-scripts --legacy-peer-deps
+    npx grunt
+
+The libraries of bower_components (bower.json) were taken from npm as the bower
+registry was not reachable: jquery 3.7.1, bootstrap 3.4.1, moment 2.31.0,
+gettext.js 0.7.0, c3 0.7.20, d3 5.16.0, papaparse 5, fullcalendar 3.10.5,
+mousetrap 1.6, bootstrap-rtl-ondemand 3 and sortablejs 1.15.7 (as Sortable).
+uglify-js is pinned to 3.17.4 because later versions parse the sources as
+module (strict mode) which does not allow the with statement of eval_pyson.
+
+Only the files used by index.html are kept.

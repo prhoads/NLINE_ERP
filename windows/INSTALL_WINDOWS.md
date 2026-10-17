@@ -59,7 +59,7 @@ Create `C:\NLINE\trytond.conf`:
     path = C:\NLINE\filestore
 
     [web]
-    listen = 0.0.0.0:8000
+    root = C:\NLINE\src\windows\sao
 
 With a SQL Server login instead of the Windows account, the URI is
 `mssql://login:password@/?server=localhost\SQLEXPRESS`.
@@ -75,7 +75,20 @@ file once the database is initialized.
 
 ## 7. Start the server
 
-    C:\NLINE\venv\Scripts\trytond.exe -c C:\NLINE\trytond.conf
+    set TRYTOND_CONFIG=C:\NLINE\trytond.conf
+    set TRYTOND_DATABASE_NAMES=nline
+    C:\NLINE\venv\Scripts\waitress-serve.exe --listen=0.0.0.0:8000 --threads=8 trytond.application:app
+
+Open <http://localhost:8000/> in a web browser and log in with the database
+`nline`, the user `admin` and its password. The other computers of the network
+use `http://<name of the server>:8000/` once the port is allowed by the
+Windows firewall (in a Command Prompt run as administrator):
+
+    netsh advfirewall firewall add rule name="NLINE ERP" dir=in action=allow protocol=TCP localport=8000
+
+The web client is the folder `windows\sao` of the repository (Tryton sao
+7.0 already built), nothing needs to be installed on the computers of the
+users.
 
 ## Updating
 

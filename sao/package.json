@@ -58,6 +58,9 @@
     "grunt-contrib-less": "^2.0",
     "grunt-contrib-uglify": "^5.0"
   },
+  "overrides": {
+    "uglify-js": "3.17.4"
+  },
   "allowScripts": {
     "puppeteer": true
   }

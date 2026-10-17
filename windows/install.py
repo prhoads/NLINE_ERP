@@ -83,6 +83,8 @@ def main():
         sys.executable, '-m', 'pip', 'install', '--upgrade',
         os.path.join(ROOT, 'trytond') + '[MSSQL]',
         os.path.join(ROOT, 'proteus'),
+        # The WSGI server for Windows
+        'waitress',
         ] + [os.path.join(MODULES_DIR, m) for m in modules]
     print("Modules (%d): %s" % (len(modules), ' '.join(modules)))
     if args.dry_run:
