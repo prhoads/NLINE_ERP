@@ -1,0 +1,161 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data>
+        <record model="account.account.type.template" id="type_root">
+            <field name="name">US GAAP Account Types</field>
+            <field name="statement" eval="None"/>
+            <field name="sequence" eval="10"/>
+        </record>
+        <record model="account.account.type.template" id="type_balance">
+            <field name="name">Balance Sheet</field>
+            <field name="parent" ref="type_root"/>
+            <field name="statement">balance</field>
+            <field name="sequence" eval="10"/>
+        </record>
+        <record model="account.account.type.template" id="type_asset">
+            <field name="name">Assets</field>
+            <field name="parent" ref="type_balance"/>
+            <field name="statement">balance</field>
+            <field name="sequence" eval="10"/>
+            <field name="assets" eval="True"/>
+        </record>
+        <record model="account.account.type.template" id="type_asset_current">
+            <field name="name">Current Assets</field>
+            <field name="parent" ref="type_asset"/>
+            <field name="statement">balance</field>
+            <field name="sequence" eval="10"/>
+            <field name="assets" eval="True"/>
+        </record>
+        <record model="account.account.type.template" id="type_asset_current_cash">
+            <field name="name">Cash and Cash Equivalents</field>
+            <field name="parent" ref="type_asset_current"/>
+            <field name="statement">balance</field>
+            <field name="sequence" eval="10"/>
+            <field name="assets" eval="True"/>
+        </record>
+        <record model="account.account.type.template" id="type_asset_current_receivable">
+            <field name="name">Accounts Receivable</field>
+            <field name="parent" ref="type_asset_current"/>
+            <field name="statement">balance</field>
+            <field name="sequence" eval="20"/>
+            <field name="assets" eval="True"/>
+            <field name="receivable" eval="True"/>
+        </record>
+        <record model="account.account.type.template" id="type_asset_current_inventory">
+            <field name="name">Inventory</field>
+            <field name="parent" ref="type_asset_current"/>
+            <field name="statement">balance</field>
+            <field name="sequence" eval="30"/>
+            <field name="assets" eval="True"/>
+            <field name="stock" eval="True"/>
+        </record>
+        <record model="account.account.type.template" id="type_asset_current_other">
+            <field name="name">Other Current Assets</field>
+            <field name="parent" ref="type_asset_current"/>
+            <field name="statement">balance</field>
+            <field name="sequence" eval="40"/>
+            <field name="assets" eval="True"/>
+        </record>
+        <record model="account.account.type.template" id="type_asset_fixed">
+            <field name="name">Property, Plant and Equipment</field>
+            <field name="parent" ref="type_asset"/>
+            <field name="statement">balance</field>
+            <field name="sequence" eval="20"/>
+            <field name="assets" eval="True"/>
+        </record>
+        <record model="account.account.type.template" id="type_asset_other">
+            <field name="name">Other Assets</field>
+            <field name="parent" ref="type_asset"/>
+            <field name="statement">balance</field>
+            <field name="sequence" eval="30"/>
+            <field name="assets" eval="True"/>
+        </record>
+        <record model="account.account.type.template" id="type_liability">
+            <field name="name">Liabilities</field>
+            <field name="parent" ref="type_balance"/>
+            <field name="statement">balance</field>
+            <field name="sequence" eval="20"/>
+        </record>
+        <record model="account.account.type.template" id="type_liability_current">
+            <field name="name">Current Liabilities</field>
+            <field name="parent" ref="type_liability"/>
+            <field name="statement">balance</field>
+            <field name="sequence" eval="10"/>
+        </record>
+        <record model="account.account.type.template" id="type_liability_current_payable">
+            <field name="name">Accounts Payable</field>
+            <field name="parent" ref="type_liability_current"/>
+            <field name="statement">balance</field>
+            <field name="sequence" eval="10"/>
+            <field name="payable" eval="True"/>
+        </record>
+        <record model="account.account.type.template" id="type_liability_current_credit_card">
+            <field name="name">Credit Cards</field>
+            <field name="parent" ref="type_liability_current"/>
+            <field name="statement">balance</field>
+            <field name="sequence" eval="20"/>
+            <field name="debt" eval="True"/>
+        </record>
+        <record model="account.account.type.template" id="type_liability_current_other">
+            <field name="name">Other Current Liabilities</field>
+            <field name="parent" ref="type_liability_current"/>
+            <field name="statement">balance</field>
+            <field name="sequence" eval="30"/>
+        </record>
+        <record model="account.account.type.template" id="type_liability_long_term">
+            <field name="name">Long-Term Liabilities</field>
+            <field name="parent" ref="type_liability"/>
+            <field name="statement">balance</field>
+            <field name="sequence" eval="20"/>
+        </record>
+        <record model="account.account.type.template" id="type_equity">
+            <field name="name">Equity</field>
+            <field name="parent" ref="type_balance"/>
+            <field name="statement">balance</field>
+            <field name="sequence" eval="30"/>
+        </record>
+        <record model="account.account.type.template" id="type_income">
+            <field name="name">Income Statement</field>
+            <field name="parent" ref="type_root"/>
+            <field name="statement">income</field>
+            <field name="sequence" eval="20"/>
+        </record>
+        <record model="account.account.type.template" id="type_revenue">
+            <field name="name">Revenue</field>
+            <field name="parent" ref="type_income"/>
+            <field name="statement">income</field>
+            <field name="sequence" eval="10"/>
+            <field name="revenue" eval="True"/>
+        </record>
+        <record model="account.account.type.template" id="type_cogs">
+            <field name="name">Cost of Goods Sold</field>
+            <field name="parent" ref="type_income"/>
+            <field name="statement">income</field>
+            <field name="sequence" eval="20"/>
+            <field name="expense" eval="True"/>
+        </record>
+        <record model="account.account.type.template" id="type_expense_operating">
+            <field name="name">Operating Expenses</field>
+            <field name="parent" ref="type_income"/>
+            <field name="statement">income</field>
+            <field name="sequence" eval="30"/>
+            <field name="expense" eval="True"/>
+        </record>
+        <record model="account.account.type.template" id="type_revenue_other">
+            <field name="name">Other Income</field>
+            <field name="parent" ref="type_income"/>
+            <field name="statement">income</field>
+            <field name="sequence" eval="40"/>
+            <field name="revenue" eval="True"/>
+        </record>
+        <record model="account.account.type.template" id="type_expense_other">
+            <field name="name">Other Expenses</field>
+            <field name="parent" ref="type_income"/>
+            <field name="statement">income</field>
+            <field name="sequence" eval="50"/>
+            <field name="expense" eval="True"/>
+        </record>
+    </data>
+</tryton>

@@ -1,0 +1,200 @@
+Account,Type,Description,Accnt. #
+PETTY CASH,Bank,CASH TRANSACTIONS,
+1003 · JP Morgan Chase ***9773,Bank,Receiving Account,1003
+1004 · JP Morgan Chase ***9807,Bank,Operating Account,1004
+1050 · Customer-to-Vendor Clearing,Bank,Used when a PO is issued to a customer for inter-company purchasing. Revenue from a Receive Payment is used to pay for a Bill Payment,1050
+1200 · Accounts Receivable,Accounts Receivable,,1200
+1120 · Inventory Asset,Other Current Asset,Costs of inventory purchased for resale,1120
+1125 · Inventory - Labor,Other Current Asset,,1125
+1130 · Inventory - Burden,Other Current Asset,,1130
+1135 · Inventory - Service,Other Current Asset,,1135
+1140 · WIP,Other Current Asset,,1140
+1145 · WIP - Labor,Other Current Asset,,1145
+1150 · WIP - Burden,Other Current Asset,,1150
+1155 · WIP - Service,Other Current Asset,,1155
+12000 · *Undeposited Funds,Other Current Asset,"Funds received, but not yet deposited to a bank account",12000
+1210 · A/R - Reggie Etheridge,Other Current Asset,,1210
+1230 · Employee Travel Advance,Other Current Asset,,1230
+1240 · Employee Payroll Advance,Other Current Asset,,1240
+1499 · Undeposited Funds,Other Current Asset,,1499
+1505 · Prepaid Building Expense,Other Current Asset,,1505
+1511 · Unearned Commisions,Other Current Asset,,1511
+1520 · Prepaid Insurance,Other Current Asset,,1520
+1540 · Prepaid Vendors,Other Current Asset,,1540
+1560 · Prepaid Legal Expense,Other Current Asset,,1560
+1570 · Prepaid Taxes,Other Current Asset,,1570
+1610 · Machinery & Equipment,Fixed Asset,,1610
+1630 · Furniture & Fixture,Fixed Asset,,1630
+1640 · Shop Equipment,Fixed Asset,,1640
+1650 · Leasehold Improvements,Fixed Asset,,1650
+1690 · Accumulated Depreciation,Fixed Asset,,1690
+1800 · Goodwill,Other Asset,,1800
+1810 · Original Costs,Other Asset,,1810
+1815 · Patent Costs,Other Asset,,1815
+1820 · Software & License,Other Asset,,1820
+1890 · Accumulated Amortization,Other Asset,,1890
+APVOUCHER,Accounts Payable,Application of payment owed to vendors invoice to N-Line to offset the vendors invoices from N-Line as a client.,
+2000 · Accounts Payable,Accounts Payable,Unpaid or unapplied vendor bills or credits,2000
+2050 · Chase Ink Credit Card,Credit Card,Chase Ink Credit Card,2050
+Loan from Peter Rhoads,Other Current Liability,,
+1205 · A/P- Reggie Etheridge,Other Current Liability,,1205
+2010 · Sales Tax Payables,Other Current Liability,,2010
+2100 · Total Loan from Valves.com,Other Current Liability,,2100
+2100 · Total Loan from Valves.com:2105 · Loan from Valves.com 1,Other Current Liability,,2105
+2100 · Total Loan from Valves.com:2106 · Loan from Valves.com 2,Other Current Liability,,2106
+2108 · SBA Loan,Other Current Liability,,2108
+2110 · Deposit - Customers,Other Current Liability,,2110
+2115 · Deposit - Valves.com,Other Current Liability,,2115
+2150 · Purchase Accrual,Other Current Liability,,2150
+2160 · Accrual Payable,Other Current Liability,,2160
+2200 · Accrual - Consulting Fees,Other Current Liability,,2200
+2250 · Accrual Commisions Payable,Other Current Liability,,2250
+2300 · Accrual Warranty,Other Current Liability,,2300
+2400 · Payroll Liabilities,Other Current Liability,"Unpaid payroll liabilities. Amounts withheld or accrued, but not yet paid",2400
+2490 · Due to Etheridge Mgmt,Other Current Liability,Due to Etheridge Mgmt- Amex Payments and Previous Operating expenses covered,2490
+2690 · Short Term Loan from Reggie,Other Current Liability,Short Term Loan from Reggie to cover company expenses as begining of new company start up.,2690
+2700 · N/P - Etheridge Management,Long Term Liability,,2700
+3000 · Opening Balance Equity,Equity,Opening balances during setup post to this account. The balance of this account should be zero after completing your setup,3000
+3100 · Common Stock,Equity,,3100
+3150 · Additional Paid-in-Capital,Equity,,3150
+3200 · Retained Earnings,Equity,Undistributed earnings of the corporation,3200
+APCREDIT,Income,APPLICATION OF PAYMENT OWED TO VENDOR FROM N-LINE APPLIED TO VENDORS INVOICE FROM N-LINE.,
+4010 · Sales - Manufactor Goods,Income,Gross receipts from sales,4010
+4015 · Sales - Valves.Com,Income,,4015
+4020 · Sales - Purchased Goods,Income,,4020
+4030 · Sales - Cancellation Fees,Income,,4030
+4040 · Freight Income,Income,,4040
+48300 · Sales Discounts,Income,Discounts given to customers,48300
+49900 · Uncategorized Income,Income,Income not categorized elsewhere,49900
+Custom Clearance,Cost of Goods Sold,Custom Clearance,
+custom Duties and Taxes,Cost of Goods Sold,,
+Destination CFS Fees,Cost of Goods Sold,,
+Destination Coloader Fee,Cost of Goods Sold,Destination Coloader Fee,
+Duty Advance Fee,Cost of Goods Sold,,
+FUEL,Cost of Goods Sold,,
+Importer Security Filing,Cost of Goods Sold,Importer Security Filing (ISF),
+Origin Charges,Cost of Goods Sold,Ogigin Charges,
+5000 · Cost of Goods Sold,Cost of Goods Sold,Costs of items purchased and then sold to customers,5000
+5010 · COGS - Shop Wages,Cost of Goods Sold,,5010
+5050 · COGS - Material,Cost of Goods Sold,,5050
+5060 · Applied Factory Burden,Cost of Goods Sold,,5060
+5070 · Applied Factory Labor,Cost of Goods Sold,,5070
+5080 · Indirect Factory Labor,Cost of Goods Sold,Indirect Factory Labor,5080
+5085 · COGS - Service,Cost of Goods Sold,,5085
+5090 · COGS - Inbound Freight,Cost of Goods Sold,,5090
+5100 · COGS - Outbound Freight,Cost of Goods Sold,,5100
+51100 · Freight and Shipping Costs,Cost of Goods Sold,SHIPPER FEE,51100
+51800 · SALES TAX,Cost of Goods Sold,sales tax - vendors,51800
+5200 · COGS - Local Freight,Cost of Goods Sold,,5200
+5250 · Warranty,Cost of Goods Sold,,5250
+5300 · Shop Expenses,Cost of Goods Sold,,5300
+5400 · Liquidated Damage,Cost of Goods Sold,,5400
+5500 · Inventory Adjustment,Cost of Goods Sold,,5500
+5600 · Reworks,Cost of Goods Sold,,5600
+EXP,Expense,,
+Management Fee,Expense,,
+Patent Expense,Expense,,
+PAYROLL DEDUCTION,Expense,FEDERAL/STATE/MEDICARE TAXES-DEDUCTION ISSUED/PAID BY PAYCHEX,
+PAYROLL TAXES,Expense,FEDERAL/STATE/MEDICARE- DEDUCTED BY PAYCHEX,
+PENALTY,Expense,PENALTY/LATE FEE..,
+REJECTED PAYMENT FEE,Expense,RETURNED OR REJECTED PAYMENT,
+1510 · Prepaid Expense,Expense,,1510
+6000 · Selling Expense,Expense,,6000
+6000 · Selling Expense:6010 · Advertising Expense,Expense,,6010
+6000 · Selling Expense:6020 · Commision Expense,Expense,,6020
+6000 · Selling Expense:6025 · Convention Expense,Expense,,6025
+6000 · Selling Expense:6030 · Marketing,Expense,,6030
+6000 · Selling Expense:6050 · Salesman Salary- International,Expense,,6050
+6000 · Selling Expense:6060 · Telephone - Mobile,Expense,,6060
+6000 · Selling Expense:6070 · Operating Expense,Expense,,6070
+6000 · Selling Expense:6350 · Travel- Meals & Entertainment,Expense,,6350
+6000 · Selling Expense:6360 · Travel - Transport & Lodge,Expense,,6360
+6000 · Selling Expense:6365 · Travel - Vehicle,Expense,,6365
+6000 · Selling Expense:6370 · Travel - Others,Expense,,6370
+6000 · Selling Expense:68400 · Travel Expense- Airline,Expense,"Business-related travel expenses including airline tickets, taxi fares, hotel and other travel expenses",68400
+61000 · US CUSTOMS BOND ENTRY FEE,Expense,BOND ENTRY FEE,61000
+6105 · Amortization,Expense,,6105
+6110 · Bank Service Charges,Expense,"Bank account service fees, bad check charges and other bank fees",6110
+6110 · Bank Service Charges:6116 · TRANSACTION FEE,Expense,CREDIT/DEBIT TRANSACTION FEE..SURCHARGE..SHIPPER..CONVENIENCE FEE..ETC.,6116
+6115 · Incoming Wire Fee,Expense,,6115
+6120 · Computer Software & Serv.,Expense,"Computer supplies, off-the-shelf software, online fees, and other computer or internet related expenses",6120
+6125 · Consulting Fees,Expense,,6125
+6130 · Contract Labor,Expense,,6130
+6140 · Depreciation Expense,Expense,,6140
+6150 · Dues and Subscrptions,Expense,,6150
+6160 · Insurance - Workers Comp.,Expense,,6160
+6170 · Insurance - Health,Expense,,6170
+6174 · Insurance - Life,Expense,,6174
+6175 · Insurance - Liability,Expense,,6175
+6180 · Internet Expense,Expense,,6180
+6190 · Interest Expense,Expense,,6190
+6195 · Interest Expense - Imputed,Expense,,6195
+6200 · Licenses and Permits,Expense,,6200
+6205 · Miscellaneous Medical,Expense,,6205
+6210 · Miscellaneous,Expense,,6210
+6215 · Moving Expense,Expense,,6215
+6220 · Office Supplies,Expense,,6220
+6230 · Postage and Delivery,Expense,,6230
+6240 · Printing and Reproduction,Expense,,6240
+6245 · Professional Fees - Doc.Certif,Expense,,6245
+6250 · Professional Fees - Accounting,Expense,,6250
+6270 · Professional Fees - Legal,Expense,,6270
+6280 · Rent - Office Building,Expense,,6280
+6290 · Rent - Equipment,Expense,,6290
+6310 · Prototype Materials,Expense,,6310
+6320 · Repairs - Building,Expense,,6320
+6330 · Repairs - Equipment,Expense,,6330
+6335 · Storage,Expense,,6335
+6340 · Telephone,Expense,,6340
+6341 · Training / Education,Expense,,6341
+6345 · Small Office Equipment,Expense,,6345
+6390 · Utilities,Expense,"Water, electricity, garbage, and other basic utilities expenses",6390
+6396 · Uniforms,Expense,,6396
+6400 · Payroll Expense,Expense,,6400
+6400 · Payroll Expense:6405 · Payroll Deductions,Expense,,6405
+6400 · Payroll Expense:6410 · Salaries - Staff,Expense,,6410
+6400 · Payroll Expense:6415 · Salaries - Officers,Expense,,6415
+6400 · Payroll Expense:6425 · Bonus,Expense,,6425
+6420 · Payroll Tax,Expense,,6420
+6430 · SD Unemployment Tax,Expense,,6430
+64700 · CONVENIENCE FEE,Expense,COVENIENCE FEE,64700
+6510 · Taxes - Federal,Expense,,6510
+6520 · Taxes - Not FIT,Expense,,6520
+6600 · Certifications,Expense,,6600
+6600 · Certifications:6630 · Physicals & Exams,Expense,,6630
+6600 · Certifications:6650 · Safety & Training,Expense,,6650
+66900 · Reconciliation Discrepancies,Expense,,66900
+66901 · *Reconciliation Discrepancies,Expense,Discrepancies between bank statements and company records,66901
+6700 · Engineering,Expense,,6700
+6700 · Engineering:6260 · Professional Fees- Engineering,Expense,,6260
+6700 · Engineering:6705 · Travel - Transport & Lodge,Expense,,6705
+6700 · Engineering:6710 · Travel - Vehicle,Expense,,6710
+6700 · Engineering:6715 · Travel - Meals,Expense,,6715
+67200 · Repairs and Maintenance,Expense,PEST CONTROL,67200
+6800 · Manufacturing,Expense,,6800
+6800 · Manufacturing:6395 · Vehicle Allowance-Mileage,Expense,,6395
+6800 · Manufacturing:6805 · Travel- Transport & Lodge,Expense,,6805
+6800 · Manufacturing:6810 · Travel - Meals,Expense,,6810
+68000 · Taxes - Property,Expense,"Taxes paid on property owned by the business, franchise taxes, excise taxes, etc.",68000
+6900 · Quality Management,Expense,,6900
+6900 · Quality Management:6275 · Quality Assurance,Expense,,6275
+6900 · Quality Management:6901 · Cost of Quality,Expense,,6901
+6900 · Quality Management:6901 · Cost of Quality:6902 · License and Permits,Expense,,6902
+6900 · Quality Management:6901 · Cost of Quality:6903 · Salary,Expense,,6903
+6900 · Quality Management:6905 · Travel - Transport & Lodge,Expense,,6905
+6900 · Quality Management:6910 · Travel - Vehicle Mileage,Expense,,6910
+6900 · Quality Management:6915 · Travel - Meals,Expense,,6915
+69800 · Uncategorized Expenses,Expense,Expenses not categorized elsewhere,69800
+Gain on Sale of Asset,Other Income,,
+7010 · Interest Income,Other Income,,7010
+7030 · Other Income,Other Income,,7030
+7031 · Debt Forgiveness,Other Income,,7031
+7032 · PPP Loan Forgiveness,Other Income,,7032
+2010,Other Expense,SALES TAX PAYABLES,
+7040 · Bad Debts Expense,Other Expense,,7040
+7050 · Exchange Rate Changes,Other Expense,,7050
+7060 · Early Pay Discount,Other Expense,,7060
+80000 · Ask My Accountant,Other Expense,"Transactions to be discussed with accountant, consultant, or tax preparer",80000
+8010 · Other Expenses,Other Expense,,8010
+9999 · Transfer,Other Expense,,9999
+90000 · Estimates,Non-Posting,"Estimates for jobs or projects. Customer proposals for work to be done, or items to be sold upon customer acceptance of the estimate",90000
