@@ -488,17 +488,84 @@ class _Statement:
         self.nested.__exit__(*args)
 
 
+# SQL Server does not allow sub-queries inside aggregate functions so they are
+# moved into OUTER APPLY derived tables of the query (like a scalar sub-query,
+# OUTER APPLY returns NULL when there is no row).
+
+class _Applies:
+    "Context collecting the sub-queries of the aggregates of a query"
+
+    def __enter__(self):
+        self.in_aggregate = getattr(_local, 'in_aggregate', False)
+        self.applies = getattr(_local, 'applies', None)
+        _local.in_aggregate = False
+        _local.applies = []
+        return _local.applies
+
+    def __exit__(self, *args):
+        _local.in_aggregate = self.in_aggregate
+        _local.applies = self.applies
+
+
+class _InAggregate:
+    "Context to render the expression of an aggregate"
+
+    def __init__(self, aggregate):
+        self.active = not aggregate.window
+
+    def __enter__(self):
+        self.previous = getattr(_local, 'in_aggregate', False)
+        if self.active:
+            _local.in_aggregate = True
+
+    def __exit__(self, *args):
+        _local.in_aggregate = self.previous
+
+
+def _apply_register(query):
+    "Return the reference to the sub-query if it must be applied"
+    if not getattr(_local, 'in_aggregate', False):
+        return None
+    applies = _local.applies
+    for i, apply in enumerate(applies):
+        if apply is query:
+            break
+    else:
+        applies.append(query)
+        i = len(applies) - 1
+    return '"_apply%d"."_value"' % (i + 1)
+
+
+def _applies_str(applies):
+    _local.in_aggregate = False
+    return ''.join(
+        ' OUTER APPLY (%s) AS "_apply%d" ("_value")' % (query, i)
+        for i, query in enumerate(applies, 1))
+
+
+def _applies_params(applies):
+    _local.in_aggregate = False
+    p = []
+    for query in applies:
+        p.extend(query.params)
+    return p
+
+
 def _select_str(self, original):
+    reference = _apply_register(self)
+    if reference:
+        return reference
+    with _Applies():
+        return _select_str_applied(self, original)
+
+
+def _select_str_applied(self, original):
     if self.distinct_on:
         raise NotImplementedError("DISTINCT ON is not supported")
     derived = getattr(_local, 'derived', False)
     _local.derived = False
     with _Statement(self) as statement:
         depth = statement.depth
-        if self.from_ is not None:
-            from_ = ' FROM %s' % self.from_
-        else:
-            from_ = ''
         distinct = 'DISTINCT ' if self.distinct else ''
         if self.columns:
             columns = []
@@ -520,18 +587,32 @@ def _select_str(self, original):
         if self.where is not None:
             where = ' WHERE ' + str(to_predicate(self.where))
         group_by = ''
-        if self.group_by:
+        group_items = _group_by_items(self)
+        if group_items:
             group_by = ' GROUP BY ' + ', '.join(
-                _format_value(_group_expression(self, e))
-                for e in self.group_by)
+                _format_value(e) for e in group_items)
         having = ''
         if self.having is not None:
             having = ' HAVING ' + str(to_predicate(self.having))
+        if self.group_by and not group_items:
+            # Grouping only by constants returns no row without row
+            having = (having + ' AND' if having else ' HAVING') + (
+                ' COUNT(*) > 0')
         order_by = _select_order_by(self, depth)
         order = ''
         if order_by:
             order = ' ORDER BY ' + ', '.join(map(_format_order, order_by))
         top, suffix = _limit_parts(self, order_by)
+        # The FROM is rendered last to know the sub-queries to apply
+        applies = _local.applies
+        if self.from_ is not None:
+            from_ = ' FROM %s' % self.from_
+        else:
+            from_ = ''
+        if applies:
+            if not from_:
+                from_ = ' FROM (SELECT 1 AS "_one") AS "_one"'
+            from_ += _applies_str(applies)
         query = ('SELECT %s%s%s%s' % (distinct, top, columns, from_)
             + where + group_by + having + order + suffix)
         if self.group_by:
@@ -541,6 +622,17 @@ def _select_str(self, original):
         if statement.top:
             query = _cte_prefix() + query
         return query
+
+
+def _group_by_items(select):
+    "Return the GROUP BY expressions without the constants"
+    # SQL Server requires a column in each expression
+    items = []
+    for expression in select.group_by or []:
+        expression = _group_expression(select, expression)
+        if '"' in _format_value(expression):
+            items.append(expression)
+    return items
 
 
 def _group_expression(select, expression):
@@ -555,6 +647,13 @@ def _group_expression(select, expression):
 
 
 def _select_params(self, original):
+    if _apply_register(self):
+        return ()
+    with _Applies():
+        return _select_params_applied(self, original)
+
+
+def _select_params_applied(self, original):
     with _Statement(self) as statement:
         if self.group_by:
             p = []
@@ -566,22 +665,27 @@ def _select_params(self, original):
 
 
 def _select_body_params(self, depth):
-    p = []
-    if True:
+    with _Applies() as applies:
+        columns = []
         for column in self.columns:
             expression, _ = _column(column)
-            p.extend(expression.params)
+            columns.extend(expression.params)
+        having = []
+        if self.having is not None:
+            having.extend(to_predicate(self.having).params)
+        order = []
+        for expression in _select_order_by(self, depth):
+            order.extend(_order_params(expression))
+        p = columns
         if self.from_ is not None:
             p.extend(self.from_.params)
+        p.extend(_applies_params(applies))
         if self.where is not None:
             p.extend(to_predicate(self.where).params)
-        if self.group_by:
-            for expression in self.group_by:
-                p.extend(_value_params(_group_expression(self, expression)))
-        if self.having is not None:
-            p.extend(to_predicate(self.having).params)
-        for expression in _select_order_by(self, depth):
-            p.extend(_order_params(expression))
+        for expression in _group_by_items(self):
+            p.extend(_value_params(expression))
+        p.extend(having)
+        p.extend(order)
     return tuple(p)
 
 
@@ -869,8 +973,23 @@ def _convert_operand(operator, operand):
     return to_value(operand)
 
 
+def _check_set_query(operator, operand):
+    "Only scalar sub-queries of aggregate can be applied"
+    o = sql_operators
+    set_operators = tuple(filter(None, (
+                o.In, o.NotIn, o.Exists,
+                getattr(o, 'Any', None), getattr(o, 'All', None))))
+    if (getattr(_local, 'in_aggregate', False)
+            and isinstance(operator, set_operators)
+            and isinstance(operand, (Select, CombiningQuery))):
+        raise NotImplementedError(
+            "%s with sub-query in aggregate is not supported"
+            % operator.__class__.__name__)
+
+
 def _operator_format(self, original, operand, param=None):
     operand = _convert_operand(self, operand)
+    _check_set_query(self, operand)
     if isinstance(operand, (_Predicate, _Value, _BoolLiteral)):
         return '(%s)' % operand
     return original(self, operand, param)
@@ -880,6 +999,7 @@ def _operator_params(self, original):
     p = []
     for operand in self._operands:
         operand = _convert_operand(self, operand)
+        _check_set_query(self, operand)
         if isinstance(operand, (Expression, Select, CombiningQuery)):
             p.extend(operand.params)
         elif isinstance(operand, (list, tuple)):
@@ -1071,8 +1191,9 @@ def _aggregate_str(self, original):
         raise NotImplementedError("Ordered aggregate is not supported")
     function = _AGGREGATES.get(self._sql, self._sql)
     quantifier = 'DISTINCT ' if self.distinct else ''
-    aggregate = '%s(%s%s)' % (
-        function, quantifier, _format(_aggregate_expression(self)))
+    with _InAggregate(self):
+        expression = _format(_aggregate_expression(self))
+    aggregate = '%s(%s%s)' % (function, quantifier, expression)
     if self._sql in {'BOOL_AND', 'BOOL_OR', 'EVERY'}:
         aggregate = 'CAST(%s AS BIT)' % aggregate
     if self.window:
@@ -1081,7 +1202,8 @@ def _aggregate_str(self, original):
 
 
 def _aggregate_params(self, original):
-    p = list(_params(_aggregate_expression(self)))
+    with _InAggregate(self):
+        p = list(_params(_aggregate_expression(self)))
     if self.window:
         p.extend(self.window.params)
     return tuple(p)
@@ -1451,6 +1573,9 @@ class _DateTrunc(Expression):
         self.expression = expression
 
     def __str__(self):
+        if self.unit is None:
+            # Like PostgreSQL, a NULL unit returns NULL
+            return 'CAST(NULL AS DATETIME2)'
         if not isinstance(self.unit, str):
             raise NotImplementedError("DATE_TRUNC unit must be a constant")
         unit = self.unit.lower()
@@ -1474,6 +1599,8 @@ class _DateTrunc(Expression):
 
     @property
     def params(self):
+        if self.unit is None:
+            return ()
         return _value_params(self.expression)
 
 
