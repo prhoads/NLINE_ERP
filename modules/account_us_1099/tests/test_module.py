@@ -1,9 +1,7 @@
 # This file is part of Tryton.  The COPYRIGHT file at the top level of
 # this repository contains the full copyright notices and license terms.
-import csv
 import datetime
 import io
-import zipfile
 from decimal import Decimal
 
 from trytond.model.exceptions import ValidationError
@@ -14,7 +12,15 @@ from trytond.pool import Pool
 from trytond.tests.test_tryton import ModuleTestCase, with_transaction
 
 from ..us_1099 import (
-    csv_header, export_files, format_tin, truncate_tin)
+    FIRE_LAYOUTS, export_workbook, format_tin, truncate_tin)
+
+
+def read_workbook(data):
+    from openpyxl import load_workbook
+    workbook = load_workbook(io.BytesIO(data))
+    sheet, = workbook.worksheets
+    rows = [list(r) for r in sheet.iter_rows(values_only=True)]
+    return sheet.title, rows
 
 
 class AccountUS1099TestCase(CompanyTestMixin, ModuleTestCase):
@@ -68,7 +74,7 @@ class AccountUS1099TestCase(CompanyTestMixin, ModuleTestCase):
             if tin:
                 party.identifiers = [{'type': tin_type, 'code': tin}]
             party.addresses = [{
-                    'street': '5 Elm St',
+                    'street': '5 Elm St\nSuite 2',
                     'city': 'Houston',
                     'postal_code': '77002',
                     'subdivision': texas.id,
@@ -204,20 +210,28 @@ class AccountUS1099TestCase(CompanyTestMixin, ModuleTestCase):
             self.assertEqual(export.result.nec_count, 1)
             self.assertEqual(export.result.misc_count, 1)
             self.assertEqual(
-                export.result.nec_filename, '1099-NEC-2026.csv')
-            rows = list(csv.reader(io.StringIO(
-                        export.result.nec_file.decode('utf-8'))))
-            self.assertEqual(rows[0], csv_header('nec'))
+                export.result.nec_filename, 'F1099NEC-2026.xlsx')
+            title, rows = read_workbook(export.result.nec_file)
+            self.assertEqual(title, '1099-NEC Data')
+            self.assertEqual(rows[0], [h for h, _ in FIRE_LAYOUTS['nec'][1]])
             row = dict(zip(rows[0], rows[1]))
+            self.assertEqual(row['DO NOT USE'], None)
+            self.assertEqual(row['Corrected (0, 1 or 2)'], 0)
             self.assertEqual(row['Payer TIN'], '12-3456789')
-            self.assertEqual(row['Recipient TIN Type'], 'SSN')
+            self.assertEqual(row['Payer Address'], '100 Main St')
             self.assertEqual(row['Recipient TIN'], '123-45-6789')
+            self.assertEqual(row['Recipient Address'], '5 Elm St|Suite 2')
             self.assertEqual(row['Recipient State'], 'TX')
+            self.assertEqual(row['Recipient Zip'], '77002')
             self.assertEqual(
-                row['Box 1 - Nonemployee compensation'], '2500.00')
-            self.assertEqual(
-                row['Box 4 - Federal income tax withheld'], '')
-            self.assertTrue(export.result.nec_file.endswith(b'\r\n'))
+                row['Box 1 - Non Employee Compensation'], 2500)
+            self.assertEqual(row['Box 4 - Federal Tax Withholding'], None)
+
+            title, rows = read_workbook(export.result.misc_file)
+            self.assertEqual(title, '1099-MISC Data')
+            row = dict(zip(rows[0], rows[1]))
+            self.assertEqual(row['Box 1\nRents'], 24000)
+            self.assertEqual(row['Box 2\nRoyalties'], None)
 
             oext, content, _, _ = RecipientCopy.execute(
                 [a.id for a in amounts], {})
@@ -261,18 +275,13 @@ class AccountUS1099TestCase(CompanyTestMixin, ModuleTestCase):
         self.assertEqual(truncate_tin('123-45-6789'), '***-**-6789')
         self.assertEqual(truncate_tin('123'), '')
 
-    def test_export_files_split(self):
-        "Test the CSV files are split by 100 forms"
-        filename, data = export_files('nec', 2026, [['a']] * 100)
-        self.assertEqual(filename, '1099-NEC-2026.csv')
-        self.assertEqual(len(data.splitlines()), 101)
-
-        filename, data = export_files('nec', 2026, [['a']] * 101)
-        self.assertEqual(filename, '1099-NEC-2026.zip')
-        with zipfile.ZipFile(io.BytesIO(data)) as zip_:
-            self.assertEqual(zip_.namelist(), [
-                    '1099-NEC-2026-1.csv', '1099-NEC-2026-2.csv'])
-            self.assertEqual(
-                len(zip_.read('1099-NEC-2026-2.csv').splitlines()), 2)
+    def test_export_workbook_zip(self):
+        "Test ZIP codes are kept as text"
+        title, rows = read_workbook(export_workbook('nec', [{
+                        'recipient_zip': '07001', 'box_1': Decimal('10'),
+                        }]))
+        row = dict(zip(rows[0], rows[1]))
+        self.assertEqual(row['Recipient Zip'], '07001')
+        self.assertEqual(row['Box 1 - Non Employee Compensation'], 10)
 
 del ModuleTestCase

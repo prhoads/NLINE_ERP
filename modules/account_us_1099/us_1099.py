@@ -1,9 +1,7 @@
 # This file is part of Tryton.  The COPYRIGHT file at the top level of
 # this repository contains the full copyright notices and license terms.
-import csv
 import datetime
 import io
-import zipfile
 from decimal import Decimal
 from itertools import groupby
 
@@ -16,7 +14,6 @@ from trytond.model.exceptions import ValidationError
 from trytond.pool import Pool, PoolMeta
 from trytond.pyson import Eval
 from trytond.report import Report
-from trytond.tools import grouped_slice
 from trytond.transaction import Transaction
 from trytond.wizard import (
     Button, StateAction, StateTransition, StateView, Wizard)
@@ -28,6 +25,7 @@ FORMS = [
 # The boxes of payment by form
 BOXES = [
     ('nec_1', "1099-NEC 1 - Nonemployee compensation"),
+    ('nec_3', "1099-NEC 3 - Excess golden parachute payments"),
     ('misc_1', "1099-MISC 1 - Rents"),
     ('misc_2', "1099-MISC 2 - Royalties"),
     ('misc_3', "1099-MISC 3 - Other income"),
@@ -39,11 +37,11 @@ BOXES = [
     ('misc_10', "1099-MISC 10 - Gross proceeds paid to an attorney"),
     ('misc_11', "1099-MISC 11 - Fish purchased for resale"),
     ('misc_12', "1099-MISC 12 - Section 409A deferrals"),
-    ('misc_14', "1099-MISC 14 - Excess golden parachute payments"),
     ('misc_15', "1099-MISC 15 - Nonqualified deferred compensation"),
     ]
 BOX_TITLES = {
     'nec_1': "Nonemployee compensation",
+    'nec_3': "Excess golden parachute payments",
     'misc_1': "Rents",
     'misc_2': "Royalties",
     'misc_3': "Other income",
@@ -54,7 +52,6 @@ BOX_TITLES = {
     'misc_10': "Gross proceeds paid to an attorney",
     'misc_11': "Fish purchased for resale",
     'misc_12': "Section 409A deferrals",
-    'misc_14': "Excess golden parachute payments",
     'misc_15': "Nonqualified deferred compensation",
     }
 FORM_TITLES = {
@@ -74,8 +71,6 @@ TAX_CLASSIFICATIONS = [
     ('llc_p', "LLC taxed as partnership"),
     ('other', "Other"),
     ]
-# The IRIS taxpayer portal accepts up to 100 forms per CSV file
-CSV_MAX_ROWS = 100
 
 
 def box_form(box):
@@ -548,8 +543,9 @@ class Export(Wizard):
             setattr(self.result, '%s_count' % form_type, len(rows))
             if not rows:
                 continue
-            filename, data = export_files(
-                form_type, self.start.year, [csv_row(f) for f in rows])
+            data = export_workbook(form_type, [fire_values(f) for f in rows])
+            filename = 'F1099%s-%s.xlsx' % (
+                form_type.upper(), self.start.year)
             setattr(self.result, '%s_file' % form_type, data)
             setattr(self.result, '%s_filename' % form_type, filename)
         return 'result'
@@ -563,95 +559,157 @@ class Export(Wizard):
         return values
 
 
-# The columns of the CSV by form
-CSV_COLUMNS = {
-    'nec': ['1', '4'],
-    'misc': ['1', '2', '3', '4', '5', '6', '8', '9', '10', '11', '12', '14',
-        '15'],
+# The amount boxes by form
+BOX_NUMBERS = {
+    'nec': ['1', '3', '4'],
+    'misc': ['1', '2', '3', '4', '5', '6', '8', '9', '10', '11', '12', '15'],
+    }
+
+# The workbooks of 1099FIRE (tax year 2025) as (sheet, columns) by form.
+# A column is a header and the key of its value in the row of the form.
+FIRE_LAYOUTS = {
+    'nec': ('1099-NEC Data', [
+            ('DO NOT USE', None),
+            ('Corrected (0, 1 or 2)', 'corrected'),
+            ('Payer Name', 'payer_name'),
+            ('Payer Address', 'payer_address'),
+            ('Payer City', 'payer_city'),
+            ('Payer State', 'payer_state'),
+            ('Payer Zip', 'payer_zip'),
+            ('Payer Phone', 'payer_phone'),
+            ('Payer TIN', 'payer_tin'),
+            ('Recipient TIN', 'recipient_tin'),
+            ('Recipient Name', 'recipient_name'),
+            ('Recipient Address', 'recipient_address'),
+            ('Recipient City', 'recipient_city'),
+            ('Recipient State', 'recipient_state'),
+            ('Recipient Zip', 'recipient_zip'),
+            ('Recipient Account Number', 'account_number'),
+            ('Box 1 - Non Employee Compensation', 'box_1'),
+            ('Box 2 - Payer Made Direct Sales', None),
+            ('Box 3 - Excess Golden Parachute Payments', 'box_3'),
+            ('Box 4 - Federal Tax Withholding', 'box_4'),
+            ('Box 5_1 - State Tax Witholding', None),
+            ('Box 5_2 - State Tax Witholding', None),
+            ('Box 6_1 - State Payers No', None),
+            ('Box 6_2 - State Payers No', None),
+            ('Box 7_1 - State Income Amt', None),
+            ('Box 7_2 - State Income Amt', None),
+            ]),
+    'misc': ('1099-MISC Data', [
+            ('DO NOT USE', None),
+            ('Corrected (0, 1 or 2)', 'corrected'),
+            ('Payer Name', 'payer_name'),
+            ('Payer Address', 'payer_address'),
+            ('Payer City', 'payer_city'),
+            ('Payer State', 'payer_state'),
+            ('Payer Zip', 'payer_zip'),
+            ('Payer Phone', 'payer_phone'),
+            ('Payer TIN', 'payer_tin'),
+            ('Recipient TIN', 'recipient_tin'),
+            ('Recipient Name', 'recipient_name'),
+            ('Recipient Address', 'recipient_address'),
+            ('Recipient City', 'recipient_city'),
+            ('Recipient State', 'recipient_state'),
+            ('Recipient Zip', 'recipient_zip'),
+            ('Acct No', 'account_number'),
+            ('Box 13\nFATCA', None),
+            ('Box 1\nRents', 'box_1'),
+            ('Box 2\nRoyalties', 'box_2'),
+            ('Box 3\nOther income', 'box_3'),
+            ('Box 4\nTax Withheld', 'box_4'),
+            ('Box 5 Fishing Boat', 'box_5'),
+            ('Box 6 Medical Payments', 'box_6'),
+            ('Box 7 Doirect Sales (1=Yes)', None),
+            ('Box 8 Sub Payments in lieu Div', 'box_8'),
+            ('Box 9 Crop Ins', 'box_9'),
+            ('Box 10 Attorney Fees', 'box_10'),
+            ('Box 11 Resale Fish', 'box_11'),
+            ('Box 12 409A Deferrals', 'box_12'),
+            ('Box 14 - Blank', None),
+            ('Box 15 Non-Qual Deferred Pay', 'box_15'),
+            ('Box 16_1 Stae 1 Tax W/H', None),
+            ('Box 16_2 State 2 Tax W/H', None),
+            ('Box 17_1 State 1 No', None),
+            ('Box 17_2 State 2 No', None),
+            ('Box 18_1 State 1 Income', None),
+            ('Box 18_2 State 2 Income', None),
+            ]),
     }
 
 
-def csv_header(form_type):
-    header = [
-        'Tax Year', 'Form Type',
-        'Payer TIN Type', 'Payer TIN', 'Payer Name',
-        'Payer Address', 'Payer City', 'Payer State', 'Payer ZIP',
-        'Payer Phone',
-        'Recipient TIN Type', 'Recipient TIN',
-        'Recipient Name', 'Recipient Second Name',
-        'Recipient Address', 'Recipient City', 'Recipient State',
-        'Recipient ZIP', 'Recipient Country',
-        'Account Number', '2nd TIN Notice',
-        ]
-    for number in CSV_COLUMNS[form_type]:
-        if number == '4':
-            header.append('Box 4 - Federal income tax withheld')
-        else:
-            header.append('Box %s - %s' % (
-                    number, BOX_TITLES['%s_%s' % (form_type, number)]))
-    return header
-
-
 def _address_values(address):
+    "Return street (lines separated by |), city, state and ZIP"
     if not address:
-        return ['', '', '', '', '']
-    street = ' '.join((address.street or '').splitlines())
+        return ['', '', '', '']
+    street = '|'.join(
+        l.strip() for l in (address.street or '').splitlines() if l.strip())
     return [
         street,
         address.city or '',
         address.subdivision.code.split('-')[-1]
         if address.subdivision else '',
         address.postal_code or '',
-        address.country.code if address.country else '',
         ]
 
 
-def csv_row(form):
+def fire_values(form):
+    "Return the values of the form by key of FIRE_LAYOUTS"
     company_party = form.company.party
     payer_tin = form.payer_tin
-    payer_address = _address_values(form.payer_address)
-    address = _address_values(form.address)
+    payer_street, payer_city, payer_state, payer_zip = _address_values(
+        form.payer_address)
+    street, city, state, zip_ = _address_values(form.address)
     tin = form.tin
-    boxes = form.boxes
-    row = [
-        str(form.year), '1099-%s' % form.form.upper(),
-        'EIN', format_tin('us_ein', payer_tin.code if payer_tin else ''),
-        company_party.name,
-        payer_address[0], payer_address[1], payer_address[2],
-        payer_address[3],
-        company_party.phone or '',
-        'EIN' if tin.type == 'us_ein' else 'SSN',
-        format_tin(tin.type, tin.code),
-        form.party.name, '',
-        address[0], address[1], address[2], address[3], address[4],
-        form.party.code or str(form.party.id), 'X' if form.party.us_1099_second_tin_notice
-        else '',
-        ]
-    for number in CSV_COLUMNS[form.form]:
-        value = boxes.get(number)
-        row.append('%.2f' % value if value else '')
-    return row
+    values = {
+        'corrected': 0,
+        'payer_name': company_party.name,
+        'payer_address': payer_street,
+        'payer_city': payer_city,
+        'payer_state': payer_state,
+        'payer_zip': payer_zip,
+        'payer_phone': company_party.phone or '',
+        'payer_tin': format_tin('us_ein', payer_tin.code if payer_tin else ''),
+        'recipient_tin': format_tin(tin.type, tin.code) if tin else '',
+        'recipient_name': form.party.name,
+        'recipient_address': street,
+        'recipient_city': city,
+        'recipient_state': state,
+        'recipient_zip': zip_,
+        'account_number': form.party.code or str(form.party.id),
+        }
+    for number, amount in form.boxes.items():
+        if amount:
+            values['box_%s' % number] = amount
+    return values
 
 
-def export_files(form_type, year, rows):
-    "Return the filename and the CSV content (zipped if many files)"
-    header = csv_header(form_type)
-    files = []
-    for i, chunk in enumerate(grouped_slice(rows or [[]], CSV_MAX_ROWS), 1):
-        output = io.StringIO()
-        writer = csv.writer(output, lineterminator='\r\n')
-        writer.writerow(header)
-        writer.writerows(r for r in chunk if r)
-        files.append(('1099-%s-%s-%s.csv' % (
-                    form_type.upper(), year, i),
-                output.getvalue().encode('utf-8')))
-    if len(files) == 1:
-        return '1099-%s-%s.csv' % (form_type.upper(), year), files[0][1]
+def export_workbook(form_type, rows):
+    "Return the 1099FIRE workbook of the rows (values by key)"
+    from openpyxl import Workbook
+
+    sheet_name, columns = FIRE_LAYOUTS[form_type]
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = sheet_name
+    sheet.append([h for h, _ in columns])
+    for values in rows:
+        row = []
+        for _, key in columns:
+            value = values.get(key) if key else None
+            if value == '':
+                value = None
+            row.append(value)
+        sheet.append(row)
+    # Keep the leading zeros of ZIP codes
+    for row in sheet.iter_rows(min_row=2):
+        for cell in row:
+            if isinstance(cell.value, str):
+                cell.data_type = 's'
+                cell.number_format = '@'
     content = io.BytesIO()
-    with zipfile.ZipFile(content, 'w') as zip_:
-        for name, data in files:
-            zip_.writestr(name, data)
-    return '1099-%s-%s.zip' % (form_type.upper(), year), content.getvalue()
+    workbook.save(content)
+    return content.getvalue()
 
 
 class RecipientCopy(Report):

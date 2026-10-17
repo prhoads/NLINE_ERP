@@ -4,7 +4,7 @@
 statements on Letter paper"""
 import io
 
-from .us_1099 import BOX_TITLES, CSV_COLUMNS, FORM_TITLES, truncate_tin
+from .us_1099 import BOX_NUMBERS, BOX_TITLES, FORM_TITLES, truncate_tin
 
 LEGEND = (
     "This is important tax information and is being furnished to the IRS. "
@@ -108,7 +108,7 @@ def render(forms):
             ['X' if form.party.us_1099_second_tin_notice else ''])
 
         # Amounts
-        numbers = CSV_COLUMNS[form.form]
+        numbers = BOX_NUMBERS[form.form]
         columns = 1 if len(numbers) <= 2 else 2
         rows = -(-len(numbers) // columns)
         column_width = half / columns

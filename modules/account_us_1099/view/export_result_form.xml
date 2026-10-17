@@ -12,5 +12,5 @@ this repository contains the full copyright notices and license terms. -->
     <field name="misc_file"/>
     <field name="nec_filename" invisible="1"/>
     <field name="misc_filename" invisible="1"/>
-    <separator id="iris" string="Upload the files on the IRIS Taxpayer Portal of the IRS." colspan="4"/>
+    <separator id="iris" string="Upload the workbooks to 1099FIRE." colspan="4"/>
 </form>

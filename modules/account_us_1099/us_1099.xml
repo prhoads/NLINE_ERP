@@ -81,7 +81,7 @@ this repository contains the full copyright notices and license terms. -->
             <field name="name">export_result_form</field>
         </record>
         <record model="ir.action.wizard" id="wizard_export">
-            <field name="name">Export 1099 for IRIS</field>
+            <field name="name">Export 1099 for 1099FIRE</field>
             <field name="wiz_name">account.us.1099.export</field>
         </record>
         <record model="ir.action-res.group" id="wizard_export_group_account_admin">
