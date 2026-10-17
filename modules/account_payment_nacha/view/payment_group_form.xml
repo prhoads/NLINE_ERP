@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<data>
+    <xpath expr="/form/field[@name='kind']" position="after">
+        <label name="nacha_file"/>
+        <field name="nacha_file"/>
+        <label name="nacha_file_id_modifier"/>
+        <field name="nacha_file_id_modifier"/>
+        <button name="nacha_generate_file" colspan="4"/>
+    </xpath>
+</data>

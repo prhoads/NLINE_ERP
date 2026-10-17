@@ -1,0 +1,16 @@
+# This file is part of Tryton.  The COPYRIGHT file at the top level of
+# this repository contains the full copyright notices and license terms.
+
+from trytond.pool import Pool
+
+from . import bank, payment
+
+
+def register():
+    Pool.register(
+        bank.Account,
+        payment.Journal,
+        payment.Group,
+        payment.Payment,
+        payment.Party,
+        module='account_payment_nacha', type_='model')

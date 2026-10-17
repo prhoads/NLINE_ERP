@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<data>
+    <xpath expr="/form/field[@name='process_method']" position="after">
+        <separator name="nacha_profile" string="ACH (Nacha)" colspan="4"/>
+        <label name="nacha_profile"/>
+        <field name="nacha_profile"/>
+        <label name="nacha_bank_account"/>
+        <field name="nacha_bank_account"/>
+        <label name="nacha_immediate_destination"/>
+        <field name="nacha_immediate_destination"/>
+        <label name="nacha_immediate_destination_name"/>
+        <field name="nacha_immediate_destination_name"/>
+        <label name="nacha_company_identification"/>
+        <field name="nacha_company_identification"/>
+        <label name="nacha_company_name"/>
+        <field name="nacha_company_name"/>
+        <label name="nacha_entry_class"/>
+        <field name="nacha_entry_class"/>
+        <label name="nacha_entry_description"/>
+        <field name="nacha_entry_description"/>
+    </xpath>
+</data>

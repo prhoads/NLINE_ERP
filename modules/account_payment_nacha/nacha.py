@@ -54,9 +54,24 @@ def _ascii(value):
     return ''.join(c for c in value if 32 <= ord(c) < 127)
 
 
-def alpha(value, size):
+# Characters accepted by Chase in alphanumeric fields
+CHASE_ALPHANUMERIC = set(
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    "./()&'- ")
+CHASE_ADDENDA = CHASE_ALPHANUMERIC | set("()!#$%&'*+-./:;=?@[]^_{|}")
+
+
+def alpha(value, size, allowed=None):
     "Alphanumeric field: upper case, left justified, blank filled"
     value = _ascii(value).upper()
+    if allowed is not None:
+        value = ''.join(c if c in allowed else ' ' for c in value)
+    return value[:size].ljust(size)
+
+
+def identifier(value, size):
+    "Upper case letters and digits only"
+    value = ''.join(c for c in _ascii(value).upper() if c.isalnum())
     return value[:size].ljust(size)
 
 
@@ -130,6 +145,9 @@ class Batch:
     odfi_routing_number: str
     standard_entry_class: str = 'CCD'
     company_discretionary_data: str = ''
+    # Account to pay from (or deposit to), Chase requires it in the
+    # company discretionary data as 20 digits
+    funding_account_number: Optional[str] = None
     descriptive_date: str = ''
     entries: List[Entry] = field(default_factory=list)
     # Balanced batch: add an offset entry against the originator account
@@ -159,8 +177,10 @@ class File:
     reference_code: str = ''
     creation: Optional[datetime.datetime] = None
     batches: List[Batch] = field(default_factory=list)
-    line_ending: str = '\n'
+    line_ending: str = '\r\n'
     block: bool = True
+    # Bank specific rules: None or 'chase'
+    profile: Optional[str] = None
 
     def validate(self):
         modifier = self.file_id_modifier
@@ -171,6 +191,48 @@ class File:
             raise NachaError("File without batches")
         for batch in self.batches:
             batch.validate()
+        if self.profile == 'chase':
+            self._validate_chase()
+
+    def _validate_chase(self):
+        "Rules of Chase ACH File Upload specifications (May 2024)"
+        creation = (self.creation or datetime.datetime.now()).date()
+        origin = (self.immediate_origin or '').strip()
+        if len(origin) != 10 or not origin.isdigit():
+            raise NachaError(
+                "Chase requires a 10 digits immediate origin")
+        directions = set()
+        for batch in self.batches:
+            if batch.offset_account_number:
+                raise NachaError("Chase does not accept balanced files")
+            if (len(batch.company_identification) != 10
+                    or not batch.company_identification.isdigit()):
+                raise NachaError(
+                    "Chase requires a 10 digits company identification")
+            if not batch.funding_account_number:
+                raise NachaError("Chase requires the funding account number")
+            if batch.effective_date <= creation:
+                raise NachaError(
+                    "Chase requires the effective date after the creation "
+                    "date")
+            batch_directions = {e.direction for e in batch.entries}
+            if len(batch_directions) > 1:
+                raise NachaError(
+                    "Chase does not accept batches with debits and credits")
+            directions |= batch_directions
+            if (batch.standard_entry_class == 'CCD'
+                    and batch.entry_description.upper() == 'PAYROLL'):
+                raise NachaError("PAYROLL description requires PPD")
+            for entry in batch.entries:
+                if entry.prenote:
+                    raise NachaError("Chase does not accept pre-notes")
+                if not identifier(entry.identification, 15).strip():
+                    raise NachaError(
+                        "Chase requires an identification number for %s"
+                        % entry.name)
+        if len(directions) > 1:
+            raise NachaError(
+                "Chase requires separate files for payments and collections")
 
     def records(self):
         self.validate()
@@ -223,10 +285,18 @@ class File:
                 '094',
                 '10',
                 '1',
-                alpha(self.immediate_destination_name, 23),
-                alpha(self.immediate_origin_name, 23),
-                alpha(self.reference_code, 8),
+                alpha(self.immediate_destination_name, 23, self._allowed),
+                alpha(self.immediate_origin_name, 23, self._allowed),
+                alpha(self.reference_code, 8, self._allowed),
                 ])
+
+    @property
+    def _allowed(self):
+        return CHASE_ALPHANUMERIC if self.profile == 'chase' else None
+
+    @property
+    def _allowed_addenda(self):
+        return CHASE_ADDENDA if self.profile == 'chase' else None
 
     @staticmethod
     def _routing_field(value):
@@ -264,15 +334,23 @@ class File:
         else:
             service_class = CREDITS_ONLY
         odfi = batch.odfi_routing_number[:8]
+        allowed = self._allowed
+        if batch.funding_account_number:
+            discretionary = numeric(
+                ''.join(c for c in batch.funding_account_number
+                    if c.isdigit()), 20)
+        else:
+            discretionary = alpha(
+                batch.company_discretionary_data, 20, allowed)
         records = [''.join([
                     '5',
                     service_class,
-                    alpha(batch.company_name, 16),
-                    alpha(batch.company_discretionary_data, 20),
+                    alpha(batch.company_name, 16, allowed),
+                    discretionary,
                     alpha(batch.company_identification, 10),
                     batch.standard_entry_class,
-                    alpha(batch.entry_description, 10),
-                    alpha(batch.descriptive_date, 6),
+                    alpha(batch.entry_description, 10, allowed),
+                    alpha(batch.descriptive_date, 6, allowed),
                     batch.effective_date.strftime('%y%m%d'),
                     '   ',
                     '1',
@@ -292,9 +370,9 @@ class File:
                         entry.routing_number[8],
                         alpha(account_number, 17),
                         numeric(cents, 10),
-                        alpha(entry.identification, 15),
-                        alpha(entry.name, 22),
-                        alpha(entry.discretionary_data, 2),
+                        identifier(entry.identification, 15),
+                        alpha(entry.name, 22, allowed),
+                        alpha(entry.discretionary_data, 2, allowed),
                         '1' if entry.addenda else '0',
                         trace,
                         ]))
@@ -303,7 +381,7 @@ class File:
                 records.append(''.join([
                             '7',
                             '05',
-                            alpha(entry.addenda, 80),
+                            alpha(entry.addenda, 80, self._allowed_addenda),
                             numeric(1, 4),
                             numeric(sequence, 7),
                             ]))

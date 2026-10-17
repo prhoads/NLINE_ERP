@@ -24,7 +24,7 @@ from collections import defaultdict, deque
 from decimal import Decimal
 
 import pyodbc
-from sql import Flavor, Table
+from sql import Cast, Flavor, Table
 
 from trytond.backend.database import DatabaseInterface, SQLType
 from trytond.config import config, parse_uri
@@ -876,6 +876,11 @@ class Database(DatabaseInterface):
         # Values are stored by Tryton as compact JSON so the key is searched
         # with the same encoding
         return dialect.JSONGet(column, json.dumps(key))
+
+    def json_get_number(self, column, key):
+        "Return the number of the key or NULL"
+        return Cast(dialect.TryCast(self.json_get(column, key), 'FLOAT'),
+            'FLOAT')
 
     def sql_type(self, type_):
         if type_ in self.TYPES_MAPPING:

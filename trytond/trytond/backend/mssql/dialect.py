@@ -1630,6 +1630,23 @@ def reset_transaction_timestamp(connection):
         timestamps.pop(id(connection), None)
 
 
+class TryCast(Expression):
+    "Cast returning NULL on failure (SQL Server 2012)"
+    __slots__ = ('expression', 'typename')
+
+    def __init__(self, expression, typename):
+        self.expression = expression
+        self.typename = typename
+
+    def __str__(self):
+        return 'TRY_CAST(%s AS %s)' % (
+            _format_value(self.expression), _cast_type(self.typename))
+
+    @property
+    def params(self):
+        return _value_params(self.expression)
+
+
 class JSONGet(Expression):
     "JSON text of the value of the key"
     __slots__ = ('column', 'key')

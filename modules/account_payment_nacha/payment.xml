@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data>
+        <record model="ir.ui.view" id="payment_journal_view_form">
+            <field name="model">account.payment.journal</field>
+            <field name="inherit" ref="account_payment.payment_journal_view_form"/>
+            <field name="name">payment_journal_form</field>
+        </record>
+        <record model="ir.ui.view" id="payment_group_view_form">
+            <field name="model">account.payment.group</field>
+            <field name="inherit" ref="account_payment.payment_group_view_form"/>
+            <field name="name">payment_group_form</field>
+        </record>
+        <record model="ir.ui.view" id="payment_view_form">
+            <field name="model">account.payment</field>
+            <field name="inherit" ref="account_payment.payment_view_form"/>
+            <field name="name">payment_form</field>
+        </record>
+        <record model="ir.ui.view" id="bank_account_view_form">
+            <field name="model">bank.account</field>
+            <field name="inherit" ref="bank.bank_account_view_form"/>
+            <field name="name">bank_account_form</field>
+        </record>
+        <record model="ir.model.button" id="group_nacha_generate_file_button">
+            <field name="model" search="[('model', '=', 'account.payment.group')]"/>
+            <field name="name">nacha_generate_file</field>
+            <field name="string">Generate ACH File</field>
+        </record>
+    </data>
+</tryton>

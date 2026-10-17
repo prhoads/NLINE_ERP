@@ -533,6 +533,8 @@ class FieldNumericTestCase(unittest.TestCase):
                     })
 
     @with_transaction()
+    @unittest.skipIf(backend.name == 'mssql',
+        "SQL Server stores numeric with 15 decimals")
     def test_write_digits_invalid_value_small(self):
         "Test write numeric with invalid small value for digits"
         Numeric = Pool().get('test.numeric_digits')

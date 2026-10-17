@@ -1,6 +1,7 @@
 # This file is part of Tryton.  The COPYRIGHT file at the toplevel of this
 # repository contains the full copyright notices and license terms.
 import json
+from decimal import Decimal
 from functools import partial
 
 from sql import Cast, CombiningQuery, Literal, Null, Select, operators
@@ -124,6 +125,14 @@ class Dict(Field):
         name, key = name.split('.', 1)
         Operator = SQL_OPERATORS[operator]
         raw_column = self.sql_column(table)
+        if (backend.name == 'mssql'
+                and isinstance(value, (int, float, Decimal))
+                and not isinstance(value, bool)
+                and operator in {'=', '!=', '<', '<=', '>', '>='}):
+            # JSON text is compared numerically for numbers
+            column = database.json_get_number(raw_column, key)
+            expression = Operator(column, value)
+            return self._domain_add_null(column, operator, value, expression)
         column = self._domain_column(operator, raw_column, key)
         expression = Operator(column, self._domain_value(operator, value))
         if operator in {'=', '!='}:
