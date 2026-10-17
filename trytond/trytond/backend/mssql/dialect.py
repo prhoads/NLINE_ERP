@@ -1128,6 +1128,46 @@ def _window_params(self, original):
     return tuple(p)
 
 
+def _nth_value_str(self, original):
+    """NTH_VALUE is not available on SQL Server
+
+    The n-th row of a frame starting at the current row is LEAD(n - 1)
+    and the first row is FIRST_VALUE."""
+    expression, n = self.args
+    window = self.window
+    value = _format_value(expression)
+    if n == 1:
+        return 'FIRST_VALUE(%s) OVER (%s)' % (value, window)
+    if window.frame == 'ROWS' and window.start == 0:
+        if window.end is not None and n - 1 > window.end:
+            return 'NULL'
+        partition = ''
+        if window.partition:
+            partition = 'PARTITION BY ' + ', '.join(
+                map(_format_value, window.partition))
+        order_by = ' ORDER BY ' + ', '.join(
+            map(_format_order, window.order_by or []))
+        return 'LEAD(%s, %d) OVER (%s%s)' % (
+            value, n - 1, partition, order_by)
+    raise NotImplementedError("NTH_VALUE is not supported for this frame")
+
+
+def _nth_value_params(self, original):
+    expression, n = self.args
+    window = self.window
+    if n != 1 and window.end is not None and n - 1 > window.end:
+        return ()
+    p = list(_value_params(expression))
+    if n == 1:
+        p.extend(window.params)
+    else:
+        for e in window.partition or []:
+            p.extend(_value_params(e))
+        for e in window.order_by or []:
+            p.extend(_order_params(e))
+    return tuple(p)
+
+
 def _window_alias(self, original):
     # Named windows are not supported so they are always inlined
     return ''
@@ -1766,6 +1806,8 @@ def _patch_all():
 
     _patch(sql_aggregate.Aggregate, '__str__', _aggregate_str)
     _patch(sql_aggregate.Aggregate, 'params', _aggregate_params)
+    _patch(sql_functions.NthValue, '__str__', _nth_value_str)
+    _patch(sql_functions.NthValue, 'params', _nth_value_params)
     _patch(Window, '__str__', _window_str)
     _patch(Window, 'params', _window_params)
     _patch(Window, 'alias', _window_alias)

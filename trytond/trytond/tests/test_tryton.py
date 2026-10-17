@@ -10,12 +10,14 @@ import multiprocessing
 import operator
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import time
 import unittest
 import unittest.mock
 from configparser import ConfigParser
+from decimal import Decimal
 from fnmatch import fnmatchcase
 from functools import reduce, wraps
 from itertools import chain
@@ -1113,7 +1115,35 @@ def doctest_teardown(test):
     return drop_db()
 
 
-doctest_checker = doctest.OutputChecker()
+class DecimalOutputChecker(doctest.OutputChecker):
+    """Compare Decimal representations by value
+
+    SQL Server stores numeric with a fixed scale so the trailing zeros of the
+    stored value are not kept like on PostgreSQL."""
+    _decimal = re.compile(r"Decimal\('(-?[0-9.]+(?:E[+-]?[0-9]+)?)'\)")
+
+    @classmethod
+    def _normalize(cls, text):
+        def repl(match):
+            value = Decimal(match.group(1))
+            if value == value.to_integral():
+                value = value.quantize(1)
+            else:
+                value = value.normalize()
+            return "Decimal('%s')" % value
+        return cls._decimal.sub(repl, text)
+
+    def check_output(self, want, got, optionflags):
+        if super().check_output(want, got, optionflags):
+            return True
+        return super().check_output(
+            self._normalize(want), self._normalize(got), optionflags)
+
+
+if backend.name == 'mssql':
+    doctest_checker = DecimalOutputChecker()
+else:
+    doctest_checker = doctest.OutputChecker()
 
 
 def load_doc_tests(name, path, loader, tests, pattern):
