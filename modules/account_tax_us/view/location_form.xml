@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<form>
+    <label name="name"/>
+    <field name="name"/>
+    <label name="county"/>
+    <field name="county"/>
+    <label name="subdivision"/>
+    <field name="subdivision"/>
+    <label name="company"/>
+    <field name="company"/>
+    <label name="state_jurisdiction"/>
+    <field name="state_jurisdiction"/>
+    <label name="local_rate"/>
+    <field name="local_rate" factor="100"/>
+    <label name="manual"/>
+    <field name="manual"/>
+    <label name="active"/>
+    <field name="active"/>
+    <field name="jurisdictions" colspan="4"/>
+</form>

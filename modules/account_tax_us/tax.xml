@@ -1,0 +1,189 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data>
+        <record model="ir.ui.view" id="configuration_view_form">
+            <field name="model">account.configuration</field>
+            <field name="inherit" ref="account.configuration_view_form"/>
+            <field name="name">configuration_form</field>
+        </record>
+        <record model="ir.ui.view" id="tax_view_form">
+            <field name="model">account.tax</field>
+            <field name="inherit" ref="account.tax_view_form"/>
+            <field name="name">tax_form</field>
+        </record>
+        <record model="ir.ui.view" id="tax_rule_view_form">
+            <field name="model">account.tax.rule</field>
+            <field name="inherit" ref="account.tax_rule_view_form"/>
+            <field name="name">tax_rule_form</field>
+        </record>
+        <record model="ir.ui.view" id="address_view_form">
+            <field name="model">party.address</field>
+            <field name="inherit" ref="party.address_view_form"/>
+            <field name="name">address_form</field>
+        </record>
+        <record model="ir.ui.view" id="party_view_form">
+            <field name="model">party.party</field>
+            <field name="inherit" ref="party.party_view_form"/>
+            <field name="name">party_form</field>
+        </record>
+
+        <menuitem
+            name="US Sales Tax"
+            parent="account.menu_taxes"
+            sequence="50"
+            id="menu_us_sales_tax"/>
+
+        <record model="ir.ui.view" id="jurisdiction_view_form">
+            <field name="model">account.tax.us.jurisdiction</field>
+            <field name="type">form</field>
+            <field name="name">jurisdiction_form</field>
+        </record>
+        <record model="ir.ui.view" id="jurisdiction_view_list">
+            <field name="model">account.tax.us.jurisdiction</field>
+            <field name="type">tree</field>
+            <field name="name">jurisdiction_list</field>
+        </record>
+        <record model="ir.action.act_window" id="act_jurisdiction_form">
+            <field name="name">Jurisdictions</field>
+            <field name="res_model">account.tax.us.jurisdiction</field>
+            <field name="domain"
+                eval="[('company', '=', Eval('context', {}).get('company', -1))]"
+                pyson="1"/>
+        </record>
+        <record model="ir.action.act_window.view" id="act_jurisdiction_form_view1">
+            <field name="sequence" eval="10"/>
+            <field name="view" ref="jurisdiction_view_list"/>
+            <field name="act_window" ref="act_jurisdiction_form"/>
+        </record>
+        <record model="ir.action.act_window.view" id="act_jurisdiction_form_view2">
+            <field name="sequence" eval="20"/>
+            <field name="view" ref="jurisdiction_view_form"/>
+            <field name="act_window" ref="act_jurisdiction_form"/>
+        </record>
+        <menuitem
+            parent="menu_us_sales_tax"
+            action="act_jurisdiction_form"
+            sequence="20"
+            id="menu_jurisdiction_form"/>
+
+        <record model="ir.ui.view" id="jurisdiction_rate_view_list">
+            <field name="model">account.tax.us.jurisdiction.rate</field>
+            <field name="type">tree</field>
+            <field name="name">jurisdiction_rate_list</field>
+        </record>
+
+        <record model="ir.ui.view" id="location_view_form">
+            <field name="model">account.tax.us.location</field>
+            <field name="type">form</field>
+            <field name="name">location_form</field>
+        </record>
+        <record model="ir.ui.view" id="location_view_list">
+            <field name="model">account.tax.us.location</field>
+            <field name="type">tree</field>
+            <field name="name">location_list</field>
+        </record>
+        <record model="ir.action.act_window" id="act_location_form">
+            <field name="name">Tax Locations</field>
+            <field name="res_model">account.tax.us.location</field>
+            <field name="domain"
+                eval="[('company', '=', Eval('context', {}).get('company', -1))]"
+                pyson="1"/>
+        </record>
+        <record model="ir.action.act_window.view" id="act_location_form_view1">
+            <field name="sequence" eval="10"/>
+            <field name="view" ref="location_view_list"/>
+            <field name="act_window" ref="act_location_form"/>
+        </record>
+        <record model="ir.action.act_window.view" id="act_location_form_view2">
+            <field name="sequence" eval="20"/>
+            <field name="view" ref="location_view_form"/>
+            <field name="act_window" ref="act_location_form"/>
+        </record>
+        <menuitem
+            parent="menu_us_sales_tax"
+            action="act_location_form"
+            sequence="30"
+            id="menu_location_form"/>
+
+        <record model="ir.ui.view" id="import_texas_start_view_form">
+            <field name="model">account.tax.us.import_texas.start</field>
+            <field name="type">form</field>
+            <field name="name">import_texas_start_form</field>
+        </record>
+        <record model="ir.ui.view" id="import_texas_result_view_form">
+            <field name="model">account.tax.us.import_texas.result</field>
+            <field name="type">form</field>
+            <field name="name">import_texas_result_form</field>
+        </record>
+        <record model="ir.action.wizard" id="wizard_import_texas">
+            <field name="name">Import Texas Sales Tax Rates</field>
+            <field name="wiz_name">account.tax.us.import_texas</field>
+        </record>
+        <record model="ir.action-res.group" id="wizard_import_texas_group_account_admin">
+            <field name="action" ref="wizard_import_texas"/>
+            <field name="group" ref="account.group_account_admin"/>
+        </record>
+        <menuitem
+            parent="menu_us_sales_tax"
+            action="wizard_import_texas"
+            sequence="10"
+            id="menu_import_texas"/>
+
+        <!-- Access rights -->
+        <record model="ir.model.access" id="access_jurisdiction">
+            <field name="model" search="[('model', '=', 'account.tax.us.jurisdiction')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_jurisdiction_account_admin">
+            <field name="model" search="[('model', '=', 'account.tax.us.jurisdiction')]"/>
+            <field name="group" ref="account.group_account_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_location">
+            <field name="model" search="[('model', '=', 'account.tax.us.location')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_location_account_admin">
+            <field name="model" search="[('model', '=', 'account.tax.us.location')]"/>
+            <field name="group" ref="account.group_account_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+
+        <record model="ir.rule.group" id="rule_group_jurisdiction_companies">
+            <field name="name">User in companies</field>
+            <field name="model" search="[('model', '=', 'account.tax.us.jurisdiction')]"/>
+            <field name="global_p" eval="True"/>
+        </record>
+        <record model="ir.rule" id="rule_jurisdiction_companies">
+            <field name="domain"
+                eval="[('company', 'in', Eval('companies', []))]"
+                pyson="1"/>
+            <field name="rule_group" ref="rule_group_jurisdiction_companies"/>
+        </record>
+        <record model="ir.rule.group" id="rule_group_location_companies">
+            <field name="name">User in companies</field>
+            <field name="model" search="[('model', '=', 'account.tax.us.location')]"/>
+            <field name="global_p" eval="True"/>
+        </record>
+        <record model="ir.rule" id="rule_location_companies">
+            <field name="domain"
+                eval="[('company', 'in', Eval('companies', []))]"
+                pyson="1"/>
+            <field name="rule_group" ref="rule_group_location_companies"/>
+        </record>
+    </data>
+</tryton>

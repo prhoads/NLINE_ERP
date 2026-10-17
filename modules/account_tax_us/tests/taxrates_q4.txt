@@ -1,0 +1,7 @@
+1	20264	202612	2026 - 4th	0.0625	0	3715	||***Required Upgrade is Now Available***||Sales Tax v7.2 is no longer being supported and must be upgraded to v7.3.  Please go to the Comptroller's EDI webpage to download and install v7.3.||The link is available at:||https://comptroller.texas.gov/taxes/file-pay/edi/||	v7.2N			
+20261	q	4/20/2026									
+20262	q	7/20/2026									
+Fort Worth 	2220031	0.01	Parker	4184008	0.005	Fort Worth Crime Control	5220503	0.005	Fort Worth MTA 	3220996	0.005
+Houston 	2101017	0.01	Fort Bend 	n/a	0	n/a	n/a	0	Houston MTA 	3101990	0.01
+Remote Seller-SLR	1777779	0.0175	n/a	n/a	0	n/a	n/a	0	n/a	n/a	0
+Rosenberg 	2079015	0.015	Fort Bend 	n/a	0	n/a	n/a	0	n/a	n/a	0

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data grouped="1">
+        <record model="ir.message" id="msg_jurisdiction_code_unique">
+            <field name="text">The code of the jurisdiction must be unique by state.</field>
+        </record>
+        <record model="ir.message" id="msg_no_sales_tax_account">
+            <field name="text">To use the US sales taxes, set the sales tax account in the accounting configuration.</field>
+        </record>
+        <record model="ir.message" id="msg_no_origin_location">
+            <field name="text">To use the US sales taxes, set the seller tax location in the accounting configuration.</field>
+        </record>
+        <record model="ir.message" id="msg_address_no_location">
+            <field name="text">To compute the sales taxes, set the sales tax location of address "%(address)s".</field>
+        </record>
+        <record model="ir.message" id="msg_location_over_cap">
+            <field name="text">The local jurisdictions of "%(location)s" exceed the 2%% cap: keep only the jurisdictions applying to the address and check "Manual".</field>
+        </record>
+        <record model="ir.message" id="msg_rate_file_invalid">
+            <field name="text">The rate file can not be read: %(error)s</field>
+        </record>
+    </data>
+</tryton>

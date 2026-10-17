@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<data>
+    <xpath expr="/form/field[@name='tax_rounding']" position="after">
+        <separator id="us_sales_tax" string="US Sales Tax" colspan="4"/>
+        <label name="us_sales_tax_account"/>
+        <field name="us_sales_tax_account"/>
+        <label name="us_sales_tax_sourcing"/>
+        <field name="us_sales_tax_sourcing"/>
+        <label name="us_sales_tax_origin"/>
+        <field name="us_sales_tax_origin"/>
+    </xpath>
+</data>
