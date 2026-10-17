@@ -5,7 +5,7 @@ import string
 from collections import defaultdict
 
 from trytond.i18n import gettext
-from trytond.model import ModelView, fields
+from trytond.model import ModelView, dualmethod, fields
 from trytond.modules.account_payment.exceptions import ProcessError
 from trytond.pool import Pool, PoolMeta
 from trytond.pyson import Eval
@@ -122,7 +122,7 @@ class Group(metaclass=PoolMeta):
                 ])
         return FILE_ID_MODIFIERS[len(groups) % len(FILE_ID_MODIFIERS)]
 
-    @classmethod
+    @dualmethod
     @ModelView.button
     def nacha_generate_file(cls, groups, _save=True):
         for group in groups:

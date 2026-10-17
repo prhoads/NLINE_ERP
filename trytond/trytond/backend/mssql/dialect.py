@@ -337,9 +337,25 @@ def _column(column):
     return to_value(column), None
 
 
+def _order_key(expression):
+    "Return the key of the sorted expression"
+    while isinstance(expression, (sql.Order, sql.NullOrder)):
+        expression = expression.expression
+    if isinstance(expression, sql.As):
+        return ('as', expression.output_name)
+    return (str(to_value(expression)), tuple(_value_params(expression)))
+
+
 def _select_order_by(select, depth):
     "Return the ORDER BY items and if OFFSET is needed"
-    order_by = list(select.order_by or [])
+    order_by = []
+    keys = set()
+    # SQL Server rejects a column sorted more than once
+    for expression in (select.order_by or []):
+        key = _order_key(expression)
+        if key not in keys:
+            keys.add(key)
+            order_by.append(expression)
     if (depth > 1 and order_by
             and select.limit is None and not select.offset):
         # ORDER BY is not allowed in sub-queries without TOP or OFFSET
