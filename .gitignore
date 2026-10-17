@@ -3,3 +3,4 @@ __pycache__/
 *.egg-info/
 /trytond/trytond/modules/*
 !/trytond/trytond/modules/__init__.py
+build/
