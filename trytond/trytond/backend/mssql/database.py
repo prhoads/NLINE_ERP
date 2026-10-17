@@ -12,6 +12,7 @@ parameter, e.g. ``mssql://user:pass@/?server=localhost%5CSQLEXPRESS``.
 Other query parameters are passed as ODBC connection attributes.
 """
 import datetime
+import json
 import logging
 import os
 import struct
@@ -20,6 +21,7 @@ import time
 import urllib.parse
 import warnings
 from collections import defaultdict, deque
+from decimal import Decimal
 
 import pyodbc
 from sql import Flavor, Table
@@ -48,6 +50,8 @@ _default_driver = 'ODBC Driver 17 for SQL Server'
 
 # Error numbers
 _OPERATIONAL_ERRORS = {
+    4060,  # cannot open database
+    18456,  # login failed
     1205,  # deadlock victim
     1222,  # lock request time out
     3960,  # snapshot update conflict
@@ -114,6 +118,7 @@ def _translate(error):
     return error
 
 
+_MAX_PARAMS = 2000
 _LONG_STRING = 4000
 _LONG_BINARY = 8000
 
@@ -145,6 +150,11 @@ class Cursor:
                     sizes[i] = (pyodbc.SQL_WVARCHAR, 0, 0)
                 else:
                     sizes[i] = (pyodbc.SQL_VARBINARY, 0, 0)
+        if len(params) > _MAX_PARAMS:
+            # SQL Server supports at most 2100 parameters
+            query = dialect.inline(query, params)
+            params = ()
+            sizes = None
         if sizes is not None:
             self._cursor.setinputsizes(sizes)
         if logger.isEnabledFor(logging.DEBUG):
@@ -246,12 +256,16 @@ class Connection:
             self._connection.commit()
         except pyodbc.Error as exception:
             raise _translate(exception) from exception
+        finally:
+            dialect.reset_transaction_timestamp(self)
 
     def rollback(self):
         try:
             self._connection.rollback()
         except pyodbc.Error as exception:
             raise _translate(exception) from exception
+        finally:
+            dialect.reset_transaction_timestamp(self)
 
     def close(self):
         try:
@@ -297,6 +311,22 @@ def _convert_datetimeoffset(value):
 
 _SQL_SS_TIME2 = -154
 _SQL_SS_TIMESTAMPOFFSET = -155
+
+
+def _convert_decimal(value):
+    # SQL_NUMERIC_STRUCT: precision, scale, sign (1 is positive) and
+    # 16 bytes little endian value
+    scale = value[1]
+    number = int.from_bytes(value[3:19], 'little')
+    if not value[2]:
+        number = -number
+    result = Decimal(number).scaleb(-scale)
+    # Remove trailing zeros added by the fixed scale like PostgreSQL
+    if result.as_tuple().exponent < 0:
+        result = result.normalize()
+        if result.as_tuple().exponent > 0:
+            result = result.quantize(1)
+    return result
 
 
 def _escape_identifier(name):
@@ -352,6 +382,7 @@ class Database(DatabaseInterface):
                 inst._used = 0
                 inst._pool_lock = threading.Lock()
                 inst._unique_indexable = {}
+                inst._functions_checked = False
                 databases[name] = inst
             inst._last_use = datetime.datetime.now()
             return inst
@@ -380,6 +411,8 @@ class Database(DatabaseInterface):
         else:
             attributes['Trusted_Connection'] = 'yes'
         attributes['DATABASE'] = name
+        # Tryton reads a cursor while executing other queries
+        attributes['MARS_Connection'] = 'yes'
         attributes['APP'] = os.environ.get('TRYTOND_APPNAME', 'trytond')
         for key, value in query.items():
             attributes[key] = value
@@ -399,6 +432,8 @@ class Database(DatabaseInterface):
         connection.add_output_converter(_SQL_SS_TIME2, _convert_time)
         connection.add_output_converter(
             _SQL_SS_TIMESTAMPOFFSET, _convert_datetimeoffset)
+        connection.add_output_converter(pyodbc.SQL_DECIMAL, _convert_decimal)
+        connection.add_output_converter(pyodbc.SQL_NUMERIC, _convert_decimal)
         cursor = connection.cursor()
         # Behave like the SQL standard
         cursor.execute(
@@ -416,6 +451,8 @@ class Database(DatabaseInterface):
         return self
 
     def get_connection(self, autocommit=False, readonly=False, ddl=False):
+        if not self._functions_checked and self.name != _default_name:
+            self._check_functions()
         retry = max(config.getint('database', 'retry'), _maxconn)
         for count in range(retry, -1, -1):
             conn = None
@@ -607,6 +644,7 @@ class Database(DatabaseInterface):
                 for statement in fp.read().split(';'):
                     if statement.strip():
                         cursor.execute(statement)
+            self._install_functions(cursor)
 
             ir_module = Table('ir_module')
             ir_module_dependency = Table('ir_module_dependency')
@@ -629,6 +667,47 @@ class Database(DatabaseInterface):
             connection.commit()
         finally:
             self.put_connection(connection)
+
+    def _check_functions(self):
+        "Install the helper functions on Tryton database"
+        with self._lock:
+            if self._functions_checked:
+                return
+            try:
+                conn = self._connect()
+            except pyodbc.Error:
+                # The error will be raised by get_connection
+                return
+            try:
+                conn.autocommit = True
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT COUNT(*) FROM sys.tables WHERE name = 'ir_module'")
+                if cursor.fetchone()[0]:
+                    self._install_functions(cursor)
+            finally:
+                conn.close()
+            self._functions_checked = True
+
+    @classmethod
+    def _install_functions(cls, cursor):
+        "Create or update the helper functions"
+        sql_file = os.path.join(os.path.dirname(__file__), 'functions.sql')
+        with open(sql_file) as fp:
+            content = fp.read()
+        for statement in content.split('\nGO\n'):
+            if not statement.strip():
+                continue
+            name = statement.split('dbo.', 1)[1].split('(', 1)[0]
+            cursor.execute(
+                "SELECT definition FROM sys.sql_modules "
+                "WHERE object_id = OBJECT_ID(?)", ('dbo.' + name,))
+            row = cursor.fetchone()
+            if row and row[0].strip() == statement.strip():
+                continue
+            if row:
+                cursor.execute('DROP FUNCTION dbo.%s' % name)
+            cursor.execute(statement.strip())
 
     def _check_collation(self, cursor):
         cursor.execute(
@@ -790,6 +869,13 @@ class Database(DatabaseInterface):
 
     def has_window_functions(self):
         return True
+
+    def json_get(self, column, key=None):
+        if key is None:
+            return column
+        # Values are stored by Tryton as compact JSON so the key is searched
+        # with the same encoding
+        return dialect.JSONGet(column, json.dumps(key))
 
     def sql_type(self, type_):
         if type_ in self.TYPES_MAPPING:

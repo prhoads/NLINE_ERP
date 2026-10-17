@@ -444,19 +444,83 @@ class TableHandler(TableHandlerInterface):
         self._update_definitions(columns=True)
 
     def add_fk(self, column_name, reference, on_delete=None):
-        # The ORM applies the CASCADE and SET NULL actions before deleting
-        # records.  SQL Server rejects these actions for self referencing
-        # tables and for multiple cascade paths, so NO ACTION is always used.
+        if on_delete is not None:
+            on_delete = on_delete.upper()
+        else:
+            on_delete = 'SET NULL'
+        on_delete = self._fk_action(column_name, reference, on_delete)
         name = self.convert_name(self.table_name + '_' + column_name + '_fkey')
-        if name in self._constraints:
-            return
         cursor = Transaction().connection.cursor()
+        if name in self._constraints:
+            cursor.execute(
+                'SELECT delete_referential_action_desc '
+                'FROM sys.foreign_keys WHERE name = ? '
+                'AND parent_object_id = OBJECT_ID(?)',
+                (name, _ident(self.table_name)))
+            row = cursor.fetchone()
+            current = row[0].replace('_', ' ') if row else None
+            if current == on_delete:
+                return
+            self.drop_fk(column_name)
         cursor.execute(
             'ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) '
-            'REFERENCES %s (id)' % (
+            'REFERENCES %s (id) ON DELETE %s' % (
                 _ident(self.table_name), _ident(name), _ident(column_name),
-                _ident(reference)))
+                _ident(reference), on_delete))
         self._update_definitions(constraints=True)
+
+    def _fk_action(self, column_name, reference, on_delete):
+        """Return the delete action supported by SQL Server
+
+        The ORM applies CASCADE and SET NULL before deleting records so the
+        database action is only needed for SQL deletion.  SQL Server rejects
+        cascading actions on self reference, on cycles and on multiple
+        cascade paths, so NO ACTION is used for them."""
+        if on_delete == 'RESTRICT':
+            return 'NO ACTION'
+        if on_delete not in {'CASCADE', 'SET NULL'}:
+            return 'NO ACTION'
+        if reference == self.table_name:
+            return 'NO ACTION'
+        field = getattr(self._model, '_fields', {}).get(column_name)
+        if on_delete == 'SET NULL' and getattr(field, 'required', False):
+            return 'NO ACTION'
+        cursor = Transaction().connection.cursor()
+        # Edges from referenced table to referencing table of cascading
+        # foreign keys except the one being created
+        cursor.execute(
+            'SELECT OBJECT_NAME(referenced_object_id), '
+            'OBJECT_NAME(parent_object_id) FROM sys.foreign_keys '
+            'WHERE delete_referential_action IN (1, 2, 3) '
+            'AND name != ?',
+            (self.convert_name(
+                    self.table_name + '_' + column_name + '_fkey'),))
+        children = {}
+        parents = {}
+        for parent, child in cursor.fetchall():
+            children.setdefault(parent, set()).add(child)
+            parents.setdefault(child, set()).add(parent)
+
+        def closure(start, graph):
+            seen = {start}
+            stack = [start]
+            while stack:
+                node = stack.pop()
+                for following in graph.get(node, ()):
+                    if following not in seen:
+                        seen.add(following)
+                        stack.append(following)
+            return seen
+        ancestors = closure(reference, parents)
+        if self.table_name in ancestors:
+            # cycle
+            return 'NO ACTION'
+        descendants = closure(self.table_name, children)
+        for ancestor in ancestors:
+            if closure(ancestor, children) & descendants:
+                # multiple cascade paths
+                return 'NO ACTION'
+        return on_delete
 
     def drop_fk(self, column_name, table=None):
         self.drop_constraint(column_name + '_fkey', table=table)

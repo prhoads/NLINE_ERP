@@ -6,7 +6,7 @@ import unittest
 
 from sql import Literal
 
-from trytond import filestore
+from trytond import backend, filestore
 from trytond.model import fields
 from trytond.model.exceptions import (
     RequiredValidationError, SQLConstraintError)
@@ -131,6 +131,8 @@ class FieldBinaryTestCase(unittest.TestCase):
         self.assertEqual(binary.binary_id, None)
 
     @with_transaction()
+    @unittest.skipIf(backend.name == 'mssql',
+        "SQL Server does not convert implicitly text into binary")
     def test_create_with_sql_value(self):
         "Test create binary with SQL value"
         Binary = Pool().get('test.binary')

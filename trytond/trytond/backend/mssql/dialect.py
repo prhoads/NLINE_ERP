@@ -475,6 +475,8 @@ class _Statement:
 def _select_str(self, original):
     if self.distinct_on:
         raise NotImplementedError("DISTINCT ON is not supported")
+    derived = getattr(_local, 'derived', False)
+    _local.derived = False
     with _Statement(self) as statement:
         depth = statement.depth
         if self.from_ is not None:
@@ -484,7 +486,7 @@ def _select_str(self, original):
         distinct = 'DISTINCT ' if self.distinct else ''
         if self.columns:
             columns = []
-            for column in self.columns:
+            for i, column in enumerate(self.columns, 1):
                 expression, as_ = _column(column)
                 if isinstance(expression, (Select, CombiningQuery)):
                     formatted = '(%s)' % expression
@@ -492,6 +494,8 @@ def _select_str(self, original):
                     formatted = str(expression)
                 if as_ is not None:
                     formatted += ' AS %s' % as_
+                elif derived and not isinstance(column, sql.Column):
+                    formatted += ' AS "_column%d"' % i
                 columns.append(formatted)
             columns = ', '.join(columns)
         else:
@@ -654,6 +658,9 @@ def _from_str(self, original):
             template = '(%s)'
         alias = getattr(from_, 'alias', None)
         columns_definitions = getattr(from_, 'columns_definitions', None)
+        if isinstance(from_, Select):
+            # SQL Server requires a name for each column of derived table
+            _local.derived = True
         if isinstance(from_, Values):
             width = len(from_[0]) if len(from_) else 0
             columns = ', '.join(
@@ -970,7 +977,8 @@ def _binary_params(self, original):
 
 
 def _cbrt_str(self, original):
-    return 'POWER(%s, 1.0 / 3)' % _format_value(self.operand)
+    return 'POWER(CAST(%s AS FLOAT), CAST(1 AS FLOAT) / 3)' % (
+            _format_value(self.operand))
 
 
 def _xor_str(self, original):
@@ -1296,9 +1304,9 @@ class _Trim(Expression):
         self.characters = characters
 
     def __str__(self):
-        if self.characters != ' ':
-            raise NotImplementedError("Only space can be trimmed")
         value = _format_value(self.string)
+        if self.characters != ' ':
+            return "dbo.tryton_trim(%s, ?, '%s')" % (value, self.position)
         if self.position == 'LEADING':
             return 'LTRIM(%s)' % value
         elif self.position == 'TRAILING':
@@ -1307,7 +1315,10 @@ class _Trim(Expression):
 
     @property
     def params(self):
-        return _value_params(self.string)
+        params = _value_params(self.string)
+        if self.characters != ' ':
+            params += (self.characters,)
+        return params
 
 
 class _Extract(Expression):
@@ -1345,8 +1356,12 @@ class _Extract(Expression):
         elif field == 'WEEK':
             return 'DATEPART(iso_week, %s)' % value
         elif field == 'EPOCH':
-            return ("(CAST(DATEDIFF(second, '1970-01-01', %s) AS FLOAT) "
-                "+ DATEPART(microsecond, %s) / 1000000.0)" % (value, value))
+            # Exact decimal seconds without DATEDIFF(second) overflow
+            return ("(CAST(DATEDIFF(day, '1970-01-01', %s) AS DECIMAL(20, 6))"
+                " * 86400"
+                " + DATEDIFF(second, CAST(CAST(%s AS DATE) AS DATETIME2), %s)"
+                " + CAST(DATEPART(microsecond, %s) AS DECIMAL(20, 6))"
+                " / 1000000)" % (value, value, value, value))
         elif field == 'DECADE':
             return '(DATEPART(year, %s) / 10)' % value
         elif field == 'CENTURY':
@@ -1362,7 +1377,9 @@ class _Extract(Expression):
     def params(self):
         p = _value_params(self.expression)
         field = self.field
-        if field in {'SECOND', 'EPOCH', 'ISOYEAR'}:
+        if field == 'EPOCH':
+            return p * 4
+        if field in {'SECOND', 'ISOYEAR'}:
             return p * 2
         return p
 
@@ -1381,6 +1398,10 @@ class _DateTrunc(Expression):
         if not isinstance(self.unit, str):
             raise NotImplementedError("DATE_TRUNC unit must be a constant")
         unit = self.unit.lower()
+        if unit in {'microsecond', 'millisecond', 'seconds', 'minutes',
+                'hours', 'days', 'weeks', 'months', 'quarters', 'years'}:
+            unit = {'microsecond': 'microseconds',
+                'millisecond': 'milliseconds'}.get(unit, unit.rstrip('s'))
         value = _format_value(self.expression)
         if unit in {'microseconds', 'milliseconds'}:
             return 'CAST(%s AS DATETIME2)' % value
@@ -1434,11 +1455,60 @@ class _ClockTimestamp(Expression):
         return ()
 
 
-class _ToChar(_Function):
+class _Cbrt(_Function):
     __slots__ = ()
 
     def __str__(self):
-        raise NotImplementedError("TO_CHAR is not supported")
+        value = _format_value(self.args[0])
+        return ('SIGN(%s) * POWER(CAST(ABS(%s) AS FLOAT), CAST(1 AS FLOAT) / 3)'
+            % (value, value))
+
+    @property
+    def params(self):
+        return _value_params(self.args[0]) * 2
+
+
+class _ToChar(_Function):
+    "TO_CHAR for date and time using FORMAT of SQL Server 2012"
+    __slots__ = ()
+    # PostgreSQL patterns to .NET custom format, longest first
+    _patterns = [
+        ('HH24', 'HH'), ('HH12', 'hh'), ('HH', 'hh'), ('MI', 'mm'),
+        ('SS', 'ss'), ('US', 'ffffff'), ('MS', 'fff'),
+        ('AM', 'tt'), ('PM', 'tt'), ('am', 'tt'), ('pm', 'tt'),
+        ('YYYY', 'yyyy'), ('YY', 'yy'), ('Month', 'MMMM'), ('Mon', 'MMM'),
+        ('MM', 'MM'), ('Day', 'dddd'), ('Dy', 'ddd'), ('DD', 'dd'),
+        ]
+
+    @classmethod
+    def _convert(cls, pattern):
+        result = []
+        i = 0
+        while i < len(pattern):
+            for source, target in cls._patterns:
+                if pattern.startswith(source, i):
+                    result.append(target)
+                    i += len(source)
+                    break
+            else:
+                char = pattern[i]
+                if char.isalpha() or char in '%\\':
+                    result.append('\\' + char)
+                else:
+                    result.append(char)
+                i += 1
+        return ''.join(result)
+
+    def __str__(self):
+        value, pattern = self.args
+        if not isinstance(pattern, str):
+            raise NotImplementedError("TO_CHAR pattern must be a constant")
+        return "FORMAT(%s, ?, 'en-US')" % _format_value(value)
+
+    @property
+    def params(self):
+        value, pattern = self.args
+        return _value_params(value) + (self._convert(pattern),)
 
 
 class _AtTimeZone(Expression):
@@ -1541,18 +1611,39 @@ def _utc_offset_case(value, zone):
 def transaction_timestamp():
     "Return the UTC timestamp of the current transaction like PostgreSQL"
     from trytond.transaction import Transaction
-    transaction = Transaction()
+    connection = Transaction().connection
     timestamps = _local.__dict__.get('timestamps')
     if timestamps is None:
-        timestamps = _local.timestamps = OrderedDict()
-    key = id(transaction), getattr(transaction, 'started_at', None)
+        timestamps = _local.timestamps = {}
+    key = id(connection)
     value = timestamps.get(key)
     if value is None:
-        while len(timestamps) >= 256:
-            timestamps.popitem(last=False)
         value = timestamps[key] = datetime.datetime.now(
             datetime.timezone.utc).replace(tzinfo=None)
     return value
+
+
+def reset_transaction_timestamp(connection):
+    "Reset the timestamp when the transaction of the connection ends"
+    timestamps = _local.__dict__.get('timestamps')
+    if timestamps:
+        timestamps.pop(id(connection), None)
+
+
+class JSONGet(Expression):
+    "JSON text of the value of the key"
+    __slots__ = ('column', 'key')
+
+    def __init__(self, column, key):
+        self.column = column
+        self.key = key
+
+    def __str__(self):
+        return 'dbo.tryton_json_get(%s, ?)' % _format_value(self.column)
+
+    @property
+    def params(self):
+        return _value_params(self.column) + (self.key,)
 
 
 MAPPING = {
@@ -1583,6 +1674,7 @@ MAPPING = {
     sql_functions.ToChar: _ToChar,
     sql_functions.AtTimeZone: _AtTimeZone,
     sql_functions.Atan2: _simple('ATN2'),
+    sql_functions.Cbrt: _Cbrt,
     sql_functions.SetSeed: _simple('RAND'),
     }
 

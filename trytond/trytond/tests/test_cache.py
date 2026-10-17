@@ -224,7 +224,8 @@ class MemoryCacheTestCase(unittest.TestCase):
         self.assertEqual(cache_expire.get('foo'), None)
 
 
-@unittest.skipIf(backend.name == 'sqlite', "SQLite has not channel")
+@unittest.skipIf(
+    backend.name in {'sqlite', 'mssql'}, "Backend has not channel")
 class MemoryCacheChannelTestCase(MemoryCacheTestCase):
     "Test Cache with channel"
 

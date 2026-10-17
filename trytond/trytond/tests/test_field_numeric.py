@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 
 from sql import Literal
 
+from trytond import backend
 from trytond.model.exceptions import (
     DigitsValidationError, RequiredValidationError)
 from trytond.pool import Pool
@@ -33,6 +34,8 @@ class FieldNumericTestCase(unittest.TestCase):
         self.assertEqual(numeric_none.numeric, None)
 
     @with_transaction()
+    @unittest.skipIf(backend.name == 'mssql',
+        "SQL Server stores numeric with 15 decimals")
     def test_create_20_digits(self):
         "Test create number 20 digits"
         Numeric = Pool().get('test.numeric')
@@ -168,6 +171,8 @@ class FieldNumericTestCase(unittest.TestCase):
                         }])
 
     @with_transaction()
+    @unittest.skipIf(backend.name == 'mssql',
+        "SQL Server stores numeric with 23 integer digits")
     def test_create_huge_digits_valid(self):
         "Test create a huge number with valid digits"
         Numeric = Pool().get('test.numeric_digits')
@@ -178,6 +183,8 @@ class FieldNumericTestCase(unittest.TestCase):
                     }])
 
     @with_transaction()
+    @unittest.skipIf(backend.name == 'mssql',
+        "SQL Server does not keep the trailing zeros")
     def test_create_trailing_zero_digits_invalid(self):
         "Test create numeric with invalid trailing zero digits"
         Numeric = Pool().get('test.numeric_digits')

@@ -273,8 +273,8 @@ class CommonTestCaseMixin:
             Text.search([('text', 'ilike', "%Sambreville%")]),
             [sambreville])
 
-    @unittest.skipIf(backend.name == 'sqlite',
-        "SQLite does not have full text search")
+    @unittest.skipIf(backend.name in {'sqlite', 'mssql'},
+        "Backend does not have full text search")
     @with_transaction()
     def test_search_full_text(self):
         "Test search full text"
@@ -295,8 +295,8 @@ class CommonTestCaseMixin:
                             ('text', 'ilike', value),
                             ]), result)
 
-    @unittest.skipIf(backend.name == 'sqlite',
-        "SQLite does not have full text search")
+    @unittest.skipIf(backend.name in {'sqlite', 'mssql'},
+        "Backend does not have full text search")
     @with_transaction()
     def test_search_full_text_order(self):
         "Test order search full text"
@@ -575,8 +575,8 @@ class FieldFullTextTestCase(unittest.TestCase):
                             ('full_text', 'not ilike', clause),
                             ]), neg_result)
 
-    @unittest.skipIf(backend.name == 'sqlite',
-        "SQLite does not have full text search")
+    @unittest.skipIf(backend.name in {'sqlite', 'mssql'},
+        "Backend does not have full text search")
     @with_transaction()
     def test_search_full_text(self):
         "Test search full text"
@@ -598,8 +598,8 @@ class FieldFullTextTestCase(unittest.TestCase):
                             ('full_text', 'ilike', clause),
                             ]), result)
 
-    @unittest.skipIf(backend.name == 'sqlite',
-        "SQLite does not have full text search")
+    @unittest.skipIf(backend.name in {'sqlite', 'mssql'},
+        "Backend does not have full text search")
     @with_transaction()
     def test_search_full_text_filter(self):
         "Test search full text"
@@ -624,8 +624,8 @@ class FieldFullTextTestCase(unittest.TestCase):
                                 ('full_text', '>', 0.01),
                                 ]), result)
 
-    @unittest.skipIf(backend.name == 'sqlite',
-        "SQLite does not have full text search")
+    @unittest.skipIf(backend.name in {'sqlite', 'mssql'},
+        "Backend does not have full text search")
     @with_transaction()
     def test_search_full_text_order(self):
         "Test order full text"

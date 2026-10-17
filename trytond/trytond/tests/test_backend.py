@@ -7,6 +7,7 @@ import unittest
 from sql import Literal, Select, functions
 from sql.functions import CurrentTimestamp, DateTrunc, ToChar
 
+from trytond import backend
 from trytond.model import fields
 from trytond.tests.test_tryton import activate_module, with_transaction
 from trytond.transaction import Transaction
@@ -131,6 +132,9 @@ class BackendTestCase(unittest.TestCase):
             (functions.Upper('tom'), 'TOM'),
             ]
         for func, result in tests:
+            if backend.name == 'mssql' and result in {math.inf, -math.inf}:
+                # SQL Server does not support infinity
+                continue
             with self.subTest(func=str(func)):
                 cursor.execute(*Select([func]))
                 value, = cursor.fetchone()
