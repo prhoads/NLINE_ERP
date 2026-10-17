@@ -5,6 +5,7 @@ import os
 import unittest
 from decimal import Decimal
 
+from trytond.exceptions import UserError
 from trytond.model.exceptions import AccessError
 from trytond.modules.account.tests import create_chart, get_fiscalyear
 from trytond.modules.company.tests import (
@@ -90,16 +91,19 @@ class AccountPayrollPaychexTestCase(CompanyTestMixin, ModuleTestCase):
             expense, = Account.search([('type.expense', '=', True)])
             cash, = Account.search([('name', '=', 'Main Cash')])
 
-            def run_import():
+            def run_import(distribute=None):
                 session_id, _, _ = Import.create()
                 wizard = Import(session_id)
                 wizard.start.company = company
                 wizard.start.journal = journal
                 wizard.start.report = sample_report()
-                return wizard.create_move()
+                if distribute is not None:
+                    wizard.distribute.lines = distribute(wizard)
+                return wizard
 
             # First import registers the lines to map
-            self.assertIsNone(run_import())
+            wizard = run_import()
+            self.assertEqual(wizard.transition_import_(), 'open_mappings')
             mappings = Mapping.search([])
             self.assertEqual(len(mappings), 9)
             for mapping in mappings:
@@ -107,20 +111,54 @@ class AccountPayrollPaychexTestCase(CompanyTestMixin, ModuleTestCase):
                     mapping.account = expense
                 else:
                     mapping.account = cash
+                if mapping.label_key == 'EARNINGS':
+                    mapping.distribute = True
             Mapping.save(mappings)
 
-            move = run_import()
+            # Earnings must be distributed
+            wizard = run_import()
+            self.assertEqual(wizard.transition_import_(), 'distribute')
+            proposal = wizard.default_distribute([])
+            self.assertEqual(proposal['lines'], [{
+                        'label': 'EARNINGS',
+                        'total': Decimal('10000.00'),
+                        'account': expense.id,
+                        'amount': Decimal('10000.00'),
+                        }])
+
+            def split(amounts):
+                def distribute(wizard):
+                    Line = pool.get(
+                        'account.payroll.paychex.import.distribute.line')
+                    return [Line(
+                            label='EARNINGS', total=Decimal('10000.00'),
+                            account=account, amount=amount)
+                        for account, amount in amounts]
+                return distribute
+
+            wizard = run_import(split([(expense, Decimal('6000.00'))]))
+            with self.assertRaises(UserError):
+                wizard.create_move()
+
+            wizard = run_import(split([
+                        (expense, Decimal('6000.00')),
+                        (cash, Decimal('4000.00'))]))
+            move = wizard.create_move()
             self.assertEqual(move.date, datetime.date(2026, 10, 9))
             self.assertEqual(move.state, 'draft')
-            self.assertEqual(len(move.lines), 9)
+            self.assertEqual(len(move.lines), 10)
             self.assertEqual(
                 sum(l.debit for l in move.lines), Decimal('10765.00'))
             self.assertEqual(
                 sum(l.credit for l in move.lines), Decimal('10765.00'))
+            earnings = [l for l in move.lines if l.description == 'EARNINGS']
+            self.assertEqual(
+                sorted(l.debit for l in earnings),
+                [Decimal('4000.00'), Decimal('6000.00')])
 
             # Same report can not be imported twice
             with self.assertRaises(AccessError):
-                run_import()
+                run_import().transition_import_()
 
 
 del ModuleTestCase

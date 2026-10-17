@@ -83,6 +83,17 @@ this repository contains the full copyright notices and license terms. -->
             <field name="type">form</field>
             <field name="name">import_start_form</field>
         </record>
+        <record model="ir.ui.view" id="import_distribute_view_form">
+            <field name="model">account.payroll.paychex.import.distribute</field>
+            <field name="type">form</field>
+            <field name="name">import_distribute_form</field>
+        </record>
+        <record model="ir.ui.view" id="import_distribute_line_view_list">
+            <field name="model">account.payroll.paychex.import.distribute.line</field>
+            <field name="type">tree</field>
+            <field name="name">import_distribute_line_list</field>
+        </record>
+
         <record model="ir.action.wizard" id="wizard_import">
             <field name="name">Import Paychex Payroll</field>
             <field name="wiz_name">account.payroll.paychex.import</field>

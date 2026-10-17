@@ -12,6 +12,9 @@ this repository contains the full copyright notices and license terms. -->
         <record model="ir.message" id="msg_report_already_imported">
             <field name="text">The Paychex payroll of check date %(check_date)s is already imported.</field>
         </record>
+        <record model="ir.message" id="msg_distribution_not_total">
+            <field name="text">The distribution of "%(line)s" must total %(total)s.</field>
+        </record>
         <record model="ir.message" id="msg_mapping_to_complete">
             <field name="text">Paychex Mappings to Complete</field>
         </record>

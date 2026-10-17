@@ -6,5 +6,6 @@ this repository contains the full copyright notices and license terms. -->
     <field name="section" expand="1"/>
     <field name="label" expand="1"/>
     <field name="account" expand="2"/>
+    <field name="distribute"/>
     <field name="party" expand="1"/>
 </tree>

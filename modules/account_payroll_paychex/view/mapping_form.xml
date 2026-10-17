@@ -11,6 +11,8 @@ this repository contains the full copyright notices and license terms. -->
     <field name="label"/>
     <label name="account"/>
     <field name="account"/>
+    <label name="distribute"/>
+    <field name="distribute"/>
     <label name="party"/>
     <field name="party"/>
 </form>

@@ -10,6 +10,8 @@ def register():
     Pool.register(
         payroll.Mapping,
         payroll.ImportStart,
+        payroll.ImportDistribute,
+        payroll.ImportDistributeLine,
         module='account_payroll_paychex', type_='model')
     Pool.register(
         payroll.Import,
