@@ -127,6 +127,8 @@ def restore_db_cache(name):
             result = _sqlite_copy(cache_file, restore=True)
         elif backend.name == 'postgresql':
             result = _pg_restore(cache_file)
+        elif backend.name == 'mssql':
+            result = _mssql_restore(cache_file)
     if result:
         Pool(DB_NAME).init()
     return result
@@ -134,13 +136,16 @@ def restore_db_cache(name):
 
 def backup_db_cache(name):
     if DB_CACHE:
-        if not DB_CACHE.startswith('postgresql://'):
+        if (not DB_CACHE.startswith('postgresql://')
+                and backend.name != 'mssql'):
             os.makedirs(DB_CACHE, exist_ok=True)
         cache_file = _db_cache_file(DB_CACHE, name)
         if backend.name == 'sqlite':
             _sqlite_copy(cache_file)
         elif backend.name == 'postgresql':
             _pg_dump(cache_file)
+        elif backend.name == 'mssql':
+            _mssql_backup(cache_file)
 
 
 def _db_cache_file(path, name):
@@ -269,6 +274,68 @@ def _pg_dump(cache_file):
             return dump_on_file()
         except OSError:
             return dump_on_template()
+
+
+def _mssql_execute(query, params=()):
+    "Execute query outside transaction on the default database"
+    database = backend.Database()
+    connection = database.get_connection(autocommit=True)
+    try:
+        cursor = connection.cursor()
+        try:
+            cursor.execute(query, params)
+            if cursor.description:
+                return cursor.fetchall()
+            # Consume the informational messages of BACKUP and RESTORE
+            while cursor._cursor.nextset():
+                pass
+        finally:
+            cursor.close()
+    finally:
+        database.put_connection(connection, True)
+
+
+def _mssql_backup(cache_file):
+    "Backup the database into a file of the SQL Server host (DB_CACHE)"
+    try:
+        _mssql_execute('RESTORE HEADERONLY FROM DISK = ?', (cache_file,))
+        exists = True
+    except Exception:
+        exists = False
+    if exists:
+        return False
+    backend.Database(DB_NAME).close()
+    _mssql_execute(
+        'BACKUP DATABASE [%s] TO DISK = ? WITH INIT, COPY_ONLY'
+        % DB_NAME.replace(']', ']]'), (cache_file,))
+    return True
+
+
+def _mssql_restore(cache_file):
+    "Restore the database from a file of the SQL Server host (DB_CACHE)"
+    try:
+        files = _mssql_execute(
+            'RESTORE FILELISTONLY FROM DISK = ?', (cache_file,))
+    except Exception:
+        return False
+    if db_exist(DB_NAME):
+        drop_db(DB_NAME)
+    backend.Database(DB_NAME).close()
+    path, = _mssql_execute(
+        "SELECT CAST(SERVERPROPERTY('InstanceDefaultDataPath') "
+        "AS NVARCHAR(4000))")[0]
+    moves = []
+    params = [cache_file]
+    for i, row in enumerate(files):
+        logical, physical, type_ = row[0], row[1], row[2]
+        extension = '.ldf' if type_ == 'L' else '.mdf'
+        moves.append('MOVE ? TO ?')
+        params.extend([logical, '%s%s_%d%s' % (path, DB_NAME, i, extension)])
+    _mssql_execute(
+        'RESTORE DATABASE [%s] FROM DISK = ? WITH REPLACE, %s' % (
+            DB_NAME.replace(']', ']]'), ', '.join(moves)), params)
+    backend.Database._list_cache.clear()
+    return True
 
 
 def with_transaction(user=1, context=None):

@@ -47,6 +47,9 @@ _collation = config.get(
 _compatibility_level = config.getint(
     'database', 'mssql_compatibility_level', default=0)
 _default_driver = 'ODBC Driver 17 for SQL Server'
+# The connections are pooled by Database, the pooling of the driver manager
+# could give a connection with pending results
+pyodbc.pooling = False
 
 # Error numbers
 _OPERATIONAL_ERRORS = {
