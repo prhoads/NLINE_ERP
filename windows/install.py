@@ -52,6 +52,7 @@ MODULES = [
     'nline_engineering',
     'nline_invoice_backdate',
     'nline_job',
+    'nline_nlbi',
     'nline_outside_service',
     'nline_sales_cost',
     'nline_wip',
