@@ -85,6 +85,20 @@
 
     applyTheme(theme());
 
+    var style = null;
+
+    /* The button and menu styles: also used by the pages that show the
+     * N-Line BI drop-ins instead of these menus */
+    function ensureStyle() {
+        if (style) {
+            return;
+        }
+        style = doc.createElement('style');
+        style.textContent = CSS;
+        (doc.head || doc.documentElement).appendChild(style);
+    }
+    ensureStyle();
+
     function esc(text) {
         return String(text === null || text === undefined ? '' : text)
             .replace(/[&<>"']/g, function (c) {
@@ -110,8 +124,8 @@
         ];
     }
 
-    var style = null;
     var popups = [];
+    var listening = false;
 
     function popup(button, html, align) {
         var box = doc.createElement('div');
@@ -150,10 +164,9 @@
     }
 
     function mount(options) {
-        if (!style) {
-            style = doc.createElement('style');
-            style.textContent = CSS;
-            doc.head.appendChild(style);
+        ensureStyle();
+        if (!listening) {
+            listening = true;
             doc.addEventListener('mousedown', function (event) {
                 if (!popups.some(function (box) {
                     return box.contains(event.target);

@@ -7,6 +7,10 @@
     'use strict';
 
     var session = null;
+    /* '' on the ERP server itself, '/ERP' through the N-Line BI web server,
+     * which signs people in once for every app */
+    var BASE = global.location.pathname.replace(/\/desk(\/.*)?$/, '');
+    var BEHIND_NLBI = BASE !== '';
 
     function storageGet(key) {
         try {
@@ -77,7 +81,8 @@
             headers.Authorization = 'Session ' + global.btoa(
                 session.login + ':' + session.user + ':' + session.key);
         }
-        var url = '/' + (database ? encodeURIComponent(database) + '/' : '');
+        var url = BASE + '/' + (database ? encodeURIComponent(database) + '/' :
+            '');
         return global.fetch(url, {
             method: 'POST',
             headers: headers,
@@ -128,7 +133,12 @@
         /* One sign-in with the Tryton web client: it keeps its session in
          * localStorage as sao_session_<database> on the same server. Adopt
          * it (the database last used first) when the desk has none. */
+        base: BASE,
+        behindNlbi: BEHIND_NLBI,
         adopt: function () {
+            if (BEHIND_NLBI) {
+                return Rpc.nlbiSignIn();
+            }
             if (session) {
                 return Promise.resolve(session);
             }
@@ -179,10 +189,56 @@
             };
             return tryNext();
         },
-        login: function (database, login, password) {
+        /* Through the N-Line BI web server: its signed-in person, its
+         * database; the Tryton session of the client is reused when it is
+         * the same person's, else the BI server signs the sign-in */
+        nlbiSignIn: function () {
+            return global.fetch(BASE + '/nlbi/config', {
+                credentials: 'same-origin',
+                headers: {Accept: 'application/json'}
+            }).then(function (response) {
+                if (!response.ok) {
+                    throw new RpcError('nlbi',
+                        'Sign in to N-Line BI to open the ERP.');
+                }
+                return response.json();
+            }).then(function (config) {
+                if (session && session.database === config.database &&
+                        session.login === config.login) {
+                    return session;
+                }
+                var stored = null;
+                try {
+                    stored = JSON.parse(global.localStorage.getItem(
+                        'sao_session_' + config.database));
+                } catch (e) {
+                    stored = null;
+                }
+                if (stored && stored.session &&
+                        stored.login === config.login) {
+                    session = {database: config.database,
+                        login: config.login, user: stored.user_id,
+                        key: stored.session, context: {}};
+                    return call('model.res.user.get_preferences',
+                        [true, {}]).then(function (preferences) {
+                        session.context = preferences;
+                        session.name = userName(preferences, config.login);
+                        storageSet('nline.desk.session', session);
+                        return session;
+                    }, function () {
+                        return Rpc.login(config.database, config.login,
+                            null, {nlbi: true});
+                    });
+                }
+                return Rpc.login(config.database, config.login, null,
+                    {nlbi: true});
+            });
+        },
+        login: function (database, login, password, parameters) {
             session = {database: database};
-            return call('common.db.login', [login, {password: password},
-                'en']).then(function (result) {
+            return call('common.db.login', [login,
+                parameters || {password: password}, 'en']).then(
+                function (result) {
                 session = {
                     database: database,
                     login: login,

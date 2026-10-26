@@ -12,6 +12,9 @@ this repository contains the full copyright notices and license terms. -->
         <record model="ir.message" id="msg_discount_given">
             <field name="text">Discount given on %(invoice)s</field>
         </record>
+        <record model="ir.message" id="msg_user_no_company">
+            <field name="text">Your Tryton user has no company yet. Ask an administrator to set it (Administration > Users).</field>
+        </record>
         <record model="ir.message" id="msg_deposit">
             <field name="text">Deposit</field>
         </record>

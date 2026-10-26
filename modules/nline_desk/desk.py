@@ -171,7 +171,10 @@ class Desk(ModelView):
     def _company(cls):
         pool = Pool()
         Company = pool.get('company.company')
-        return Company(Transaction().context['company'])
+        company = Transaction().context.get('company')
+        if not company:
+            raise ValidationError(gettext('nline_desk.msg_user_no_company'))
+        return Company(company)
 
     @classmethod
     def _config(cls, name):

@@ -60,6 +60,13 @@ body { background: var(--nl-bg); }
 .navbar-nav > li.nl-right-item { padding: 9px 4px 0; color: var(--nl-ink-2); }
 #user-preferences, #user-logout { display: none !important; }
 
+/* The N-Line BI drop-ins (Claude panel, Apps and name menus) under the
+ * client's Bootstrap, which shows hidden file inputs and styles forms */
+.nlbi-claude [hidden], .nlbi-claude input[type="file"] { display: none !important; }
+.nlbi-claude form { margin: 0; }
+.nlbi-claude textarea { width: auto; min-width: 0; }
+.nlbi-claude button, .nlbi-apps-list a, .nlbi-who-box a { text-decoration: none; }
+
 /* Accent of the N-Line BI apps */
 a { color: var(--nl-accent); }
 a:hover, a:focus { color: var(--nl-accent-dark); }

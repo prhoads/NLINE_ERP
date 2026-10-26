@@ -19,6 +19,20 @@
     ];
 
     Screens.login = function (main) {
+        if (Rpc.behindNlbi) {
+            /* The N-Line BI sign-in is the only one: sign in again with it */
+            main.appendChild(el('div.login', el('div.panel',
+                el('h1', 'Tryton ERP'),
+                el('p', 'Signing in with your N-Line BI account…'))));
+            Rpc.nlbiSignIn().then(function () {
+                renderUser();
+                Screens.afterLogin();
+            }, function () {
+                global.location.href = '/server/login?next=' +
+                    encodeURIComponent(global.location.pathname);
+            });
+            return;
+        }
         var database = el('select', {'aria-label': 'Database'});
         var login = el('input', {type: 'text', value: 'admin',
             autocomplete: 'username', 'aria-label': 'User'});
@@ -101,7 +115,7 @@
                 tile('#/deposits/new', '\u{1F3E6}', 'Make Deposits'))),
             el('div.panel', el('h2', 'Manufacturing'), el('div.flow',
                 tile('#/workorders', '\u{1F527}', 'Work Orders'),
-                tile('/#' + encodeURIComponent(Rpc.session().database),
+                tile(Rpc.base + '/#' + encodeURIComponent(Rpc.session().database),
                     '\u{1F5C2}', 'Tryton ERP')))));
     };
 
@@ -118,7 +132,48 @@
         });
     }
 
+    var nlbiHeader = false;
+
+    /* Through N-Line BI: its drop-ins, as in every N-Line BI app (Apps after
+     * the name, then Claude, light / dark and the name menu) */
+    function renderNlbiHeader() {
+        if (nlbiHeader) {
+            return;
+        }
+        nlbiHeader = true;
+        var apps = UI.clear(document.getElementById('nl-apps'));
+        var right = UI.clear(document.getElementById('nl-right'));
+        right.classList.add('nl-right');
+        apps.appendChild(el('span#apps-slot', {dataset: {btnClass:
+            'nl-btn'}}));
+        right.appendChild(el('span#claude-slot', {dataset: {app:
+            'Tryton ERP', btnClass: 'nl-btn'}}));
+        var theme = el('button.nl-btn.nl-theme', {type: 'button'});
+        var paint = function () {
+            var dark = NLineHeader.isDark();
+            theme.textContent = dark ? '☀' : '☾';
+            theme.title = dark ? 'Switch to light' : 'Switch to dark';
+            theme.setAttribute('aria-label', theme.title);
+        };
+        theme.addEventListener('click', function () {
+            NLineHeader.setTheme(NLineHeader.isDark() ? 'light' : 'dark');
+            paint();
+        });
+        paint();
+        right.appendChild(theme);
+        right.appendChild(el('span#who-slot'));
+        ['apps_menu.js', 'claude_panel.js', 'name_menu.js'].forEach(
+            function (name) {
+                document.head.appendChild(el('script', {type: 'module',
+                    src: '/server/web/' + name}));
+            });
+    }
+
     function renderUser() {
+        if (Rpc.behindNlbi) {
+            renderNlbiHeader();
+            return;
+        }
         var apps = UI.clear(document.getElementById('nl-apps'));
         var right = UI.clear(document.getElementById('nl-right'));
         var session = Rpc.session();
@@ -131,7 +186,7 @@
                 here: 'desk',
                 onPreferences: function () {
                     /* The preferences are those of the Tryton client */
-                    global.open('/#' + encodeURIComponent(session.database),
+                    global.open(Rpc.base + '/#' + encodeURIComponent(session.database),
                         '_blank');
                 },
                 onSignOut: function () {
