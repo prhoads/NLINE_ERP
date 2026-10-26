@@ -105,13 +105,25 @@
     }
 
     Screens.createInvoice = function (main) {
-        main.appendChild(el('h1', 'Create Invoices'));
+        var form = UI.form(main, {title: 'Create Invoices', kind: 'customer',
+            find: {model: 'account.invoice', title: 'Find invoices',
+                domain: [['type', '=', 'out']],
+                order: [['invoice_date', 'DESC'], ['id', 'DESC']],
+                columns: Screens.INVOICE_COLUMNS},
+            onSave: function (andNew) {
+                return save(andNew);
+            },
+            onClear: function () {
+                global.location.hash = '#/invoices/new?' + Date.now();
+            }});
+        main = form.body;
         var customer = UI.picker('party.party', {placeholder: 'Customer',
             label: 'Customer', fields: ['customer_payment_term'],
             onselect: function (record) {
                 if (record.customer_payment_term) {
                     term.value = record.customer_payment_term;
                 }
+                form.showParty(record.id);
                 Rpc.searchRead('party.address', [['party', '=', record.id]],
                     ['full_address'], {limit: 1}).then(function (rows) {
                     billTo.textContent = record.rec_name + '\n' +
@@ -169,7 +181,7 @@
                 UI.showError('Enter the customer and at least one line.');
                 return;
             }
-            UI.service('create_invoice', {party: customer.value(),
+            return UI.service('create_invoice', {party: customer.value(),
                 date: date.value, reference: po.value || null,
                 memo: memo.value || null, payment_term: term.value ?
                     parseInt(term.value, 10) : null, lines: lines}).then(
@@ -196,19 +208,27 @@
                     }
                 });
         };
-        main.appendChild(el('div.toolbar', el('span.spacer'),
-            el('button', {type: 'button', onclick: function () {
-                save(true);
-            }}, 'Save & New'),
-            el('button.primary', {type: 'button', onclick: function () {
-                save(false);
-            }}, 'Save & Close')));
     };
 
     Screens.receivePayment = function (main) {
-        main.appendChild(el('h1', 'Receive Payments'));
+        var form = UI.form(main, {title: 'Receive Payments', kind: 'customer',
+            find: {model: 'account.payment', title: 'Find payments',
+                domain: [['kind', '=', 'receivable']],
+                order: [['date', 'DESC'], ['id', 'DESC']],
+                columns: Screens.PAYMENT_COLUMNS},
+            onSave: function (andNew) {
+                return save(andNew);
+            },
+            onClear: function () {
+                global.location.hash = '#/payments/receive?' + Date.now();
+            }});
+        main = form.body;
         var customer = UI.picker('party.party', {placeholder:
-            'Received from', label: 'Received from', onselect: load});
+            'Received from', label: 'Received from', onselect: function (
+                record) {
+                form.showParty(record.id);
+                load(record);
+            }});
         var amount = UI.moneyInput({'aria-label': 'Payment amount'});
         var date = el('input', {type: 'date', value: UI.today(),
             'aria-label': 'Date'});
@@ -310,8 +330,8 @@
                 applied)))));
         main.appendChild(unapplied);
         render();
-        main.appendChild(el('div.toolbar', el('span.spacer'),
-            el('button.primary', {type: 'button', onclick: function () {
+        function save(andNew) {
+            {
                 var items = invoices.filter(function (i) {
                     return i.pay > 0;
                 }).map(function (i) {
@@ -322,7 +342,7 @@
                     UI.showError('Enter the customer and the amount.');
                     return;
                 }
-                UI.service('receive_payment', {journal: parseInt(
+                return UI.service('receive_payment', {journal: parseInt(
                     journal.value, 10), party: customer.value(),
                     date: date.value, amount: String(total),
                     reference: reference.value || null, items: items}).then(
@@ -330,17 +350,22 @@
                         UI.toast('Payment of ' + UI.money(result.amount,
                             true) + ' received into undeposited funds',
                             'ok');
-                        global.location.hash = '#/deposits/new';
+                        global.location.hash = andNew ?
+                            '#/payments/receive?' + Date.now() :
+                            '#/deposits/new';
                     }, function (error) {
                         if (!error.cancelled) {
                             UI.showError(error);
                         }
                     });
-            }}, 'Save & Close')));
+            }
+        }
     };
 
     Screens.makeDeposit = function (main) {
-        main.appendChild(el('h1', 'Make Deposits'));
+        main = UI.form(main, {title: 'Make Deposits', onSave: function () {
+            return save();
+        }}).body;
         var journal = el('select', {'aria-label': 'Deposit to'});
         var date = el('input', {type: 'date', value: UI.today(),
             'aria-label': 'Date'});
@@ -408,8 +433,8 @@
                 el('th.num', 'Amount'))), body,
             el('tfoot', el('tr', el('td', {colspan: 4}, 'Deposit total'),
                 total)))));
-        main.appendChild(el('div.toolbar', el('span.spacer'),
-            el('button.primary', {type: 'button', onclick: function () {
+        function save() {
+            {
                 var lines = payments.filter(function (p) {
                     return p.selected;
                 }).map(function (p) {
@@ -419,7 +444,7 @@
                     UI.showError('Select the payments to deposit.');
                     return;
                 }
-                UI.service('make_deposit', {journal: parseInt(journal.value,
+                return UI.service('make_deposit', {journal: parseInt(journal.value,
                     10), date: date.value, memo: memo.value || null,
                     lines: lines}).then(function (result) {
                     UI.toast('Deposit of ' + UI.money(result.amount, true) +
@@ -430,7 +455,8 @@
                         UI.showError(error);
                     }
                 });
-            }}, 'Save & Close')));
+            }
+        }
         load();
     };
 

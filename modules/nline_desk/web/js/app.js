@@ -89,38 +89,57 @@
         password.focus();
     };
 
-    function tile(href, icon, label) {
-        return el('a', {href: href}, el('span.icon', {'aria-hidden': 'true'},
-            icon), label);
-    }
+    /* The Home tab: the workflows, as on the QuickBooks Home Page; only the
+     * tiles of the menus the user sees (nline.desk.home) */
+    var ICONS = {
+        'Purchase Orders': '\u{1F6D2}', 'Receive Items': '\u{1F4E6}',
+        'Enter Bills': '\u{1F4C4}', 'Pay Bills': '\u{1F4B5}',
+        'Sales Orders': '\u{1F4DD}', 'Ship': '\u{1F69A}',
+        'Create Invoices': '\u{1F9FE}', 'Receive Payments': '\u{1F4B3}',
+        'Make Deposits': '\u{1F3E6}', 'Bills of Materials': '\u{1F4CB}',
+        'Work Orders': '\u{1F527}', 'Productions': '\u{1F3ED}',
+        'Inventory Counts': '\u{1F522}', 'Write Checks': '✍',
+        'Check Register': '\u{1F4D2}', 'Bank Statements': '\u{1F4C3}',
+        'Chart of Accounts': '\u{1F5C2}', 'Journal Entries': '\u{1F4D3}',
+        'Balance Sheet': '⚖', 'Income Statement': '\u{1F4C8}',
+        'Customer Center': '\u{1F465}', 'Vendor Center': '\u{1F3E2}',
+        'Parts': '⚙'
+    };
 
-    function arrow() {
-        return el('span.arrow', {'aria-hidden': 'true'}, '→');
+    function tile(item) {
+        return el('a.tile', {href: '#', onclick: function (event) {
+            event.preventDefault();
+            if (item.route !== null) {
+                UI.openScreen(item.route);
+            } else {
+                UI.openAction(item.action);
+            }
+        }}, el('span.icon', {'aria-hidden': 'true'},
+            ICONS[item.label] || '▢'), item.label);
     }
 
     Screens.home = function (main) {
-        main.appendChild(el('h1', 'Home'));
-        main.appendChild(el('div.home',
-            el('div.panel', el('h2', 'Vendors'), el('div.flow',
-                tile('#/bills/new', '\u{1F4C4}', 'Enter Bills'), arrow(),
-                tile('#/bills/pay', '\u{1F4B5}', 'Pay Bills'),
-                tile('#/checks/new', '✍', 'Write Checks'),
-                tile('#/vendors', '\u{1F465}', 'Vendor Center'))),
-            el('div.panel', el('h2', 'Customers'), el('div.flow',
-                tile('#/invoices/new', '\u{1F9FE}', 'Create Invoices'),
-                arrow(),
-                tile('#/payments/receive', '\u{1F4B3}', 'Receive Payments'),
-                arrow(),
-                tile('#/deposits/new', '\u{1F3E6}', 'Make Deposits'),
-                tile('#/customers', '\u{1F465}', 'Customer Center'))),
-            el('div.panel', el('h2', 'Banking'), el('div.flow',
-                tile('#/register', '\u{1F4D2}', 'Check Register'),
-                tile('#/checks/new', '✍', 'Write Checks'),
-                tile('#/deposits/new', '\u{1F3E6}', 'Make Deposits'))),
-            el('div.panel', el('h2', 'Manufacturing'), el('div.flow',
-                tile('#/workorders', '\u{1F527}', 'Work Orders'),
-                tile(Rpc.base + '/#' + encodeURIComponent(Rpc.session().database),
-                    '\u{1F5C2}', 'Tryton ERP')))));
+        main = UI.form(main, {title: 'Home'}).body;
+        var board = el('div.home');
+        main.appendChild(board);
+        Rpc.desk('home', []).then(function (sections) {
+            sections.forEach(function (section) {
+                var flow = el('div.flow' + (section.flow ? '.arrows' : ''));
+                section.tiles.forEach(function (item, index) {
+                    if (section.flow && index) {
+                        flow.appendChild(el('span.arrow', {'aria-hidden':
+                            'true'}, '→'));
+                    }
+                    flow.appendChild(tile(item));
+                });
+                board.appendChild(el('section.panel' + (section.flow ?
+                    '.flow-section' : ''), el('h2', section.title), flow));
+            });
+            if (!sections.length) {
+                board.appendChild(el('p.muted', 'Nothing to show: ask an ' +
+                    'administrator for access.'));
+            }
+        }, UI.showError);
     };
 
     function renderNav(route) {

@@ -98,6 +98,13 @@
     var userMenu = Sao.user_menu;
     Sao.user_menu = function (preferences) {
         userMenu.apply(this, arguments);
+        /* Signed in without a screen to open: the Home tab */
+        setTimeout(function () {
+            var hash = location.hash.replace(/^#!?/, '');
+            if (!Sao.Tab.tabs.length && hash.indexOf('/') < 0) {
+                openScreen('', 'Home');
+            }
+        }, 300);
         var session = Sao.Session.current_session;
         if (BEHIND_NLBI || !window.NLineHeader || !session) {
             return;
@@ -134,7 +141,8 @@
         'deposits/new': 'Make Deposits',
         'register': 'Check Register',
         'customers': 'Customer Center',
-        'vendors': 'Vendor Center'
+        'vendors': 'Vendor Center',
+        '': 'Home'
     };
 
     /* The screen of a route: "workorders/12?x" is the work orders screen */
@@ -185,8 +193,10 @@
             this.frame = jQuery('<iframe/>', {
                 'class': 'nl-screen',
                 'title': this.name,
-                'src': BASE + '/' + DESK.replace('#/', '?embed=1#/') +
-                    this.route
+                /* (the page itself is never taken from the cache: its
+                 * scripts carry their version) */
+                'src': BASE + '/' + DESK.replace('#/', '?embed=1&t=' +
+                    Date.now() + '#/') + this.route
             });
             this.content.append(this.frame);
         },
@@ -268,14 +278,45 @@
         });
     };
 
+    /* A message of a screen (e.g. "Bill 12 posted"), kept after its tab
+     * closed */
+    function toast(message, kind) {
+        var box = jQuery('#nl-toasts');
+        if (!box.length) {
+            box = jQuery('<div/>', {'id': 'nl-toasts',
+                'aria-live': 'polite'}).appendTo('body');
+        }
+        var item = jQuery('<div/>', {'class': 'nl-toast ' + kind,
+            'text': message}).appendTo(box);
+        setTimeout(function () {
+            item.fadeOut(400, function () {
+                item.remove();
+            });
+        }, kind === 'error' ? 8000 : 4000);
+    }
+
     /* From a screen: open another one in its own tab, or close (Save & Close) */
     window.addEventListener('message', function (event) {
         var data = event.data;
         if (event.origin !== location.origin || !data || !data.nline) {
             return;
         }
-        if (data.nline === 'open' && data.route) {
-            openScreen(String(data.route));
+        if (data.nline === 'open' && typeof data.route === 'string') {
+            openScreen(data.route);
+        } else if (data.nline === 'record' && data.model && data.id) {
+            Sao.Tab.create({
+                model: String(data.model),
+                res_id: Number(data.id),
+                mode: ['form', 'tree'],
+                view_ids: [],
+                domain: [],
+                context: {},
+                name: String(data.name || '')
+            });
+        } else if (data.nline === 'toast' && data.message) {
+            toast(String(data.message), String(data.kind || ''));
+        } else if (data.nline === 'action' && data.action) {
+            Sao.Action.execute(Number(data.action), {}, {});
         } else if (data.nline === 'close') {
             Sao.Tab.tabs.slice().forEach(function (tab) {
                 if (tab.frame && tab.frame[0].contentWindow === event.source) {

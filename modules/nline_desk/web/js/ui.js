@@ -146,6 +146,14 @@
     }
 
     function toast(message, kind) {
+        /* In a Tryton tab the message is shown by Tryton too: the tab may
+         * close at once (Save & Close) */
+        if (global.parent !== global && global.Screens &&
+                global.Screens.embedded) {
+            global.parent.postMessage({nline: 'toast', message:
+                String(message), kind: kind || ''}, global.location.origin);
+            return;
+        }
         var box = doc.getElementById('toasts');
         var item = el('div.toast' + (kind ? '.' + kind : ''), message);
         box.appendChild(item);
@@ -249,7 +257,32 @@
             placeholder: options.placeholder || '', 'aria-label':
                 options.label || options.placeholder || model});
         var list = el('div.picker-list');
-        var wrap = el('div.picker', input, list);
+        /* "..." (or F9): the full lookup with wildcards (frame.js) */
+        var more = el('button.picker-browse', {type: 'button', tabindex: -1,
+            title: 'Look up (F9)', 'aria-label': 'Look up', onclick:
+                function () {
+                    lookup();
+                }}, '…');
+        var wrap = el('div.picker', input, list, more);
+
+        function lookup() {
+            if (!global.UI.browse) {
+                return;
+            }
+            global.UI.browse(model, {title: options.label || options.placeholder,
+                domain: options.domain, order: options.order}).then(
+                function (record) {
+                    /* With the fields the screen needs (e.g. the terms) */
+                    global.Rpc.searchRead(model, [['id', '=', record.id]],
+                        ['rec_name'].concat(options.fields || [])).then(
+                        function (rows) {
+                            choose(rows[0] || record);
+                            input.focus();
+                        }, showError);
+                }, function () {
+                    input.focus();
+                });
+        }
         var timer = null;
         var active = -1;
         var items = [];
@@ -325,6 +358,11 @@
             }, 150);
         });
         input.addEventListener('keydown', function (event) {
+            if (event.key === 'F9') {
+                event.preventDefault();
+                lookup();
+                return;
+            }
             if (event.key === 'Enter' && pending) {
                 /* Typed faster than the search: search now, take the first */
                 event.preventDefault();

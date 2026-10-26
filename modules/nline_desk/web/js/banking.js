@@ -6,7 +6,7 @@
     var Screens = global.Screens = global.Screens || {};
 
     Screens.register = function (main) {
-        main.appendChild(el('h1', 'Check Register'));
+        main = UI.form(main, {title: 'Check Register'}).body;
         var journal = el('select', {'aria-label': 'Bank account'});
         var from = el('input', {type: 'date', value: UI.addDays(UI.today(),
             -60), 'aria-label': 'From'});

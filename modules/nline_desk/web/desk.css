@@ -113,7 +113,7 @@ table.data tfoot td { font-weight: 600; border-top: 2px solid var(--line); backg
 
 /* Home: the QuickBooks-style flow */
 .home { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
-.home .panel h2 { margin-top: 0; color: var(--head); }
+.home .panel h2 { margin-top: 0; color: var(--accent); }
 .flow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .flow a { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 96px; height: 78px; border: 1px solid var(--line); border-radius: 8px; background: var(--accent-soft); color: var(--ink); text-decoration: none; font-size: 12.5px; text-align: center; padding: 6px; }
 .flow a:hover { border-color: var(--accent); background: var(--button-hover); }
@@ -243,3 +243,42 @@ table.data tfoot td { font-weight: 600; border-top: 2px solid var(--line); backg
 html.embed #topbar { display: none; }
 html.embed body { background: var(--paper); }
 html.embed #main { padding: 12px 16px; max-width: none; }
+
+/* ---- Building blocks (js/frame.js) ---------------------------------- */
+/* The ribbon of a form or center: title, Find, ..., Save & New, Save & Close */
+.ribbon { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 10px; margin: -4px 0 12px; background: var(--table-head); border: 1px solid var(--line); border-radius: 6px; position: sticky; top: 0; z-index: 20; }
+.ribbon .ribbon-title { font-size: 17px; font-weight: 600; margin-right: 10px; }
+.ribbon .spacer { flex: 1; }
+.ribbon button { padding: 5px 12px; }
+/* The form with the history panel on the right, as in QuickBooks */
+.form-layout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 14px; align-items: start; }
+.form-layout.no-history { grid-template-columns: minmax(0, 1fr); }
+.history { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; position: sticky; top: 60px; font-size: 13px; }
+.history h3 { margin: 0 0 8px; font-size: 15px; }
+.history h4 { margin: 12px 0 6px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.history-balance { display: flex; justify-content: space-between; align-items: baseline; }
+.history-balance strong { font-size: 16px; }
+.history-list { list-style: none; margin: 0 0 10px; padding: 0; }
+.history-list li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--line-soft); }
+@media (max-width: 900px) { .form-layout { grid-template-columns: minmax(0, 1fr); } .history { position: static; } }
+/* Line grid: row marker (+ new, ✎ edited) and delete */
+table.lines th.marker, table.lines td.marker { width: 22px; text-align: center; color: var(--muted); padding: 0 2px; }
+table.lines td.row-delete { width: 30px; }
+table.lines td.row-delete button { padding: 2px 7px; color: var(--muted); }
+/* The "..." lookup of a field and its dialog */
+.picker { display: flex; }
+.picker input { flex: 1; min-width: 0; }
+.picker-browse { padding: 0 7px; margin-left: 2px; color: var(--muted); }
+.modal .browse { max-height: 340px; overflow-y: auto; margin-top: 8px; border: 1px solid var(--line); border-radius: 4px; }
+.modal .browse tr { cursor: pointer; }
+.modal .browse tr.active td { background: var(--accent-soft); }
+.overlay .modal:has(.browse) { max-width: 640px; }
+/* Centers: list on the left, detail on the right */
+.center-list { display: flex; flex-direction: column; gap: 8px; }
+.center-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); padding: 0 8px; }
+.center-detail { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; min-width: 0; }
+/* Home: the workflows on one line each, the other sections side by side */
+.home { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.home .flow-section { grid-column: 1 / -1; }
+.home .flow.arrows { flex-wrap: nowrap; overflow-x: auto; }
+@media (max-width: 900px) { .home { grid-template-columns: minmax(0, 1fr); } }

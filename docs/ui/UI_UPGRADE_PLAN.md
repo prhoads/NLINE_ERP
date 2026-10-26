@@ -24,9 +24,10 @@ Both products share a small set of patterns. Build them once in `web/js/ui.js`:
 
 ## Screens by phase
 
-Done today: Enter Bills, Pay Bills, Write Checks, Create Invoices, Receive Payments, Make Deposits, Check Register, Customer Center, Vendor Center, Work Orders (cards).
+Done before the plan: Enter Bills, Pay Bills, Write Checks, Create Invoices, Receive Payments, Make Deposits, Check Register, Customer Center, Vendor Center, Work Orders (cards).
 
-1. **Foundations.** The building blocks above; the Home tab; the menus regrouped as QuickBooks/Jobshop users expect (Customers, Vendors, Banking, Company, Engineering, Sales, Inventory, Purchasing, Shopfloor). The existing screens move onto the new form frame.
+1. **Foundations (done 2026-10-28).** `web/js/frame.js`: `UI.form` (ribbon: Find, Clear, Save & New, Save & Close, Alt+S / Alt+N / Alt+R / Ctrl+F; history panel of the customer or vendor), `UI.grid` (row markers, totals, Enter to the next cell), `UI.browse` ("..." and F9 in every lookup field, * wildcards), `UI.center`, `UI.openRecord/openScreen/openAction`. Home tab (`nline.desk.home`, tiles only for the menus the user sees) opened at sign-in. Menus Home, Customers, Vendors, Banking, Shop Floor, Engineering, Inventory, Company first; the standard top menus are proposed under Superseded Menus. All existing screens on the frame; the invoice item grid moves to `UI.grid` with phase 2. The report viewer comes with the Report Center in phase 2.
+   Original phase 1 scope: The building blocks above; the Home tab; the menus regrouped as QuickBooks/Jobshop users expect (Customers, Vendors, Banking, Company, Engineering, Sales, Inventory, Purchasing, Shopfloor). The existing screens move onto the new form frame.
 2. **QuickBooks daily accounting.** Sales Receipts, Credit Memos/Refunds (+ apply credits), Statements, Enter Credit Card Charges, Make General Journal Entries, Chart of Accounts with registers, Reconcile, Income Tracker, Bill Tracker, Item List, Report Center (P&L, Balance Sheet, A/R and A/P aging, with drill-down to the form).
 3. **Jobshop order to cash.** Customers window, Sales Order with lines linked to work orders, Shipping, Invoicing from shipments; Parts window (where used, transactions, availability).
 4. **Jobshop purchasing.** Supplier window, Purchase Order (lines linked to work orders), Receiving (receiver + returns), QuickBooks Receive Inventory / Enter Bills Against Inventory on the same data.

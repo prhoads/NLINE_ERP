@@ -119,3 +119,9 @@ a:hover, a:focus { color: var(--nl-accent-dark); }
     display: block; width: 100%; border: 0;
     height: calc(100vh - 110px);
 }
+
+/* Messages of the N-Line screens (custom.js toast) */
+#nl-toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 2000; }
+.nl-toast { background: #24323f; color: #fff; padding: 9px 14px; border-radius: 6px; box-shadow: 0 6px 18px rgba(0,0,0,.2); max-width: 380px; }
+.nl-toast.ok { background: #1d6b55; }
+.nl-toast.error { background: #b3261e; }

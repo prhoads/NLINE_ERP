@@ -162,8 +162,92 @@ class Desk(ModelView):
             cls.__rpc__[name] = RPC(readonly=False)
         for name in [
                 'open_bills', 'open_invoices', 'undeposited_payments',
-                'register', 'party_center', 'masters', 'work_order']:
+                'register', 'party_center', 'masters', 'work_order',
+                'home']:
             cls.__rpc__[name] = RPC()
+
+    # ---- Home ------------------------------------------------------------
+
+    # The Home tab: the workflows as on the QuickBooks Home Page, each tile
+    # the action of a menu (shown only when the user sees that menu); flow
+    # sections are drawn with arrows
+    HOME = [
+        ('Vendors', True, [
+                ('Purchase Orders', 'purchase.act_purchase_form'),
+                ('Receive Items', 'stock.act_shipment_in_form'),
+                ('Enter Bills', 'nline_desk.url_desk_bills'),
+                ('Pay Bills', 'nline_desk.url_desk_pay_bills'),
+                ]),
+        ('Customers', True, [
+                ('Sales Orders', 'sale.act_sale_form'),
+                ('Ship', 'stock.act_shipment_out_form'),
+                ('Create Invoices', 'nline_desk.url_desk_invoices'),
+                ('Receive Payments', 'nline_desk.url_desk_receive'),
+                ('Make Deposits', 'nline_desk.url_desk_deposits'),
+                ]),
+        ('Shop Floor', True, [
+                ('Bills of Materials', 'production.act_bom_list'),
+                ('Work Orders', 'nline_desk.url_desk_workorders'),
+                ('Productions', 'production.act_production_list'),
+                ('Inventory Counts', 'stock.act_inventory_form'),
+                ]),
+        ('Banking', False, [
+                ('Write Checks', 'nline_desk.url_desk_checks'),
+                ('Check Register', 'nline_desk.url_desk_register'),
+                ('Bank Statements', 'account_statement.act_statement_form'),
+                ]),
+        ('Company', False, [
+                ('Chart of Accounts', 'account.act_account_tree'),
+                ('Journal Entries', 'account.act_move_form'),
+                ('Balance Sheet', 'account.act_account_balance_sheet_tree'),
+                ('Income Statement',
+                    'account.act_account_income_statement_tree'),
+                ]),
+        ('Centers', False, [
+                ('Customer Center', 'nline_desk.url_desk_customers'),
+                ('Vendor Center', 'nline_desk.url_desk_vendors'),
+                ('Parts', 'product.act_template_form'),
+                ]),
+        ]
+
+    @classmethod
+    def home(cls):
+        """Return the sections of the Home tab with the tiles the user may
+        open: label, action (ir.action id) and route (N-Line screens)"""
+        pool = Pool()
+        Menu = pool.get('ir.ui.menu')
+        ModelData = pool.get('ir.model.data')
+        visible = {}
+        for menu in Menu.search([]):
+            if menu.action and menu.action.id >= 0:
+                visible[str(menu.action)] = menu.action
+        sections = []
+        for title, flow, tiles in cls.HOME:
+            shown = []
+            for label, xml_id in tiles:
+                module, fs_id = xml_id.split('.')
+                with Transaction().set_context(_check_access=False):
+                    data = ModelData.search([
+                            ('module', '=', module),
+                            ('fs_id', '=', fs_id),
+                            ], limit=1)
+                if not data:
+                    continue
+                action = visible.get('%s,%s' % (data[0].model,
+                        data[0].db_id))
+                if not action:
+                    continue
+                url = getattr(action, 'url', None) or ''
+                shown.append({
+                        'label': label,
+                        'action': action.action.id,
+                        'route': (url.split('#/', 1)[1]
+                            if url.startswith('desk/') else None),
+                        })
+            if shown:
+                sections.append({
+                        'title': title, 'flow': flow, 'tiles': shown})
+        return sections
 
     # ---- Helpers ---------------------------------------------------------
 

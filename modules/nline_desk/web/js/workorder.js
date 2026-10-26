@@ -19,7 +19,7 @@
         'done', 'cancelled'];
 
     Screens.workorders = function (main) {
-        main.appendChild(el('h1', 'Work Orders'));
+        main = UI.form(main, {title: 'Work Orders'}).body;
         var search = el('input', {type: 'text', placeholder:
             'Search number or part', 'aria-label': 'Search work orders'});
         var body = el('tbody');

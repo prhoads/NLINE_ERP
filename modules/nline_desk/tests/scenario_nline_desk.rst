@@ -215,12 +215,25 @@ The administrator hides a superseded standard menu and shows it again::
     >>> len(Menu.find([('id', '=', menu_id)]))
     1
 
-The N-Line screens are in the Tryton menus, opened in Tryton tabs::
+The N-Line screens are in the QuickBooks / Jobshop menus, opened in Tryton
+tabs::
 
-    >>> purchases, = Menu.find([('name', '=', "Purchases"), ('parent', '=', None)])
+    >>> vendors, = Menu.find([('name', '=', "Vendors"), ('parent', '=', None)])
     >>> {'Enter Bills', 'Pay Bills', 'Vendor Center'} <= {
-    ...     m.name for m in purchases.childs}
+    ...     m.name for m in vendors.childs}
     True
+    >>> home, = Menu.find([('name', '=', "Home"), ('parent', '=', None)])
+
+The Home tab shows the workflows of the menus the user sees::
+
+    >>> Desk = Model.get('nline.desk')
+    >>> sections = Desk.home({})
+    >>> [s['title'] for s in sections][:2]
+    ['Vendors', 'Customers']
+    >>> bills = [t for t in sections[0]['tiles']
+    ...     if t['label'] == 'Enter Bills'][0]
+    >>> bills['route']
+    'bills/new'
     >>> Menu.find([('name', '=', "N-Line"), ('parent', '=', None)])
     []
 

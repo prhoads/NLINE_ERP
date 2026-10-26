@@ -9,94 +9,60 @@
     /* The expense grid of bills and checks: account, memo, amount and the
      * cost order (sales order) the cost is for */
     function expenseGrid(onchange, kind) {
-        var body = el('tbody');
-        var total = el('td.num', '0.00');
-        var rows = [];
         var accountDomain = kind === 'revenue' ?
             [['type.revenue', '=', true], ['closed', '!=', true]] :
             [['type.expense', '=', true], ['closed', '!=', true]];
-
-        function addRow() {
-            var account = UI.picker('account.account', {domain:
-                accountDomain, placeholder: 'Account', label: 'Account'});
-            var memo = el('input', {type: 'text', 'aria-label': 'Memo'});
-            var amount = UI.moneyInput({'aria-label': 'Amount'});
-            var cost = UI.picker('analytic_account.account', {domain: [
-                ['type', '=', 'normal']], placeholder: 'Sales order',
-                label: 'Cost order'});
-            var row = {account: account, memo: memo, amount: amount,
-                cost: cost};
-            var tr = el('tr', el('td', {style: {width: '34%'}}, account.node),
-                el('td', memo), el('td', {style: {width: '18%'}},
-                    cost.node),
-                el('td', {style: {width: '14%'}}, amount),
-                el('td', {style: {width: '30px'}}, el('button', {type:
-                    'button', title: 'Remove line', 'aria-label':
-                    'Remove line', onclick: function () {
-                        rows.splice(rows.indexOf(row), 1);
-                        tr.remove();
-                        update();
-                    }}, '✕')));
-            amount.addEventListener('input', update);
-            amount.addEventListener('blur', function () {
-                update();
-                if (rows[rows.length - 1] === row && UI.parseMoney(
-                        amount.value)) {
-                    addRow();
-                }
-            });
-            rows.push(row);
-            body.appendChild(tr);
-            return row;
-        }
-
-        function update() {
-            var sum = rows.reduce(function (s, row) {
-                return s + UI.parseMoney(row.amount.value);
-            }, 0);
-            total.textContent = UI.money(sum);
-            if (onchange) {
-                onchange(sum);
-            }
-        }
-
-        addRow();
+        var grid = UI.grid({total: 'amount', onchange: onchange, columns: [
+            {key: 'account', label: 'Account', width: '34%', kind: 'picker',
+                picker: {model: 'account.account', domain: accountDomain,
+                    placeholder: 'Account'}},
+            {key: 'memo', label: 'Memo'},
+            {key: 'cost', label: 'Cost order', width: '18%', kind: 'picker',
+                picker: {model: 'analytic_account.account', domain: [
+                    ['type', '=', 'normal']], placeholder: 'Sales order'}},
+            {key: 'amount', label: 'Amount', width: '14%', kind: 'money'}
+        ]});
         return {
-            node: el('div.table-wrap', el('table.data',
-                el('thead', el('tr', el('th', 'Account'), el('th', 'Memo'),
-                    el('th', 'Cost order'), el('th.num', 'Amount'),
-                    el('th', ''))), body,
-                el('tfoot', el('tr', el('td', {colspan: 3}, 'Total'), total,
-                    el('td', ''))))),
+            node: grid.node,
             lines: function () {
-                return rows.filter(function (row) {
-                    return UI.parseMoney(row.amount.value);
-                }).map(function (row) {
-                    if (!row.account.value()) {
+                return grid.rows().map(function (row) {
+                    if (!row.account) {
                         throw new Error('Choose the account of every line.');
                     }
                     return {
-                        account: row.account.value(),
-                        description: row.memo.value || null,
-                        amount: String(UI.parseMoney(row.amount.value)),
-                        cost_order: row.cost.value()
+                        account: row.account,
+                        description: row.memo || null,
+                        amount: String(row.amount),
+                        cost_order: row.cost
                     };
                 });
             },
-            total: function () {
-                return rows.reduce(function (s, row) {
-                    return s + UI.parseMoney(row.amount.value);
-                }, 0);
-            },
+            total: grid.total,
             setFirst: function (accountId, accountName, memo) {
-                rows[0].account.set(accountId, accountName);
+                var first = grid.controls()[0];
+                first.account.set(accountId, accountName);
                 if (memo) {
-                    rows[0].memo.value = memo;
+                    first.memo.value = memo;
                 }
             }
         };
     }
     Screens.expenseGrid = expenseGrid;
+
+    /* The columns of the Find of bills and invoices */
+    var INVOICE_COLUMNS = [
+        {field: 'number', label: 'Number'},
+        {field: 'invoice_date', label: 'Date'},
+        {field: 'rec_name', label: 'Invoice'},
+        {field: 'total_amount', label: 'Amount', money: true},
+        {field: 'state', label: 'State'}];
+    Screens.INVOICE_COLUMNS = INVOICE_COLUMNS;
+    var PAYMENT_COLUMNS = [
+        {field: 'date', label: 'Date'},
+        {field: 'rec_name', label: 'Payment'},
+        {field: 'amount', label: 'Amount', money: true},
+        {field: 'state', label: 'State'}];
+    Screens.PAYMENT_COLUMNS = PAYMENT_COLUMNS;
 
     function paymentJournals(method) {
         var domain = method ? [['process_method', 'in', method]] : [];
@@ -113,13 +79,24 @@
     }
 
     Screens.enterBill = function (main) {
-        main.appendChild(el('h1', 'Enter Bills'));
+        var form = UI.form(main, {title: 'Enter Bills', kind: 'vendor',
+            find: {model: 'account.invoice', title: 'Find bills', domain: [['type', '=', 'in']],
+                order: [['invoice_date', 'DESC'], ['id', 'DESC']],
+                columns: INVOICE_COLUMNS},
+            onSave: function (andNew) {
+                return save(andNew);
+            },
+            onClear: function () {
+                global.location.hash = '#/bills/new?' + Date.now();
+            }});
+        main = form.body;
         var vendor = UI.picker('party.party', {placeholder: 'Vendor',
             label: 'Vendor', fields: ['supplier_payment_term'],
             onselect: function (record) {
                 if (record.supplier_payment_term) {
                     term.value = record.supplier_payment_term;
                 }
+                form.showParty(record.id);
             }});
         var date = el('input', {type: 'date', value: UI.today(),
             'aria-label': 'Date'});
@@ -160,7 +137,7 @@
                 UI.showError('Enter the vendor and at least one amount.');
                 return;
             }
-            UI.service('enter_bill', {party: vendor.value(), date: date.value,
+            return UI.service('enter_bill', {party: vendor.value(), date: date.value,
                 reference: ref.value || null, memo: memo.value || null,
                 payment_term: term.value ? parseInt(term.value, 10) : null,
                 lines: lines}).then(function (result) {
@@ -174,17 +151,21 @@
                 }
             });
         };
-        main.appendChild(el('div.toolbar', el('span.spacer'),
-            el('button', {type: 'button', onclick: function () {
-                save(true);
-            }}, 'Save & New'),
-            el('button.primary', {type: 'button', onclick: function () {
-                save(false);
-            }}, 'Save & Close')));
     };
 
     Screens.writeCheck = function (main) {
-        main.appendChild(el('h1', 'Write Checks'));
+        var form = UI.form(main, {title: 'Write Checks', kind: 'vendor',
+            find: {model: 'account.payment', title: 'Find checks',
+                domain: [['kind', '=', 'payable']],
+                order: [['date', 'DESC'], ['id', 'DESC']],
+                columns: PAYMENT_COLUMNS},
+            onSave: function (andNew) {
+                return save(andNew);
+            },
+            onClear: function () {
+                global.location.hash = '#/checks/new?' + Date.now();
+            }});
+        main = form.body;
         var company = (Rpc.context()['company.rec_name']) || '';
         var bank = el('select', {'aria-label': 'Bank account'});
         var number = el('input', {type: 'text', readonly: true,
@@ -194,6 +175,7 @@
         var address = el('div.address', {'aria-label': 'Address'}, '');
         var payee = UI.picker('party.party', {placeholder: 'Pay to the order of',
             label: 'Payee', onselect: function (record) {
+                form.showParty(record.id);
                 Rpc.searchRead('party.address', [['party', '=', record.id]],
                     ['full_address'], {limit: 1}).then(function (rows) {
                     address.textContent = record.rec_name + '\n' +
@@ -282,7 +264,7 @@
                     '.');
                 return;
             }
-            UI.service('write_check', {journal: parseInt(bank.value, 10),
+            return UI.service('write_check', {journal: parseInt(bank.value, 10),
                 party: payee.value(), date: date.value,
                 memo: memo.value || null, lines: lines}).then(
                 function (result) {
@@ -303,13 +285,6 @@
                     }
                 });
         };
-        main.appendChild(el('div.toolbar', el('span.spacer'),
-            el('button', {type: 'button', onclick: function () {
-                save(true);
-            }}, 'Save & New'),
-            el('button.primary', {type: 'button', onclick: function () {
-                save(false);
-            }}, 'Save & Close')));
     };
 
     function printChecks(group) {
@@ -320,7 +295,7 @@
     Screens.printChecks = printChecks;
 
     Screens.payBills = function (main) {
-        main.appendChild(el('h1', 'Pay Bills'));
+        main = UI.form(main, {title: 'Pay Bills'}).body;
         var date = el('input', {type: 'date', value: UI.today(),
             'aria-label': 'Payment date'});
         var method = el('select', {'aria-label': 'Payment method'});
@@ -484,59 +459,52 @@
         load();
     };
 
-    /* Customer and Vendor Centers share the layout */
+    /* Customer and Vendor Centers share the layout (UI.center) */
     function center(main, kind) {
-        main.appendChild(el('h1', kind === 'customer' ? 'Customer Center' :
-            'Vendor Center'));
-        var search = el('input', {type: 'text', placeholder: 'Search',
-            'aria-label': 'Search'});
-        var list = el('div.party-list');
-        var detail = el('div.panel', el('p.muted', 'Choose a ' + kind + '.'));
-        main.appendChild(el('div.center', el('div.panel', search,
-            el('div', {style: {height: '8px'}}), list), detail));
         var field = kind === 'customer' ? 'receivable' : 'payable';
-
-        function load() {
-            var domain = [];
-            if (search.value.trim()) {
-                domain.push(['rec_name', 'ilike', '%' + search.value.trim() +
-                    '%']);
+        UI.center(main, {
+            title: kind === 'customer' ? 'Customer Center' : 'Vendor Center',
+            empty: 'Choose a ' + kind + '.',
+            actions: kind === 'customer' ? [
+                {label: 'New Invoice', route: 'invoices/new'},
+                {label: 'Receive Payments', route: 'payments/receive'}] : [
+                {label: 'Enter Bills', route: 'bills/new'},
+                {label: 'Pay Bills', route: 'bills/pay'},
+                {label: 'Write Checks', route: 'checks/new'}],
+            list: function (text) {
+                var domain = [];
+                if (text) {
+                    domain.push(['rec_name', 'ilike', '%' + text + '%']);
+                }
+                return Rpc.searchRead('party.party', domain, ['rec_name',
+                    field], {limit: 200, order: [['name', 'ASC']]}).then(
+                    function (rows) {
+                        return rows.map(function (row) {
+                            return {id: row.id, name: row.rec_name, amount:
+                                kind === 'customer' ? row.receivable :
+                                    -row.payable};
+                        });
+                    });
+            },
+            detail: function (id, detail) {
+                show(id, detail);
             }
-            Rpc.searchRead('party.party', domain, ['rec_name', field],
-                {limit: 200, order: [['name', 'ASC']]}).then(function (rows) {
-                UI.clear(list);
-                rows.forEach(function (row) {
-                    var balance = kind === 'customer' ? row.receivable :
-                        -row.payable;
-                    list.appendChild(el('div.party-row', {onclick:
-                        function () {
-                            list.querySelectorAll('.active').forEach(
-                                function (node) {
-                                    node.classList.remove('active');
-                                });
-                            this.classList.add('active');
-                            show(row.id);
-                        }}, el('span', row.rec_name),
-                        el('span.num', UI.money(balance))));
-                });
-            }, UI.showError);
-        }
+        });
 
-        function show(id) {
+        function show(id, detail) {
             Rpc.desk('party_center', [id, kind]).then(function (data) {
                 UI.clear(detail);
                 detail.appendChild(el('h2', {style: {marginTop: 0}},
-                    data.name));
+                    el('a', {href: '#', title: 'Open in Tryton', onclick:
+                        function (event) {
+                            event.preventDefault();
+                            UI.openRecord('party.party', id, data.name);
+                        }}, data.name)));
                 detail.appendChild(el('p', 'Open balance: ', el('strong',
                     UI.money(data.balance, true))));
-                var actions = el('div.toolbar');
                 if (kind === 'customer') {
-                    actions.appendChild(el('a', {href: '#/invoices/new'},
-                        'New invoice'));
-                    actions.appendChild(el('a', {href: '#/payments/receive'},
-                        'Receive payment'));
-                    actions.appendChild(el('button', {type: 'button',
-                        onclick: function () {
+                    detail.appendChild(el('div.toolbar', el('button', {
+                        type: 'button', onclick: function () {
                             var from = UI.addDays(UI.today(), -90);
                             Rpc.report('nline.customer_statement', [id], {
                                 company: Rpc.context().company,
@@ -545,19 +513,16 @@
                                 parties: [id]}).then(function (report) {
                                 UI.openReport(report, 'Statement');
                             }, UI.showError);
-                        }}, 'Statement (90 days)'));
-                } else {
-                    actions.appendChild(el('a', {href: '#/bills/new'},
-                        'Enter bill'));
-                    actions.appendChild(el('a', {href: '#/bills/pay'},
-                        'Pay bills'));
-                    actions.appendChild(el('a', {href: '#/checks/new'},
-                        'Write check'));
+                        }}, 'Statement (90 days)')));
                 }
-                detail.appendChild(actions);
                 var body = el('tbody');
                 data.transactions.forEach(function (t) {
-                    body.appendChild(el('tr', el('td', UI.date(t.date)),
+                    var model = t.type === 'payment' ? 'account.payment' :
+                        'account.invoice';
+                    body.appendChild(el('tr', {title: 'Double-click to open',
+                        ondblclick: function () {
+                            UI.openRecord(model, t.id, t.number);
+                        }}, el('td', UI.date(t.date)),
                         el('td', t.type), el('td', t.number || ''),
                         el('td', t.reference || ''),
                         el('td.num', UI.money(t.amount)),
@@ -578,12 +543,6 @@
                         el('th', 'State'))), body)));
             }, UI.showError);
         }
-        var timer;
-        search.addEventListener('input', function () {
-            clearTimeout(timer);
-            timer = setTimeout(load, 250);
-        });
-        load();
     }
     Screens.center = center;
 
