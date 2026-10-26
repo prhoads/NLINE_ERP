@@ -16,8 +16,9 @@ Configuration of trytond.conf::
     secret = <the ERP_SECRET of the BI server's ERP app>
 
 A person signed in to N-Line BI with access to the ERP gets a Tryton user of
-the same login on the first sign-in, without groups: an administrator gives
-the groups in Tryton. An inactive Tryton user is refused.
+the same login on the first sign-in, and at each sign-in the N-Line role
+(module ``nline_role``) chosen for them on the BI Admin page, which gives the
+Tryton groups. An inactive Tryton user is refused.
 
 The password method stays after ``nlbi``: the ERP keeps opening directly on
 its own server with a Tryton password when the BI server is down.

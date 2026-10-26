@@ -168,6 +168,15 @@ class Desk(ModelView):
     # ---- Helpers ---------------------------------------------------------
 
     @classmethod
+    def _check_create(cls, *models):
+        """Refuse a user who may not create these records in Tryton: the
+        screens create them through server code, which Tryton does not check
+        (read-only roles, users without the accounting groups)"""
+        ModelAccess = Pool().get('ir.model.access')
+        for model in models:
+            ModelAccess.check(model, 'create')
+
+    @classmethod
     def _company(cls):
         pool = Pool()
         Company = pool.get('company.company')
@@ -348,6 +357,7 @@ class Desk(ModelView):
         values: party, date, reference, memo, payment_term, lines
         (account or product, description, quantity, unit_price, cost_order)
         """
+        cls._check_create('account.invoice')
         return cls._summary(cls._invoice('in', values))
 
     @classmethod
@@ -356,6 +366,7 @@ class Desk(ModelView):
         """Write a check: post a bill for the expense lines and pay it with
         one check of the payment journal
         values: journal, party, date, memo, lines"""
+        cls._check_create('account.invoice', 'account.payment')
         pool = Pool()
         Invoice = pool.get('account.invoice')
         Payment = pool.get('account.payment')
@@ -444,6 +455,7 @@ class Desk(ModelView):
         values: journal, date, items (line, amount, discount)
         One check per supplier; discounts are posted to the early pay
         discount account. Returns the payment group."""
+        cls._check_create('account.payment')
         pool = Pool()
         Payment = pool.get('account.payment')
         PaymentJournal = pool.get('account.payment.journal')
@@ -500,6 +512,7 @@ class Desk(ModelView):
         """Post a customer invoice
         values: party, date, reference (customer PO), memo, payment_term,
         lines (product or account, description, quantity, unit_price)"""
+        cls._check_create('account.invoice')
         return cls._summary(cls._invoice('out', values))
 
     @classmethod
@@ -515,6 +528,7 @@ class Desk(ModelView):
         reference (check number), items (line, amount, discount)
         The payment waits in undeposited funds (the clearing account of the
         journal) until it is deposited."""
+        cls._check_create('account.payment')
         pool = Pool()
         Payment = pool.get('account.payment')
         PaymentJournal = pool.get('account.payment.journal')
@@ -603,6 +617,7 @@ class Desk(ModelView):
         (undeposited lines), memo
         The deposit waits in the clearing account of the bank (deposit in
         transit) until the bank statement clears it."""
+        cls._check_create('account.move')
         pool = Pool()
         Move = pool.get('account.move')
         Line = pool.get('account.move.line')
@@ -776,6 +791,7 @@ class Desk(ModelView):
     def make_leg(cls, card, product_bom):
         """Make the leg of the material card from the master dropped on it
         and return the build tree of the work order"""
+        cls._check_create('production.material_card')
         pool = Pool()
         Card = pool.get('production.material_card')
         ProductBom = pool.get('product.product-production.bom')

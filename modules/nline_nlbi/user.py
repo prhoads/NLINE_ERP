@@ -14,9 +14,10 @@ server (trytond.conf):
     secret = <the same secret as ERP_SECRET on the BI server>
 
 The token is "<base64 json>.<hmac sha256 hex>", the json holding login, name,
-database and time. It is valid for max_age seconds (120). A person signed in to
-N-Line BI with access to the ERP gets a Tryton user of the same login on the
-first sign-in (no groups: an administrator gives them in Tryton).
+database, time and role. It is valid for max_age seconds (120). A person signed
+in to N-Line BI with access to the ERP gets a Tryton user of the same login on
+the first sign-in, and at each sign-in the N-Line role (module nline_role) of
+their access on the BI Admin page.
 
 Without a token, the next method (password) is used, so the ERP still opens
 directly on its own server with a Tryton password.
@@ -86,15 +87,20 @@ class User(metaclass=PoolMeta):
             if not user.active:
                 logger.warning("N-Line BI sign-in of inactive user %s", login)
                 return None
-            return user.id
-        with Transaction().set_user(0):
-            values = {
-                'login': login,
-                'name': payload.get('name') or login,
-                }
-            values.update(cls._nlbi_company_values())
-            user, = cls.create([values])
-        logger.info("Tryton user %s created by N-Line BI sign-in", login)
+        else:
+            with Transaction().set_user(0):
+                values = {
+                    'login': login,
+                    'name': payload.get('name') or login,
+                    }
+                values.update(cls._nlbi_company_values())
+                user, = cls.create([values])
+            logger.info("Tryton user %s created by N-Line BI sign-in", login)
+        if 'role' in payload:
+            # The role of the BI Admin page; an unknown one gives no groups
+            if not cls.set_nline_role(user, payload['role']):
+                logger.warning("N-Line BI sign-in of %s: no Tryton role %r",
+                    login, payload['role'])
         return user.id
 
     @classmethod

@@ -70,6 +70,29 @@ class NlineNlbiTestCase(ModuleTestCase):
             user_id)
 
     @with_transaction()
+    def test_login_role(self):
+        "Test the role of the token gives the Tryton groups"
+        pool = Pool()
+        User = pool.get('res.user')
+        Role = pool.get('nline.role')
+        role = Role.by_code('production_user')
+        user_id = User.get_login('jdoe', {
+                'nlbi_token': self.token('jdoe', role='production_user')})
+        user = User(user_id)
+        self.assertEqual(user.nline_role, role)
+        self.assertEqual({g.id for g in user.groups}, role.group_ids())
+
+        # No role in the token: unchanged
+        User.get_login('jdoe', {'nlbi_token': self.token('jdoe')})
+        self.assertEqual(User(user_id).nline_role, role)
+
+        # A role unknown to Tryton: no groups
+        User.get_login('jdoe', {'nlbi_token': self.token('jdoe', role='x')})
+        user = User(user_id)
+        self.assertIsNone(user.nline_role)
+        self.assertFalse(user.groups)
+
+    @with_transaction()
     def test_login_refused(self):
         "Test a wrong token signs nobody in"
         pool = Pool()

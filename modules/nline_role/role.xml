@@ -1,0 +1,307 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data>
+        <record model="res.group" id="group_read_only">
+            <field name="name">N-Line Read Only</field>
+        </record>
+
+        <record model="ir.message" id="msg_role_code_unique">
+            <field name="text">The code of a role must be unique.</field>
+        </record>
+
+        <record model="ir.ui.view" id="role_view_list">
+            <field name="model">nline.role</field>
+            <field name="type">tree</field>
+            <field name="name">role_list</field>
+        </record>
+        <record model="ir.ui.view" id="role_view_form">
+            <field name="model">nline.role</field>
+            <field name="type">form</field>
+            <field name="name">role_form</field>
+        </record>
+        <record model="ir.action.act_window" id="act_role">
+            <field name="name">N-Line Roles</field>
+            <field name="res_model">nline.role</field>
+        </record>
+        <record model="ir.action.act_window.view" id="act_role_view1">
+            <field name="sequence" eval="10"/>
+            <field name="view" ref="role_view_list"/>
+            <field name="act_window" ref="act_role"/>
+        </record>
+        <record model="ir.action.act_window.view" id="act_role_view2">
+            <field name="sequence" eval="20"/>
+            <field name="view" ref="role_view_form"/>
+            <field name="act_window" ref="act_role"/>
+        </record>
+        <menuitem parent="res.menu_res" action="act_role"
+            sequence="30" id="menu_role"/>
+        <record model="ir.ui.menu-res.group" id="menu_role_group_admin">
+            <field name="menu" ref="menu_role"/>
+            <field name="group" ref="res.group_admin"/>
+        </record>
+
+        <record model="ir.model.access" id="access_role">
+            <field name="model" search="[('model', '=', 'nline.role')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_role_admin">
+            <field name="model" search="[('model', '=', 'nline.role')]"/>
+            <field name="group" ref="res.group_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+
+        <record model="ir.model.access" id="access_role_group">
+            <field name="model" search="[('model', '=', 'nline.role-res.group')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_role_group_admin">
+            <field name="model" search="[('model', '=', 'nline.role-res.group')]"/>
+            <field name="group" ref="res.group_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+
+        <record model="ir.ui.view" id="user_view_form">
+            <field name="model">res.user</field>
+            <field name="inherit" ref="res.user_view_form"/>
+            <field name="name">user_form</field>
+        </record>
+    </data>
+    <!-- Proposed; the administrator changes the groups of a role in Tryton -->
+    <data noupdate="1">
+        <record model="nline.role" id="role_accounting_user">
+            <field name="name">Accounting User</field>
+            <field name="code">accounting_user</field>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_account">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_account_party">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="account.group_account_party"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_payment">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="account_payment.group_payment"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_payment_approval">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="account_payment.group_payment_approval"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_statement">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="account_statement.group_statement"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_account_product_admin">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="account_product.group_account_product_admin"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_analytic_admin">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="analytic_account.group_analytic_admin"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_bank_admin">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="bank.group_bank_admin"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_party_admin">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="party.group_party_admin"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_sale">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="sale.group_sale"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_production">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="production.group_production"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_production_admin">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="production.group_production_admin"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_stock">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="stock.group_stock"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_stock_force_assignment">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="stock.group_stock_force_assignment"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_purchase">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="purchase.group_purchase"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_purchase_request">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="purchase_request.group_purchase_request"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_product_admin">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="product.group_product_admin"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounting_user_group_read_only">
+            <field name="role" ref="role_accounting_user"/>
+            <field name="group" ref="group_read_only"/>
+        </record>
+        <record model="nline.role" id="role_accounts_specialist">
+            <field name="name">Accounts Specialist</field>
+            <field name="code">accounts_specialist</field>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_account">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_account_party">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="account.group_account_party"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_payment">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="account_payment.group_payment"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_payment_approval">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="account_payment.group_payment_approval"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_statement">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="account_statement.group_statement"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_account_product_admin">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="account_product.group_account_product_admin"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_analytic_admin">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="analytic_account.group_analytic_admin"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_bank_admin">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="bank.group_bank_admin"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_party_admin">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="party.group_party_admin"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_sale">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="sale.group_sale"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_production">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="production.group_production"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_production_admin">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="production.group_production_admin"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_stock">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="stock.group_stock"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_stock_force_assignment">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="stock.group_stock_force_assignment"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_purchase">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="purchase.group_purchase"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_purchase_request">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="purchase_request.group_purchase_request"/>
+        </record>
+        <record model="nline.role-res.group" id="role_accounts_specialist_group_product_admin">
+            <field name="role" ref="role_accounts_specialist"/>
+            <field name="group" ref="product.group_product_admin"/>
+        </record>
+        <record model="nline.role" id="role_production_user">
+            <field name="name">Production User</field>
+            <field name="code">production_user</field>
+        </record>
+        <record model="nline.role-res.group" id="role_production_user_group_production">
+            <field name="role" ref="role_production_user"/>
+            <field name="group" ref="production.group_production"/>
+        </record>
+        <record model="nline.role-res.group" id="role_production_user_group_production_admin">
+            <field name="role" ref="role_production_user"/>
+            <field name="group" ref="production.group_production_admin"/>
+        </record>
+        <record model="nline.role-res.group" id="role_production_user_group_stock">
+            <field name="role" ref="role_production_user"/>
+            <field name="group" ref="stock.group_stock"/>
+        </record>
+        <record model="nline.role-res.group" id="role_production_user_group_stock_force_assignment">
+            <field name="role" ref="role_production_user"/>
+            <field name="group" ref="stock.group_stock_force_assignment"/>
+        </record>
+        <record model="nline.role-res.group" id="role_production_user_group_purchase">
+            <field name="role" ref="role_production_user"/>
+            <field name="group" ref="purchase.group_purchase"/>
+        </record>
+        <record model="nline.role-res.group" id="role_production_user_group_purchase_request">
+            <field name="role" ref="role_production_user"/>
+            <field name="group" ref="purchase_request.group_purchase_request"/>
+        </record>
+        <record model="nline.role-res.group" id="role_production_user_group_product_admin">
+            <field name="role" ref="role_production_user"/>
+            <field name="group" ref="product.group_product_admin"/>
+        </record>
+        <record model="nline.role-res.group" id="role_production_user_group_read_only">
+            <field name="role" ref="role_production_user"/>
+            <field name="group" ref="group_read_only"/>
+        </record>
+        <record model="nline.role" id="role_production_specialist">
+            <field name="name">Production Specialist</field>
+            <field name="code">production_specialist</field>
+        </record>
+        <record model="nline.role-res.group" id="role_production_specialist_group_production">
+            <field name="role" ref="role_production_specialist"/>
+            <field name="group" ref="production.group_production"/>
+        </record>
+        <record model="nline.role-res.group" id="role_production_specialist_group_production_admin">
+            <field name="role" ref="role_production_specialist"/>
+            <field name="group" ref="production.group_production_admin"/>
+        </record>
+        <record model="nline.role-res.group" id="role_production_specialist_group_stock">
+            <field name="role" ref="role_production_specialist"/>
+            <field name="group" ref="stock.group_stock"/>
+        </record>
+        <record model="nline.role-res.group" id="role_production_specialist_group_stock_force_assignment">
+            <field name="role" ref="role_production_specialist"/>
+            <field name="group" ref="stock.group_stock_force_assignment"/>
+        </record>
+        <record model="nline.role-res.group" id="role_production_specialist_group_purchase">
+            <field name="role" ref="role_production_specialist"/>
+            <field name="group" ref="purchase.group_purchase"/>
+        </record>
+        <record model="nline.role-res.group" id="role_production_specialist_group_purchase_request">
+            <field name="role" ref="role_production_specialist"/>
+            <field name="group" ref="purchase_request.group_purchase_request"/>
+        </record>
+        <record model="nline.role-res.group" id="role_production_specialist_group_product_admin">
+            <field name="role" ref="role_production_specialist"/>
+            <field name="group" ref="product.group_product_admin"/>
+        </record>
+        <record model="nline.role" id="role_admin">
+            <field name="name">Admin</field>
+            <field name="code">admin</field>
+            <field name="all_groups" eval="True"/>
+        </record>
+    </data>
+</tryton>

@@ -54,6 +54,7 @@ MODULES = [
     'nline_job',
     'nline_nlbi',
     'nline_outside_service',
+    'nline_role',
     'nline_sales_cost',
     'nline_wip',
     'nline_work_order',
