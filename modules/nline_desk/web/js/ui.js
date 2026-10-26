@@ -205,6 +205,14 @@
             global.location.hash = '#/login';
         }
         var message = error && error.message ? error.message : String(error);
+        if (error && error.type === 'server' && /nline\./.test(message)) {
+            /* A KeyError on an N-Line model: the module is not activated */
+            var session = global.Rpc.session();
+            message = 'The N-Line modules are not activated in database "' +
+                (session ? session.database : '') + '". Sign out and ' +
+                'choose the database where they are (nline_test).';
+            error = {message: message};
+        }
         var description = error && error.description ? error.description :
             '';
         modal(error && error.type === 'user' ? 'Cannot save' : 'Error',

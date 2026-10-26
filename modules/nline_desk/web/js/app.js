@@ -30,6 +30,12 @@
             button.disabled = true;
             Rpc.login(database.value, login.value, password.value).then(
                 function () {
+                    try {
+                        global.localStorage.setItem('nline.desk.database',
+                            database.value);
+                    } catch (e) {
+                        /* Remembering the database is a convenience */
+                    }
                     global.location.hash = '#/';
                     renderUser();
                 }, function (error) {
@@ -45,8 +51,15 @@
             button);
         main.appendChild(el('div.login', form));
         Rpc.databases().then(function (names) {
+            var last = null;
+            try {
+                last = global.localStorage.getItem('nline.desk.database');
+            } catch (e) {
+                /* No storage: no remembered database */
+            }
             (names || []).forEach(function (name) {
-                database.appendChild(el('option', {value: name}, name));
+                database.appendChild(el('option', {value: name,
+                    selected: name === last || null}, name));
             });
             if (!names || !names.length) {
                 database.appendChild(el('option', {value: ''},
