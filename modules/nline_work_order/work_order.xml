@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data>
+        <record model="ir.ui.view" id="production_view_form">
+            <field name="model">production</field>
+            <field name="inherit" ref="production.production_view_form"/>
+            <field name="name">production_form</field>
+        </record>
+        <record model="ir.ui.view" id="production_view_list">
+            <field name="model">production</field>
+            <field name="inherit" ref="production.production_view_list"/>
+            <field name="name">production_list</field>
+        </record>
+
+        <record model="ir.ui.view" id="material_card_view_list">
+            <field name="model">production.material_card</field>
+            <field name="type">tree</field>
+            <field name="name">material_card_list</field>
+        </record>
+        <record model="ir.ui.view" id="material_card_view_form">
+            <field name="model">production.material_card</field>
+            <field name="type">form</field>
+            <field name="name">material_card_form</field>
+        </record>
+
+        <record model="ir.action.act_window" id="act_material_card">
+            <field name="name">Material Cards</field>
+            <field name="res_model">production.material_card</field>
+        </record>
+        <record model="ir.action.act_window.view" id="act_material_card_view1">
+            <field name="sequence" eval="10"/>
+            <field name="view" ref="material_card_view_list"/>
+            <field name="act_window" ref="act_material_card"/>
+        </record>
+        <record model="ir.action.act_window.view" id="act_material_card_view2">
+            <field name="sequence" eval="20"/>
+            <field name="view" ref="material_card_view_form"/>
+            <field name="act_window" ref="act_material_card"/>
+        </record>
+        <menuitem
+            parent="production.menu_production_list"
+            action="act_material_card"
+            sequence="20"
+            id="menu_material_card"/>
+
+        <record model="ir.model.button" id="material_card_make_leg_button">
+            <field name="model" search="[('model', '=', 'production.material_card')]"/>
+            <field name="name">make_leg</field>
+            <field name="string">Make Leg</field>
+            <field name="help">Make the component in a leg of the work order</field>
+        </record>
+        <record model="ir.model.button" id="material_card_remove_leg_button">
+            <field name="model" search="[('model', '=', 'production.material_card')]"/>
+            <field name="name">remove_leg</field>
+            <field name="string">Remove Leg</field>
+            <field name="confirm">Are you sure you want to remove the leg?</field>
+        </record>
+
+        <record model="ir.ui.view" id="material_card_make_leg_start_view_form">
+            <field name="model">production.material_card.make_leg.start</field>
+            <field name="type">form</field>
+            <field name="name">material_card_make_leg_start_form</field>
+        </record>
+        <record model="ir.action.wizard" id="wizard_make_leg">
+            <field name="name">Make Leg</field>
+            <field name="wiz_name">production.material_card.make_leg</field>
+            <field name="model">production.material_card</field>
+        </record>
+    </data>
+</tryton>

@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<data>
+    <xpath expr="/form/notebook/page[@id='other']" position="before">
+        <page string="Cost Order" id="cost_order">
+            <label name="cost_order"/>
+            <field name="cost_order"/>
+            <newline/>
+            <label name="cost_order_revenue"/>
+            <field name="cost_order_revenue"/>
+            <label name="cost_order_cogs"/>
+            <field name="cost_order_cogs"/>
+            <label name="cost_order_bills"/>
+            <field name="cost_order_bills"/>
+            <label name="cost_order_margin"/>
+            <field name="cost_order_margin"/>
+            <label name="cost_order_margin_rate"/>
+            <group id="margin_rate" col="-1">
+                <field name="cost_order_margin_rate" factor="100"
+                    xexpand="0"/>
+                <label name="cost_order_margin_rate" string="%"
+                    xalign="0.0" xexpand="1"/>
+            </group>
+        </page>
+    </xpath>
+</data>

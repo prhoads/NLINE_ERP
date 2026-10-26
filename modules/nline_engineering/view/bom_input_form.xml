@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<data>
+    <xpath expr="/form/field[@name='product']" position="after">
+        <label name="component_revision"/>
+        <field name="component_revision"/>
+        <label name="component_bom"/>
+        <field name="component_bom"/>
+    </xpath>
+    <xpath expr="/form/field[@name='unit']" position="after">
+        <label name="operation"/>
+        <field name="operation"/>
+        <label name="piece"/>
+        <field name="piece"/>
+    </xpath>
+</data>

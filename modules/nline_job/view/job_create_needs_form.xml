@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<form>
+    <label name="product"/>
+    <field name="product"/>
+    <label name="product_bom"/>
+    <field name="product_bom"/>
+    <field name="needs" colspan="4"/>
+    <label name="extra_quantity"/>
+    <field name="extra_quantity" symbol="unit"/>
+    <label name="planned_date"/>
+    <field name="planned_date"/>
+    <field name="unit" invisible="1"/>
+    <field name="job" invisible="1"/>
+</form>

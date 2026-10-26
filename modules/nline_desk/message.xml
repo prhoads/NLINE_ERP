@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data grouped="1">
+        <record model="ir.message" id="msg_missing_configuration">
+            <field name="text">To use the desk, set "%(field)s" in the desk configuration.</field>
+        </record>
+        <record model="ir.message" id="msg_discount_taken">
+            <field name="text">Early pay discount on %(invoice)s</field>
+        </record>
+        <record model="ir.message" id="msg_discount_given">
+            <field name="text">Discount given on %(invoice)s</field>
+        </record>
+        <record model="ir.message" id="msg_deposit">
+            <field name="text">Deposit</field>
+        </record>
+        <record model="ir.message" id="msg_master_wrong_part">
+            <field name="text">Master "%(master)s" makes "%(part)s", not the part of card "%(card)s".</field>
+        </record>
+    </data>
+</tryton>

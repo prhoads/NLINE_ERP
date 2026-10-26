@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data>
+        <record model="ir.ui.view" id="sale_configuration_view_form">
+            <field name="model">sale.configuration</field>
+            <field name="inherit" ref="sale.sale_configuration_view_form"/>
+            <field name="name">configuration_form</field>
+        </record>
+
+        <record model="ir.ui.view" id="sale_view_form">
+            <field name="model">sale.sale</field>
+            <field name="inherit" ref="sale.sale_view_form"/>
+            <field name="name">sale_form</field>
+        </record>
+
+        <record model="ir.ui.view" id="sale_cost_view_list">
+            <field name="model">sale.sale</field>
+            <field name="type">tree</field>
+            <field name="priority" eval="20"/>
+            <field name="name">sale_cost_list</field>
+        </record>
+
+        <record model="ir.action.act_window" id="act_sale_cost">
+            <field name="name">Sales Order Costs</field>
+            <field name="res_model">sale.sale</field>
+            <field name="domain"
+                eval="[('cost_order', '!=', None)]" pyson="1"/>
+        </record>
+        <record model="ir.action.act_window.view" id="act_sale_cost_view1">
+            <field name="sequence" eval="10"/>
+            <field name="view" ref="sale_cost_view_list"/>
+            <field name="act_window" ref="act_sale_cost"/>
+        </record>
+        <record model="ir.action.act_window.view" id="act_sale_cost_view2">
+            <field name="sequence" eval="20"/>
+            <field name="view" ref="sale.sale_view_form"/>
+            <field name="act_window" ref="act_sale_cost"/>
+        </record>
+        <menuitem
+            parent="sale.menu_reporting"
+            action="act_sale_cost"
+            sequence="50"
+            id="menu_sale_cost"/>
+    </data>
+</tryton>

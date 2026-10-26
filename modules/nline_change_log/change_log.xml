@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data>
+        <record model="ir.ui.view" id="change_log_start_view_form">
+            <field name="model">nline.change_log.start</field>
+            <field name="type">form</field>
+            <field name="name">change_log_start_form</field>
+        </record>
+        <record model="ir.ui.view" id="change_log_result_view_form">
+            <field name="model">nline.change_log.result</field>
+            <field name="type">form</field>
+            <field name="name">change_log_result_form</field>
+        </record>
+        <record model="ir.ui.view" id="change_log_line_view_list">
+            <field name="model">nline.change_log.line</field>
+            <field name="type">tree</field>
+            <field name="name">change_log_line_list</field>
+        </record>
+
+        <record model="ir.action.wizard" id="wizard_change_log">
+            <field name="name">Change Log</field>
+            <field name="wiz_name">nline.change_log</field>
+        </record>
+        <menuitem
+            parent="account.menu_reporting"
+            action="wizard_change_log"
+            sequence="90"
+            id="menu_change_log"/>
+
+        <record model="ir.action.keyword" id="change_log_invoice_keyword">
+            <field name="keyword">form_relate</field>
+            <field name="model">account.invoice,-1</field>
+            <field name="action" ref="wizard_change_log"/>
+        </record>
+        <record model="ir.action.keyword" id="change_log_move_keyword">
+            <field name="keyword">form_relate</field>
+            <field name="model">account.move,-1</field>
+            <field name="action" ref="wizard_change_log"/>
+        </record>
+        <record model="ir.action.keyword" id="change_log_payment_keyword">
+            <field name="keyword">form_relate</field>
+            <field name="model">account.payment,-1</field>
+            <field name="action" ref="wizard_change_log"/>
+        </record>
+        <record model="ir.action.keyword" id="change_log_party_keyword">
+            <field name="keyword">form_relate</field>
+            <field name="model">party.party,-1</field>
+            <field name="action" ref="wizard_change_log"/>
+        </record>
+        <record model="ir.action.keyword" id="change_log_template_keyword">
+            <field name="keyword">form_relate</field>
+            <field name="model">product.template,-1</field>
+            <field name="action" ref="wizard_change_log"/>
+        </record>
+    </data>
+</tryton>

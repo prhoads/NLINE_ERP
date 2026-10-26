@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data grouped="1">
+        <record model="ir.message" id="msg_production_not_billed">
+            <field name="text">The outside operations of productions "%(productions)s" are not billed yet. They will be costed at their purchase amount and the difference with the bill will be posted as a variance.</field>
+        </record>
+    </data>
+</tryton>

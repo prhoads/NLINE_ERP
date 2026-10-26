@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<form>
+    <label name="early_discount_account"/>
+    <field name="early_discount_account"/>
+    <label name="sales_discount_account"/>
+    <field name="sales_discount_account"/>
+    <label name="undeposited_account"/>
+    <field name="undeposited_account"/>
+    <label name="deposit_journal"/>
+    <field name="deposit_journal"/>
+</form>

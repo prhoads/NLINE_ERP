@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<data>
+    <xpath expr="/form/field[@name='process_method']" position="after">
+        <newline/>
+        <label name="check_sequence"/>
+        <field name="check_sequence"/>
+        <label name="check_bank_account"/>
+        <field name="check_bank_account"/>
+        <label name="check_micr"/>
+        <field name="check_micr"/>
+        <newline/>
+        <label name="check_micr_routing"/>
+        <field name="check_micr_routing"/>
+        <label name="check_micr_account"/>
+        <field name="check_micr_account"/>
+    </xpath>
+</data>

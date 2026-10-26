@@ -41,6 +41,25 @@ MODULES = [
     'sale',
     'sale_supply_production',
     'stock',
+    # N-Line development (activate per database, see the status document)
+    'nline_account',
+    'nline_build_tree',
+    'nline_change_log',
+    'nline_check_print',
+    'nline_currency_round',
+    'nline_customer_statement',
+    'nline_desk',
+    'nline_engineering',
+    'nline_invoice_backdate',
+    'nline_job',
+    'nline_outside_service',
+    'nline_sales_cost',
+    'nline_wip',
+    'nline_work_order',
+    'account_statement_ofx',
+    'analytic_invoice',
+    'analytic_purchase',
+    'analytic_sale',
     'stock_lot',
     'stock_supply',
     ]
@@ -76,6 +95,11 @@ def main():
         help="the modules to install (default: the NLINE modules)")
     parser.add_argument('--dry-run', action='store_true',
         help="only print the pip command")
+    parser.add_argument('--web-root',
+        default=os.path.join(ROOT, 'windows', 'sao'),
+        help="the web client folder the N-Line Desk screens are copied into "
+        "(default: windows/sao of this checkout, which the server install "
+        "script mirrors to its web root)")
     args = parser.parse_args()
 
     modules = closure(args.modules)
@@ -91,6 +115,19 @@ def main():
         print(' '.join(command))
         return
     subprocess.check_call(command)
+    if args.web_root:
+        install_desk(args.web_root)
+
+
+def install_desk(web_root):
+    "Copy the N-Line Desk screens to <web root>/desk"
+    import shutil
+    source = os.path.join(MODULES_DIR, 'nline_desk', 'web')
+    target = os.path.join(web_root, 'desk')
+    if os.path.isdir(target):
+        shutil.rmtree(target)
+    shutil.copytree(source, target)
+    print("N-Line Desk copied to %s (http://<server>:8000/desk/)" % target)
 
 
 if __name__ == '__main__':

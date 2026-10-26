@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<data>
+    <xpath expr="/form/field[@name='active']" position="after">
+        <label name="revision"/>
+        <field name="revision"/>
+        <newline/>
+        <label name="drawing_number"/>
+        <field name="drawing_number"/>
+        <label name="drawing_revision"/>
+        <field name="drawing_revision"/>
+    </xpath>
+</data>

@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<data>
+    <xpath expr="/form/field[@name='work_center']" position="after">
+        <label name="supplier"/>
+        <field name="supplier"/>
+        <label name="purchase"/>
+        <field name="purchase"/>
+        <label name="expected_date"/>
+        <field name="expected_date"/>
+        <label name="purchase_line"/>
+        <field name="purchase_line"/>
+    </xpath>
+    <xpath expr="//button[@name='start']" position="before">
+        <button name="receive" icon="tryton-forward"/>
+    </xpath>
+</data>

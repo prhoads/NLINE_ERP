@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data>
+        <record model="ir.ui.view" id="party_view_form">
+            <field name="model">party.party</field>
+            <field name="inherit" ref="party.party_view_form"/>
+            <field name="name">party_form</field>
+        </record>
+
+        <record model="ir.ui.view" id="texas_return_start_view_form">
+            <field name="model">nline.texas_return.start</field>
+            <field name="type">form</field>
+            <field name="name">texas_return_start_form</field>
+        </record>
+        <record model="ir.action.report" id="report_texas_return">
+            <field name="name">Texas Sales Tax Return</field>
+            <field name="model"></field>
+            <field name="report_name">nline.texas_return.report</field>
+            <field name="report">nline_account/texas_return.html</field>
+            <field name="template_extension">html</field>
+        </record>
+        <record model="ir.action.wizard" id="wizard_texas_return">
+            <field name="name">Texas Sales Tax Return</field>
+            <field name="wiz_name">nline.texas_return</field>
+        </record>
+        <menuitem
+            parent="account.menu_reporting"
+            action="wizard_texas_return"
+            sequence="60"
+            id="menu_texas_return"/>
+    </data>
+</tryton>

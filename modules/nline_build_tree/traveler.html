@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html xmlns:py="http://genshi.edgewall.org/">
+    <head>
+        <meta charset="utf-8"/>
+        <title>Traveler</title>
+        <style>
+            body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; }
+            h1 { font-size: 16pt; margin: 0 0 4px 0; }
+            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; margin-bottom: 8px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #999; padding: 3px 5px; vertical-align: top; }
+            th { background: #eee; text-align: left; }
+            tr.production td { background: #dde6f0; font-weight: bold; }
+            tr.work td { background: #f7f7f7; }
+            td.num { text-align: right; }
+            td.sign { width: 70px; }
+            .short { color: #b00; font-weight: bold; }
+            .order { page-break-after: always; }
+        </style>
+    </head>
+    <body>
+        <div py:for="production in records" class="order">
+            <div class="header">
+                <div>
+                    <h1>Traveler ${production.number}</h1>
+                    <div>${production.product.rec_name if production.product else ''}
+                        <span py:if="production.bom and production.bom.revision">Rev ${production.bom.revision}</span>
+                        &#8212; ${format_number(production.quantity, user.language, digits=production.unit.digits if production.unit else 0)} ${production.unit.symbol if production.unit else ''}</div>
+                    <div py:if="production.origin">For: ${production.origin.rec_name}</div>
+                </div>
+                <div>
+                    <div>${company.rec_name if company else ''}</div>
+                    <div>Start: ${format_date(production.planned_start_date, user.language) if production.planned_start_date else ''}</div>
+                    <div>Due: ${format_date(production.planned_date, user.language) if production.planned_date else ''}</div>
+                </div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Op</th>
+                        <th>Description</th>
+                        <th>Work Center / Supplier</th>
+                        <th>Qty</th>
+                        <th>Rev</th>
+                        <th>Supply</th>
+                        <th>Done by / Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <py:for each="depth, kind, record in lines(production)">
+                        <tr py:if="kind == 'production'" class="production">
+                            <td></td>
+                            <td style="padding-left: ${depth * 12 + 5}px">${record.number} ${record.product.rec_name if record.product else ''}</td>
+                            <td>${'Leg %s' % record.leg_index if record.leg_index else ''}</td>
+                            <td class="num">${format_number(record.quantity, user.language, digits=record.unit.digits if record.unit else 0)}</td>
+                            <td>${record.bom.revision if record.bom else ''}</td>
+                            <td>${record.state}</td>
+                            <td class="sign"></td>
+                        </tr>
+                        <tr py:if="kind == 'work'" class="work">
+                            <td>${record.sequence or ''}</td>
+                            <td style="padding-left: ${depth * 12 + 5}px">${record.operation.rec_name}</td>
+                            <td>${record.supplier.rec_name if attr(record, 'outside', False) and record.supplier else (record.work_center.rec_name if record.work_center else '')}
+                                <span py:if="attr(record, 'outside', False) and record.purchase"> (${record.purchase.rec_name}<py:if test="record.expected_date">, due ${format_date(record.expected_date, user.language)}</py:if>)</span></td>
+                            <td></td>
+                            <td></td>
+                            <td>${'%.2f h' % (record.planned_duration.total_seconds() / 3600) if attr(record, 'planned_duration', None) else ''}</td>
+                            <td class="sign"></td>
+                        </tr>
+                        <tr py:if="kind == 'card'">
+                            <td>${record.operation or ''}<py:if test="record.piece">-${record.piece}</py:if></td>
+                            <td style="padding-left: ${depth * 12 + 5}px">${record.product.rec_name}</td>
+                            <td></td>
+                            <td class="num">${format_number(record.quantity, user.language, digits=record.unit.digits)} ${record.unit.symbol}</td>
+                            <td>${record.component_revision or ''}</td>
+                            <td><span py:attrs="{'class': 'short' if record.short else None}">${record.supply}${' (%s)' % record.job.number if attr(record, 'job', None) else ''}${' SHORT' if record.short else ''}</span></td>
+                            <td class="sign"></td>
+                        </tr>
+                    </py:for>
+                </tbody>
+            </table>
+        </div>
+    </body>
+</html>

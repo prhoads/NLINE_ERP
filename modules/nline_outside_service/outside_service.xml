@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data>
+        <record model="ir.ui.view" id="routing_step_view_list">
+            <field name="model">production.routing.step</field>
+            <field name="inherit" ref="production_routing.routing_step_view_list"/>
+            <field name="name">routing_step_list</field>
+        </record>
+        <record model="ir.ui.view" id="routing_step_view_form">
+            <field name="model">production.routing.step</field>
+            <field name="inherit" ref="production_routing.routing_step_view_form"/>
+            <field name="name">routing_step_form</field>
+        </record>
+
+        <record model="ir.ui.view" id="work_view_list">
+            <field name="model">production.work</field>
+            <field name="inherit" ref="production_work.work_view_list"/>
+            <field name="name">work_list</field>
+        </record>
+        <record model="ir.ui.view" id="work_view_form">
+            <field name="model">production.work</field>
+            <field name="inherit" ref="production_work.work_view_form"/>
+            <field name="name">work_form</field>
+        </record>
+
+        <record model="ir.ui.view" id="purchase_line_view_form">
+            <field name="model">purchase.line</field>
+            <field name="inherit" ref="purchase.purchase_line_view_form"/>
+            <field name="name">purchase_line_form</field>
+        </record>
+
+        <record model="ir.model.button" id="work_receive_button">
+            <field name="model" search="[('model', '=', 'production.work')]"/>
+            <field name="name">receive</field>
+            <field name="string">Receive</field>
+            <field name="help">Finish the outside operation when the supplier returns the goods</field>
+        </record>
+    </data>
+</tryton>

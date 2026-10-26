@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data>
+        <record model="ir.sequence.type" id="sequence_type_check">
+            <field name="name">Check</field>
+        </record>
+        <record model="ir.sequence.type-res.group"
+            id="sequence_type_check_group_admin">
+            <field name="sequence_type" ref="sequence_type_check"/>
+            <field name="group" ref="res.group_admin"/>
+        </record>
+        <record model="ir.sequence.type-res.group"
+            id="sequence_type_check_group_account_admin">
+            <field name="sequence_type" ref="sequence_type_check"/>
+            <field name="group" ref="account.group_account_admin"/>
+        </record>
+
+        <record model="ir.ui.view" id="payment_journal_view_form">
+            <field name="model">account.payment.journal</field>
+            <field name="inherit" ref="account_payment.payment_journal_view_form"/>
+            <field name="name">payment_journal_form</field>
+        </record>
+        <record model="ir.ui.view" id="payment_view_form">
+            <field name="model">account.payment</field>
+            <field name="inherit" ref="account_payment.payment_view_form"/>
+            <field name="name">payment_form</field>
+        </record>
+        <record model="ir.ui.view" id="payment_view_list">
+            <field name="model">account.payment</field>
+            <field name="inherit" ref="account_payment.payment_view_list"/>
+            <field name="name">payment_list</field>
+        </record>
+
+        <record model="ir.action.report" id="report_check">
+            <field name="name">Checks</field>
+            <field name="model">account.payment.group</field>
+            <field name="report_name">account.payment.group.check</field>
+            <field name="report">nline_check_print/check.html</field>
+            <field name="template_extension">html</field>
+        </record>
+        <record model="ir.action.keyword" id="report_check_keyword">
+            <field name="keyword">form_print</field>
+            <field name="model">account.payment.group,-1</field>
+            <field name="action" ref="report_check"/>
+        </record>
+    </data>
+</tryton>

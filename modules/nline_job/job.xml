@@ -1,0 +1,108 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data>
+        <record model="ir.sequence.type" id="sequence_type_job">
+            <field name="name">Job</field>
+        </record>
+        <record model="ir.sequence.type-res.group"
+            id="sequence_type_job_group_admin">
+            <field name="sequence_type" ref="sequence_type_job"/>
+            <field name="group" ref="res.group_admin"/>
+        </record>
+        <record model="ir.sequence.type-res.group"
+            id="sequence_type_job_group_production_admin">
+            <field name="sequence_type" ref="sequence_type_job"/>
+            <field name="group" ref="production.group_production_admin"/>
+        </record>
+    </data>
+    <data noupdate="1">
+        <record model="ir.sequence" id="sequence_job">
+            <field name="name">Job</field>
+            <field name="sequence_type" ref="sequence_type_job"/>
+            <field name="number_next" eval="8780"/>
+        </record>
+    </data>
+    <data>
+        <record model="ir.ui.view" id="production_configuration_view_form">
+            <field name="model">production.configuration</field>
+            <field name="inherit" ref="production.production_configuration_view_form"/>
+            <field name="name">configuration_form</field>
+        </record>
+
+        <record model="ir.ui.view" id="production_view_form">
+            <field name="model">production</field>
+            <field name="inherit" ref="production.production_view_form"/>
+            <field name="name">production_form</field>
+        </record>
+        <record model="ir.ui.view" id="production_view_list">
+            <field name="model">production</field>
+            <field name="inherit" ref="production.production_view_list"/>
+            <field name="name">production_list</field>
+        </record>
+
+        <record model="ir.ui.view" id="job_coverage_view_list">
+            <field name="model">production.job.coverage</field>
+            <field name="type">tree</field>
+            <field name="name">job_coverage_list</field>
+        </record>
+        <record model="ir.ui.view" id="job_coverage_view_form">
+            <field name="model">production.job.coverage</field>
+            <field name="type">form</field>
+            <field name="name">job_coverage_form</field>
+        </record>
+
+        <record model="ir.ui.view" id="material_card_view_list">
+            <field name="model">production.material_card</field>
+            <field name="inherit" ref="nline_work_order.material_card_view_list"/>
+            <field name="name">material_card_list</field>
+        </record>
+
+        <record model="ir.action.act_window" id="act_job_list">
+            <field name="name">Jobs</field>
+            <field name="res_model">production</field>
+            <field name="domain" eval="[('job', '=', True)]" pyson="1"/>
+        </record>
+        <record model="ir.action.act_window.view" id="act_job_list_view1">
+            <field name="sequence" eval="10"/>
+            <field name="view" ref="production.production_view_list"/>
+            <field name="act_window" ref="act_job_list"/>
+        </record>
+        <record model="ir.action.act_window.view" id="act_job_list_view2">
+            <field name="sequence" eval="20"/>
+            <field name="view" ref="production.production_view_form"/>
+            <field name="act_window" ref="act_job_list"/>
+        </record>
+        <menuitem
+            parent="production.menu_production"
+            action="act_job_list"
+            sequence="15"
+            id="menu_job_list"/>
+
+        <record model="ir.ui.view" id="job_create_start_view_form">
+            <field name="model">production.job.create.start</field>
+            <field name="type">form</field>
+            <field name="name">job_create_start_form</field>
+        </record>
+        <record model="ir.ui.view" id="job_create_needs_view_form">
+            <field name="model">production.job.create.needs</field>
+            <field name="type">form</field>
+            <field name="name">job_create_needs_form</field>
+        </record>
+        <record model="ir.ui.view" id="job_create_need_view_list">
+            <field name="model">production.job.create.need</field>
+            <field name="type">tree</field>
+            <field name="name">job_create_need_list</field>
+        </record>
+        <record model="ir.action.wizard" id="wizard_job_create">
+            <field name="name">Create Job</field>
+            <field name="wiz_name">production.job.create</field>
+        </record>
+        <menuitem
+            parent="menu_job_list"
+            action="wizard_job_create"
+            sequence="10"
+            id="menu_job_create"/>
+    </data>
+</tryton>

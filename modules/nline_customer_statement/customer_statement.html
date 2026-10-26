@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html xmlns:py="http://genshi.edgewall.org/">
+    <head>
+        <meta charset="utf-8"/>
+        <title>Customer Statement</title>
+        <style>
+            @page { size: 8.5in 11in; margin: 0.5in; }
+            body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; }
+            .statement { page-break-after: always; }
+            .top { display: flex; justify-content: space-between; margin-bottom: 18px; }
+            .company { font-weight: bold; font-size: 12pt; }
+            h1 { font-size: 18pt; margin: 0; text-align: right; }
+            .box { border: 1px solid #000; padding: 6px 10px; }
+            .to { white-space: pre-line; min-height: 70px; width: 3.3in; }
+            .meta td { padding: 2px 8px; }
+            table.lines { width: 100%; border-collapse: collapse; margin-top: 14px; }
+            table.lines th { border-bottom: 2px solid #000; text-align: left; padding: 4px; }
+            table.lines td { border-bottom: 1px solid #ddd; padding: 3px 4px; }
+            .num { text-align: right; white-space: nowrap; }
+            tr.opening td { font-style: italic; }
+            table.aging { width: 100%; border-collapse: collapse; margin-top: 18px; }
+            table.aging th, table.aging td { border: 1px solid #000; padding: 4px; text-align: right; }
+            table.aging th { background: #eee; }
+            .due { font-weight: bold; font-size: 12pt; }
+        </style>
+    </head>
+    <body>
+        <div py:for="statement in statements" class="statement">
+            <div class="top">
+                <div>
+                    <div class="company">${company.rec_name}</div>
+                    <div py:if="company.party.address_get()" style="white-space: pre-line">${company.party.address_get().full_address}</div>
+                </div>
+                <div>
+                    <h1>Statement</h1>
+                    <table class="meta">
+                        <tr><td>Date</td><td class="num">${format_date(statement['to_date'], user.language)}</td></tr>
+                        <tr><td>Period</td><td class="num">${format_date(statement['from_date'], user.language)} &#8211; ${format_date(statement['to_date'], user.language)}</td></tr>
+                    </table>
+                </div>
+            </div>
+            <div class="box to">${statement['party'].rec_name}
+<py:if test="statement['address']">${statement['address'].full_address}</py:if></div>
+            <table class="lines">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Transaction</th>
+                        <th>Memo</th>
+                        <th>Due</th>
+                        <th class="num">Amount</th>
+                        <th class="num">Payment</th>
+                        <th class="num">Balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="opening">
+                        <td>${format_date(statement['from_date'], user.language)}</td>
+                        <td>Balance forward</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td class="num">${format_currency(statement['opening'], user.language, statement['currency'])}</td>
+                    </tr>
+                    <tr py:for="line in statement['lines']">
+                        <td>${format_date(line.date, user.language)}</td>
+                        <td>${line.document}</td>
+                        <td>${line.description}</td>
+                        <td>${format_date(line.due_date, user.language) if line.due_date and line.charge else ''}</td>
+                        <td class="num">${format_currency(line.charge, user.language, statement['currency']) if line.charge else ''}</td>
+                        <td class="num">${format_currency(line.payment, user.language, statement['currency']) if line.payment else ''}</td>
+                        <td class="num">${format_currency(line.balance, user.language, statement['currency'])}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <table class="aging">
+                <thead>
+                    <tr>
+                        <th py:for="label, amount in statement['aging']">${label}</th>
+                        <th>Amount Due</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td py:for="label, amount in statement['aging']">${format_currency(amount, user.language, statement['currency'])}</td>
+                        <td class="due">${format_currency(statement['closing'], user.language, statement['currency'])}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </body>
+</html>

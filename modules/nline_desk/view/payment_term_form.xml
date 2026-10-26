@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<data>
+    <xpath expr="/form/field[@name='active']" position="after">
+        <label name="early_discount_rate"/>
+        <field name="early_discount_rate" factor="100"/>
+        <label name="early_discount_days"/>
+        <field name="early_discount_days"/>
+    </xpath>
+</data>

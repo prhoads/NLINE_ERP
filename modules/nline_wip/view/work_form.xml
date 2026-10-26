@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<data>
+    <xpath expr="/form/field[@name='work_center']" position="after">
+        <label name="planned_duration"/>
+        <field name="planned_duration"/>
+    </xpath>
+    <xpath expr="//button[@name='start']" position="before">
+        <button name="finish" icon="tryton-ok"/>
+    </xpath>
+</data>

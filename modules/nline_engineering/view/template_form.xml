@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<data>
+    <xpath expr="/form/notebook/page[@id='production']" position="inside">
+        <label name="engineering_revision"/>
+        <field name="engineering_revision"/>
+    </xpath>
+    <xpath expr="/form/notebook/page[@id='general']" position="inside">
+        <label name="drawing_number"/>
+        <field name="drawing_number"/>
+        <label name="drawing_revision"/>
+        <field name="drawing_revision"/>
+    </xpath>
+</data>

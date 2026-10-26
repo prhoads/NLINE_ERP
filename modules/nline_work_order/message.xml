@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data grouped="1">
+        <record model="ir.message" id="msg_make_leg_state">
+            <field name="text">You can not make a leg on production "%(production)s" because it is already running.</field>
+        </record>
+        <record model="ir.message" id="msg_make_leg_already">
+            <field name="text">Material card "%(card)s" is already supplied by a leg.</field>
+        </record>
+        <record model="ir.message" id="msg_missing_wip_location">
+            <field name="text">To make legs, you must set the production WIP location of warehouse "%(warehouse)s".</field>
+        </record>
+        <record model="ir.message" id="msg_remove_leg_started">
+            <field name="text">You can not remove leg "%(leg)s" because it is released.</field>
+        </record>
+        <record model="ir.message" id="msg_delete_card_leg">
+            <field name="text">You can not delete material card "%(card)s" because it is supplied by a leg. Remove the leg first.</field>
+        </record>
+    </data>
+</tryton>

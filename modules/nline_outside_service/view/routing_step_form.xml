@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<data>
+    <xpath expr="/form" position="inside">
+        <separator string="Outside Operation" id="outside" colspan="4"/>
+        <label name="supplier"/>
+        <field name="supplier"/>
+        <newline/>
+        <label name="service"/>
+        <field name="service"/>
+        <label name="service_supplier"/>
+        <field name="service_supplier"/>
+        <label name="service_quantity"/>
+        <field name="service_quantity"/>
+    </xpath>
+</data>

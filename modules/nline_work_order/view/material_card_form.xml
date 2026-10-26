@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<form>
+    <label name="production"/>
+    <field name="production"/>
+    <label name="move"/>
+    <field name="move"/>
+    <label name="product"/>
+    <field name="product"/>
+    <label name="quantity"/>
+    <group id="quantity" col="-1">
+        <field name="quantity" symbol="unit"/>
+    </group>
+    <label name="operation"/>
+    <field name="operation"/>
+    <label name="piece"/>
+    <field name="piece"/>
+    <label name="component_revision"/>
+    <field name="component_revision"/>
+    <label name="bom_input"/>
+    <field name="bom_input"/>
+    <label name="supply"/>
+    <field name="supply"/>
+    <label name="leg"/>
+    <field name="leg"/>
+    <label name="state"/>
+    <field name="state"/>
+    <group id="buttons" colspan="2" col="-1">
+        <button name="make_leg" icon="tryton-forward"/>
+        <button name="remove_leg" icon="tryton-clear"/>
+    </group>
+</form>

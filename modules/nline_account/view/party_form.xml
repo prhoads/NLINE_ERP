@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<data>
+    <xpath expr="/form/notebook/page[@id='general']" position="after">
+        <page string="Sales Tax" id="sales_tax">
+            <label name="tax_exemption_type"/>
+            <field name="tax_exemption_type"/>
+            <label name="tax_exemption_certificate"/>
+            <field name="tax_exemption_certificate"/>
+            <label name="tax_exemption_state"/>
+            <field name="tax_exemption_state"/>
+            <newline/>
+            <label name="tax_exemption_date"/>
+            <field name="tax_exemption_date"/>
+            <label name="tax_exemption_expiry"/>
+            <field name="tax_exemption_expiry"/>
+        </page>
+    </xpath>
+</data>

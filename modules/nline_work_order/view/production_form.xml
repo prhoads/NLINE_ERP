@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<data>
+    <xpath expr="/form/notebook/page[@id='lines']" position="before">
+        <page string="Cards" id="cards">
+            <label name="parent"/>
+            <field name="parent"/>
+            <label name="leg_index"/>
+            <field name="leg_index"/>
+            <field name="material_cards" colspan="4"
+                view_ids="nline_work_order.material_card_view_list"/>
+            <field name="legs" colspan="4"/>
+        </page>
+    </xpath>
+</data>

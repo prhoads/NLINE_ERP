@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data grouped="1">
+        <record model="ir.message" id="msg_no_sub_job">
+            <field name="text">Material card "%(card)s" can not be covered by Job "%(job)s" because it belongs to a Job. The output of a Job never feeds another Job.</field>
+        </record>
+        <record model="ir.message" id="msg_job_no_quantity">
+            <field name="text">To create a Job, check at least one need or enter an extra quantity.</field>
+        </record>
+        <record model="ir.message" id="msg_order_point_need">
+            <field name="text">Below order point</field>
+        </record>
+    </data>
+</tryton>

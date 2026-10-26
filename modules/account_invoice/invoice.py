@@ -1186,8 +1186,6 @@ class Invoice(Workflow, ModelSQL, ModelView, TaxableMixin, InvoiceReportMixin):
         '''
         pool = Pool()
         Date = pool.get('ir.date')
-        Lang = pool.get('ir.lang')
-        Sequence = pool.get('ir.sequence.strict')
 
         sequences = set()
 
@@ -1219,24 +1217,30 @@ class Invoice(Workflow, ModelSQL, ModelView, TaxableMixin, InvoiceReportMixin):
                     invoice.invoice_date = today
                 invoice.number, invoice.sequence = invoice.get_next_number()
                 if invoice.type == 'out' and invoice.sequence not in sequences:
-                    date = invoice_date(invoice)
-                    # Do not need to lock the table
-                    # because sequence.get_id is sequential
-                    after_invoices = cls.search([
-                            ('sequence', '=', invoice.sequence),
-                            ('invoice_date', '>', date),
-                            ],
-                        limit=1, order=[('invoice_date', 'DESC')])
-                    if after_invoices:
-                        after_invoice, = after_invoices
-                        raise InvoiceNumberError(
-                            gettext('account_invoice.msg_invoice_number_after',
-                                invoice=invoice.rec_name,
-                                sequence=Sequence(invoice.sequence).rec_name,
-                                date=Lang.get().strftime(date),
-                                after_invoice=after_invoice.rec_name))
+                    invoice.check_number_date(invoice_date(invoice))
                     sequences.add(invoice.sequence)
         cls.save(invoices)
+
+    def check_number_date(self, date):
+        "Check that no invoice numbered in the sequence has a later date"
+        pool = Pool()
+        Lang = pool.get('ir.lang')
+        Sequence = pool.get('ir.sequence.strict')
+        # Do not need to lock the table
+        # because sequence.get_id is sequential
+        after_invoices = self.search([
+                ('sequence', '=', self.sequence),
+                ('invoice_date', '>', date),
+                ],
+            limit=1, order=[('invoice_date', 'DESC')])
+        if after_invoices:
+            after_invoice, = after_invoices
+            raise InvoiceNumberError(
+                gettext('account_invoice.msg_invoice_number_after',
+                    invoice=self.rec_name,
+                    sequence=Sequence(self.sequence).rec_name,
+                    date=Lang.get().strftime(date),
+                    after_invoice=after_invoice.rec_name))
 
     def get_next_number(self, pattern=None):
         "Return invoice number and sequence id used"

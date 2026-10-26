@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tree>
+    <field name="number"/>
+    <field name="party" expand="1"/>
+    <field name="sale_date"/>
+    <field name="cost_order_revenue" sum="1"/>
+    <field name="cost_order_cogs" sum="1"/>
+    <field name="cost_order_bills" sum="1"/>
+    <field name="cost_order_margin" sum="1"/>
+    <field name="cost_order_margin_rate" factor="100">
+        <suffix name="cost_order_margin_rate" string="%"/>
+    </field>
+    <field name="state"/>
+</tree>

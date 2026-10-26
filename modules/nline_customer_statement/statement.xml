@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data>
+        <record model="ir.ui.view" id="statement_start_view_form">
+            <field name="model">nline.customer_statement.start</field>
+            <field name="type">form</field>
+            <field name="name">statement_start_form</field>
+        </record>
+
+        <record model="ir.action.report" id="report_statement">
+            <field name="name">Customer Statement</field>
+            <field name="model">party.party</field>
+            <field name="report_name">nline.customer_statement</field>
+            <field name="report">nline_customer_statement/customer_statement.html</field>
+            <field name="template_extension">html</field>
+        </record>
+
+        <record model="ir.action.wizard" id="wizard_statement">
+            <field name="name">Customer Statements</field>
+            <field name="wiz_name">nline.customer_statement.print</field>
+        </record>
+        <menuitem
+            parent="account.menu_reporting"
+            action="wizard_statement"
+            sequence="20"
+            id="menu_statement"/>
+        <record model="ir.action.keyword" id="wizard_statement_keyword">
+            <field name="keyword">form_print</field>
+            <field name="model">party.party,-1</field>
+            <field name="action" ref="wizard_statement"/>
+        </record>
+    </data>
+</tryton>

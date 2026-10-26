@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html xmlns:py="http://genshi.edgewall.org/">
+    <head>
+        <meta charset="utf-8"/>
+        <title>Checks</title>
+        <style>
+            @page { size: 8.5in 11in; margin: 0; }
+            body { margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 10pt; }
+            .page { position: relative; width: 8.5in; height: 11in; page-break-after: always; overflow: hidden; }
+            .check { position: absolute; top: 0; left: 0; width: 8.5in; height: 3.5in; }
+            .abs { position: absolute; white-space: nowrap; }
+            .date { top: 0.70in; left: 6.55in; }
+            .payee { top: 1.20in; left: 1.05in; font-size: 11pt; }
+            .amount { top: 1.20in; left: 6.95in; font-size: 11pt; font-weight: bold; }
+            .words { top: 1.55in; left: 0.40in; width: 6.3in; overflow: hidden; }
+            .words:after { content: " ******************************************************************************"; }
+            .address { top: 1.95in; left: 1.05in; white-space: pre-line; line-height: 1.25; }
+            .memo { top: 2.80in; left: 0.70in; }
+            .micr { top: 3.12in; left: 1.60in; font-family: "MICR E13B", "MICR", monospace; font-size: 12pt; letter-spacing: 0.02in; }
+            .number { top: 0.30in; left: 7.45in; font-weight: bold; }
+            .stub { position: absolute; left: 0.40in; width: 7.7in; height: 3.5in; }
+            .stub1 { top: 3.65in; }
+            .stub2 { top: 7.25in; }
+            .stub h2 { font-size: 10pt; margin: 0 0 4px 0; display: flex; justify-content: space-between; }
+            .stub table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+            .stub th, .stub td { padding: 2px 4px; border-bottom: 1px solid #ccc; text-align: left; }
+            .stub td.num, .stub th.num { text-align: right; }
+            .stub tfoot td { font-weight: bold; border-top: 1px solid #000; border-bottom: none; }
+        </style>
+    </head>
+    <body>
+        <py:for each="group in records">
+            <div py:for="check in checks(group)" class="page">
+                <div class="check">
+                    <div class="abs number">${check['number']}</div>
+                    <div class="abs date">${format_date(check['date'], user.language)}</div>
+                    <div class="abs payee">${check['party'].rec_name}</div>
+                    <div class="abs amount">**${format_number(check['amount'], user.language, digits=2)}</div>
+                    <div class="abs words">${check['words']}</div>
+                    <div class="abs address" py:if="check['address']">${check['party'].rec_name}
+${check['address'].full_address}</div>
+                    <div class="abs memo" py:if="len(check['payments']) == 1 and check['payments'][0].description">${check['payments'][0].description}</div>
+                    <div class="abs micr" py:if="group.journal.check_micr">C${check['number'].zfill(6)}C A${group.journal.check_micr_routing}A ${group.journal.check_micr_account}C</div>
+                </div>
+                <div py:for="stub in ['stub1', 'stub2']" class="stub ${stub}">
+                    <h2><span>${check['party'].rec_name}</span><span>${format_date(check['date'], user.language)}</span><span>Check ${check['number']}</span></h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Bill</th>
+                                <th>Reference</th>
+                                <th class="num">Original</th>
+                                <th class="num">Payment</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <py:for each="payment in check['payments']">
+                                <tr py:with="invoice = payment.get_check_invoice()">
+                                    <td>${format_date(invoice.invoice_date, user.language) if invoice and invoice.invoice_date else ''}</td>
+                                    <td>${invoice.number if invoice else (payment.description or '')}</td>
+                                    <td>${invoice.reference if invoice and invoice.reference else ''}</td>
+                                    <td class="num">${format_number(invoice.total_amount, user.language, digits=2) if invoice else ''}</td>
+                                    <td class="num">${format_number(payment.amount, user.language, digits=2)}</td>
+                                </tr>
+                            </py:for>
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="4">Check Amount</td>
+                                <td class="num">${format_number(check['amount'], user.language, digits=2)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </py:for>
+    </body>
+</html>
