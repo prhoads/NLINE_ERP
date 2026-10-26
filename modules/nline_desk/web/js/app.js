@@ -108,7 +108,11 @@
         'Income Tracker': '\u{1F4CA}', 'Vendor Credits': '\u21A9',
         'Bill Tracker': '\u{1F4CA}', 'Credit Card Charges': '\u{1F4B3}',
         'Reconcile': '\u2714', 'Report Center': '\u{1F4C8}',
-        'Items': '\u{1F4E6}'
+        'Items': '\u{1F4E6}',
+        'Order Entry': '\u{1F4DD}',
+        'Shipping': '\u{1F69A}',
+        'Invoicing': '\u{1F9FE}',
+        'Customers': '\u{1F465}'
     };
 
     function tile(item) {
@@ -258,7 +262,14 @@
         [/^#\/bill-tracker$/, 'billTracker'],
         [/^#\/items$/, 'items'],
         [/^#\/reports$/, 'reportCenter'],
-        [/^#\/reports\/(\w+)$/, 'report']
+        [/^#\/reports\/(\w+)$/, 'report'],
+        [/^#\/customer-window$/, 'customerWindow'],
+        [/^#\/supplier-window$/, 'supplierWindow'],
+        [/^#\/parts$/, 'parts'],
+        [/^#\/orders\/new$/, 'salesOrder'],
+        [/^#\/orders\/(\d+)$/, 'salesOrder'],
+        [/^#\/shipping$/, 'shipping'],
+        [/^#\/invoicing$/, 'invoicing']
     ];
 
     /* The Tryton tab of a screen: a work order card stays in the work

@@ -777,7 +777,463 @@
         return {reload: load};
     }
 
+    /* ---- The maintenance window (Jobshop) ------------------------------ */
+
+    /* The control of a field of a master: {node, get(), set(value)};
+     * field: {name, label, type: 'char'|'text'|'integer'|'float'|'money'|
+     * 'boolean'|'date'|'selection'|'many2one', options: [[value, label]],
+     * model, domain, readonly, span} */
+    function fieldControl(f) {
+        var input, get, set;
+        var attrs = {'aria-label': f.label};
+        if (f.readonly) {
+            attrs.readonly = true;
+            attrs.disabled = f.type === 'boolean' || f.type === 'selection' ?
+                true : null;
+        }
+        if (f.type === 'many2one') {
+            var picker = UI.picker(f.model, {label: f.label, placeholder:
+                f.placeholder || '', domain: f.domain});
+            if (f.readonly) {
+                picker.input.readOnly = true;
+            }
+            return {
+                node: picker.node,
+                get: function () {
+                    return picker.value();
+                },
+                set: function (value) {
+                    if (value && typeof value === 'object') {
+                        picker.set(value.id, value.rec_name);
+                    } else {
+                        picker.set(null, '');
+                    }
+                },
+                picker: picker
+            };
+        }
+        if (f.type === 'boolean') {
+            input = el('input', Object.assign({type: 'checkbox'}, attrs));
+            get = function () {
+                return input.checked;
+            };
+            set = function (value) {
+                input.checked = !!value;
+            };
+        } else if (f.type === 'selection') {
+            input = el('select', attrs, (f.options || []).map(function (o) {
+                return el('option', {value: o[0] === null ? '' : o[0]},
+                    o[1]);
+            }));
+            get = function () {
+                return input.value === '' ? null : input.value;
+            };
+            set = function (value) {
+                input.value = value === null || value === undefined ? '' :
+                    value;
+            };
+        } else if (f.type === 'text') {
+            input = el('textarea', Object.assign({rows: f.rows || 4}, attrs));
+            get = function () {
+                return input.value || null;
+            };
+            set = function (value) {
+                input.value = value || '';
+            };
+        } else if (f.type === 'money') {
+            input = UI.moneyInput(attrs);
+            get = function () {
+                return input.value === '' ? null :
+                    String(UI.parseMoney(input.value));
+            };
+            set = function (value) {
+                input.value = value === null || value === undefined ? '' :
+                    UI.money(value);
+            };
+        } else {
+            input = el('input', Object.assign({type: f.type === 'date' ?
+                'date' : 'text'}, attrs));
+            if (f.type === 'integer' || f.type === 'float') {
+                input.classList.add('money');
+            }
+            get = function () {
+                if (input.value === '') {
+                    return null;
+                }
+                if (f.type === 'integer') {
+                    return parseInt(input.value, 10);
+                }
+                if (f.type === 'float') {
+                    return parseFloat(input.value);
+                }
+                return input.value;
+            };
+            set = function (value) {
+                input.value = value === null || value === undefined ? '' :
+                    f.type === 'date' ? String(value).slice(0, 10) : value;
+            };
+        }
+        return {node: input, get: get, set: set};
+    }
+
+    /* The fields to read for a list of field definitions */
+    function readFields(fields) {
+        var names = [];
+        fields.forEach(function (f) {
+            if (f.type === 'many2one') {
+                names.push(f.name, f.name + '.rec_name');
+            } else if (f.name) {
+                names.push(f.name);
+            }
+        });
+        return names;
+    }
+
+    /* The value of a read many2one: {id, rec_name} */
+    function m2o(record, name) {
+        var id = record[name];
+        var related = record[name + '.'];
+        if (!id) {
+            return null;
+        }
+        return {id: id, rec_name: related ? related.rec_name : String(id)};
+    }
+
+    /* master(main, {title, model, label (of the ID), domain, order,
+     * tabs: [{title, fields: [...]} | {title, lines: {model, inverse,
+     * fields: [...]}} | {title, render(pane, record)}], browse: [columns],
+     * defaults, writes (false: read-only window)}): the Jobshop window: ID
+     * with "..." lookup (blank ID = new), tabs, the Browse tab last, Save,
+     * Clear, Copy, Delete; Browse rows open with a double-click */
+    function master(main, options) {
+        var record = null;
+        var controls = {};
+        var lineTabs = [];
+        var allFields = [];
+        var id = UI.picker(options.model, {label: options.label || 'ID',
+            placeholder: options.label || 'ID', domain: options.domain,
+            order: options.order, onselect: function (r) {
+                load(r.id);
+            }});
+        var status = el('span.muted', 'New');
+        var tabBar = el('div.tabs', {role: 'tablist'});
+        var panes = el('div.tab-panes');
+
+        function save(andNew) {
+            var values = {};
+            Object.keys(controls).forEach(function (name) {
+                var c = controls[name];
+                if (!c.field.readonly) {
+                    values[name] = c.get();
+                }
+            });
+            lineTabs.forEach(function (t) {
+                values[t.name] = t.changes();
+            });
+            if (options.beforeSave) {
+                values = options.beforeSave(values, record) || values;
+            }
+            var call = record ? global.Rpc.model(options.model, 'write',
+                [[record.id], values]).then(function () {
+                    return record.id;
+                }) : global.Rpc.model(options.model, 'create', [[
+                    Object.assign({}, options.defaults || {}, values)]])
+                .then(function (ids) {
+                    return ids[0];
+                });
+            return call.then(function (newId) {
+                UI.toast(options.title + ' saved', 'ok');
+                if (andNew) {
+                    clear();
+                } else {
+                    load(newId);
+                }
+                if (browseLoaded) {
+                    browseLoad();
+                }
+            }, UI.showError);
+        }
+
+        function clear() {
+            record = null;
+            id.set(null, '');
+            status.textContent = 'New';
+            Object.keys(controls).forEach(function (name) {
+                var c = controls[name];
+                c.set(c.field.default !== undefined ? c.field.default : null);
+            });
+            lineTabs.forEach(function (t) {
+                t.set([]);
+            });
+            customTabs.forEach(function (t) {
+                UI.clear(t.pane).appendChild(el('p.muted',
+                    'Save or choose one first.'));
+            });
+        }
+
+        function load(recordId) {
+            global.Rpc.model(options.model, 'read', [[recordId],
+                readFields(allFields).concat(['rec_name'])]).then(
+                function (rows) {
+                    record = rows[0];
+                    id.set(record.id, record.rec_name);
+                    status.textContent = '';
+                    Object.keys(controls).forEach(function (name) {
+                        var c = controls[name];
+                        c.set(c.field.type === 'many2one' ? m2o(record,
+                            name) : record[name]);
+                    });
+                    lineTabs.forEach(function (t) {
+                        t.load(record.id);
+                    });
+                    customTabs.forEach(function (t) {
+                        t.render(UI.clear(t.pane), record);
+                    });
+                    if (options.onload) {
+                        options.onload(record);
+                    }
+                }, UI.showError);
+        }
+
+        function copy() {
+            if (!record) {
+                return;
+            }
+            global.Rpc.model(options.model, 'copy', [[record.id], {}]).then(
+                function (ids) {
+                    UI.toast(options.title + ' copied', 'ok');
+                    load(ids[0]);
+                }, UI.showError);
+        }
+
+        function remove() {
+            if (!record) {
+                return;
+            }
+            UI.confirm('Delete', 'Delete ' + record.rec_name + '?').then(
+                function (ok) {
+                    if (!ok) {
+                        return;
+                    }
+                    global.Rpc.model(options.model, 'delete', [[record.id]])
+                        .then(function () {
+                            UI.toast('Deleted', 'ok');
+                            clear();
+                        }, UI.showError);
+                });
+        }
+
+        var writes = options.writes !== false;
+        var extra = (options.extra || []).map(function (item) {
+            return {label: item.label, onclick: function () {
+                item.onclick(record, load);
+            }};
+        });
+        if (writes) {
+            extra = extra.concat([{label: 'Copy', onclick: copy},
+                {label: 'Delete', onclick: remove}]);
+        }
+        var form = UI.form(main, {title: options.title, extra: extra,
+            onClear: clear, onSave: writes ? function (andNew) {
+                return save(andNew);
+            } : null});
+        main = form.body;
+        main.appendChild(el('div.panel.master-head',
+            el('label.field', options.label || 'ID'), id.node, status));
+
+        var customTabs = [];
+        var tabs = (options.tabs || []).concat(options.browse ? [{
+            title: 'Browse', browse: options.browse}] : []);
+
+        function show(index) {
+            Array.prototype.forEach.call(tabBar.children, function (b, i) {
+                b.classList.toggle('active', i === index);
+                b.setAttribute('aria-selected', i === index);
+            });
+            Array.prototype.forEach.call(panes.children, function (p, i) {
+                p.hidden = i !== index;
+            });
+            if (tabs[index].browse && !browseLoaded) {
+                browseLoad();
+            }
+        }
+
+        var browseLoaded = false;
+        var browseBody = el('tbody');
+        var browseSearch = el('input', {type: 'text', placeholder:
+            'Search (* for any text)', 'aria-label': 'Search'});
+
+        function browseLoad() {
+            browseLoaded = true;
+            var domain = (options.domain || []).slice();
+            var text = browseSearch.value.trim().replace(/\*/g, '%');
+            if (text) {
+                domain.push(['rec_name', 'ilike', text.indexOf('%') >= 0 ?
+                    text : '%' + text + '%']);
+            }
+            var columns = options.browse;
+            global.Rpc.searchRead(options.model, domain, readFields(columns),
+                {limit: 300, order: options.order}).then(function (rows) {
+                    UI.clear(browseBody);
+                    rows.forEach(function (row) {
+                        browseBody.appendChild(el('tr', {title:
+                            'Double-click to open', ondblclick: function () {
+                                load(row.id);
+                                show(0);
+                            }}, columns.map(function (c) {
+                                var v = c.type === 'many2one' ? (m2o(row,
+                                    c.name) || {}).rec_name : row[c.name];
+                                return el('td' + (c.type === 'money' ||
+                                    c.type === 'float' ? '.num' : ''),
+                                    c.type === 'money' ? UI.money(v) :
+                                    c.type === 'date' ? UI.date(v) :
+                                    c.type === 'boolean' ? (v ? '✔' :
+                                        '') : v === null || v === undefined ?
+                                    '' : String(v));
+                            })));
+                    });
+                }, UI.showError);
+        }
+
+        tabs.forEach(function (tab, index) {
+            tabBar.appendChild(el('button.tab', {type: 'button', role: 'tab',
+                onclick: function () {
+                    show(index);
+                }}, tab.title));
+            var pane = el('div.tab-pane.panel', {role: 'tabpanel'});
+            if (tab.fields) {
+                var grid = el('div.grid-form');
+                tab.fields.forEach(function (f) {
+                    var c = fieldControl(f);
+                    c.field = f;
+                    controls[f.name] = c;
+                    allFields.push(f);
+                    grid.appendChild(el('div', f.span ? {style: {gridColumn:
+                        'span ' + f.span}} : null, el('label.field', f.label),
+                        c.node));
+                });
+                pane.appendChild(grid);
+            } else if (tab.lines) {
+                lineTabs.push(linesTab(pane, tab.lines));
+            } else if (tab.browse) {
+                var timer;
+                browseSearch.addEventListener('input', function () {
+                    global.clearTimeout(timer);
+                    timer = global.setTimeout(browseLoad, 250);
+                });
+                pane.appendChild(el('div.toolbar', el('div', {style: {width:
+                    '320px'}}, browseSearch)));
+                pane.appendChild(el('div.table-wrap', el('table.data',
+                    el('thead', el('tr', tab.browse.map(function (c) {
+                        return el('th', c.label);
+                    }))), browseBody)));
+            } else if (tab.render) {
+                customTabs.push({pane: pane, render: tab.render});
+                pane.appendChild(el('p.muted', 'Save or choose one first.'));
+            }
+            panes.appendChild(pane);
+        });
+        main.appendChild(tabBar);
+        main.appendChild(panes);
+        show(0);
+        clear();
+        if (options.open) {
+            load(options.open);
+        }
+        return {load: load, record: function () {
+            return record;
+        }};
+    }
+
+    /* A tab of related lines (one2many) edited in a grid: their changes as
+     * the one2many actions of the parent's write */
+    function linesTab(pane, spec) {
+        var body = el('tbody');
+        var rows = [];
+        var removed = [];
+
+        function addRow(line) {
+            var row = {id: line ? line.id : null, controls: {}};
+            var tr = el('tr', spec.fields.map(function (f) {
+                var c = fieldControl(f);
+                c.field = f;
+                row.controls[f.name] = c;
+                if (line) {
+                    c.set(f.type === 'many2one' ? m2o(line, f.name) :
+                        line[f.name]);
+                }
+                return el('td', c.node);
+            }), el('td.row-delete', el('button', {type: 'button',
+                title: 'Delete line', 'aria-label': 'Delete line',
+                onclick: function () {
+                    if (row.id) {
+                        removed.push(row.id);
+                    }
+                    rows.splice(rows.indexOf(row), 1);
+                    tr.remove();
+                }}, '✕')));
+            rows.push(row);
+            body.appendChild(tr);
+        }
+
+        pane.appendChild(el('div.table-wrap', el('table.data', el('thead',
+            el('tr', spec.fields.map(function (f) {
+                return el('th', f.label);
+            }), el('th', ''))), body)));
+        pane.appendChild(el('div.toolbar', el('button', {type: 'button',
+            onclick: function () {
+                addRow(null);
+            }}, 'Add line')));
+
+        return {
+            name: spec.name,
+            set: function (lines) {
+                UI.clear(body);
+                rows = [];
+                removed = [];
+                lines.forEach(addRow);
+            },
+            load: function (parentId) {
+                var self = this;
+                global.Rpc.searchRead(spec.model, [[spec.inverse, '=',
+                    parentId]], readFields(spec.fields), {order:
+                    spec.order}).then(function (lines) {
+                        self.set(lines);
+                    }, UI.showError);
+            },
+            changes: function () {
+                var actions = [];
+                var create = [];
+                rows.forEach(function (row) {
+                    var values = {};
+                    spec.fields.forEach(function (f) {
+                        if (!f.readonly) {
+                            values[f.name] = row.controls[f.name].get();
+                        }
+                    });
+                    if (row.id) {
+                        actions.push(['write', [row.id], values]);
+                    } else if (Object.keys(values).some(function (k) {
+                        return values[k] !== null && values[k] !== '' &&
+                            values[k] !== false;
+                    })) {
+                        create.push(values);
+                    }
+                });
+                if (create.length) {
+                    actions.push(['create', create]);
+                }
+                if (removed.length) {
+                    actions.push(['delete', removed]);
+                }
+                return actions;
+            }
+        };
+    }
+
     Object.assign(UI, {
+        master: master,
+        fieldControl: fieldControl,
         report: report,
         setTitle: setTitle,
         browse: browse,

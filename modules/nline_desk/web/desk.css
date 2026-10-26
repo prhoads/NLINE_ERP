@@ -317,3 +317,11 @@ table.report tr.drill { cursor: zoom-in; }
 .report-center h2 { margin-top: 0; color: var(--accent); }
 .report-link { display: flex; flex-direction: column; padding: 8px 6px; border-bottom: 1px solid var(--line-soft); text-decoration: none; color: var(--ink); }
 .report-link:hover { background: var(--accent-soft); }
+/* Maintenance windows (UI.master): ID, tabs, Browse */
+.master-head { display: grid; grid-template-columns: auto minmax(220px, 420px) auto; gap: 10px; align-items: center; margin-bottom: 10px; }
+.master-head label.field { margin: 0; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: -1px; flex-wrap: wrap; }
+.tabs .tab { border-radius: 6px 6px 0 0; border-bottom: none; background: var(--table-head); }
+.tabs .tab.active { background: var(--paper); font-weight: 600; border-color: var(--line); position: relative; top: 1px; }
+.tab-panes > .tab-pane { border-top-left-radius: 0; }
+textarea { width: 100%; box-sizing: border-box; background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }

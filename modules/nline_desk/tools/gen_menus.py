@@ -22,6 +22,10 @@ PURCHASE = 'purchase.group_purchase'
 SCREENS = {
     'home': ('Home', '', False, None),
     'customers': ('Customer Center', 'customers', False, ACC),
+    'customer_window': ('Customers', 'customer-window', False, None),
+    'orders': ('Customer Order Entry', 'orders/new', True, SALE),
+    'shipping': ('Shipping', 'shipping', True, STOCK),
+    'invoicing': ('Invoicing', 'invoicing', True, ACC),
     'invoices': ('Create Invoices', 'invoices/new', True, ACC),
     'sales_receipts': ('Enter Sales Receipts', 'sales-receipts/new', True,
         ACC),
@@ -42,6 +46,7 @@ SCREENS = {
     'reconcile': ('Reconcile', 'reconcile', True, ACC),
     'workorders': ('Work Orders (cards)', 'workorders', False, PROD),
     'items': ('Item List', 'items', False, None),
+    'parts': ('Parts', 'parts', False, None),
     'accounts': ('Chart of Accounts', 'accounts', False, ACC),
     'journal': ('Make General Journal Entries', 'journal/new', True, ACC),
     'reports': ('Report Center', 'reports', False, None),
@@ -52,6 +57,10 @@ FOLDERS = [
     ('customers', 'Customers', 'tryton-sale', [
         ('customers', 'screen:customers', [ACC]),
         ('income_tracker', 'screen:income_tracker', [ACC]),
+        ('customer_window', 'screen:customer_window', []),
+        ('orders', 'screen:orders', [SALE]),
+        ('shipping', 'screen:shipping', [STOCK]),
+        ('invoicing', 'screen:invoicing', [ACC]),
         ('sales', 'sale.act_sale_form', [SALE]),
         ('invoices', 'screen:invoices', [ACC]),
         ('sales_receipts', 'screen:sales_receipts', [ACC]),
@@ -89,6 +98,7 @@ FOLDERS = [
         ('works', 'production_work.act_work_list', [PROD]),
         ]),
     ('engineering', 'Engineering', 'tryton-product', [
+        ('part_window', 'screen:parts', []),
         ('parts', 'product.act_template_form', []),
         ('boms', 'production.act_bom_list', [PROD]),
         ('routings', 'production_routing.act_routing_list', [PROD]),

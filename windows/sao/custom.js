@@ -154,12 +154,19 @@
         'income-tracker': 'Income Tracker',
         'bill-tracker': 'Bill Tracker',
         'items': 'Item List',
-        'reports': 'Report Center'
+        'reports': 'Report Center',
+        'customer-window': 'Customers',
+        'supplier-window': 'Suppliers',
+        'parts': 'Parts',
+        'orders/new': 'Customer Order Entry',
+        'shipping': 'Shipping',
+        'invoicing': 'Invoicing'
     };
 
     /* Screens with a tab per item: a register per account, a tab per
      * report */
-    var PER_ITEM = ['accounts', 'reports'];
+    var PER_ITEM = ['accounts', 'reports', 'orders', 'purchase-orders',
+        'work-orders'];
 
     /* The screen of a route: "workorders/12?x" is the work orders screen,
      * "accounts/12" the register of account 12 */
@@ -167,7 +174,7 @@
         route = route.replace(/\?.*$/, '');
         for (var name in NAMES) {
             if (route === name || (route.indexOf(name + '/') === 0 &&
-                    PER_ITEM.indexOf(name) < 0)) {
+                    PER_ITEM.indexOf(name.split('/')[0]) < 0)) {
                 return name;
             }
         }
@@ -181,8 +188,9 @@
                 return false;
             }
             var menu = screenOf(url.substr(DESK.length));
-            return menu === screen || (PER_ITEM.indexOf(menu) >= 0 &&
-                screen.indexOf(menu + '/') === 0);
+            var family = menu.split('/')[0];
+            return menu === screen || (PER_ITEM.indexOf(family) >= 0 &&
+                screen.indexOf(family + '/') === 0);
         });
     }
 

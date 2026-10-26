@@ -179,13 +179,14 @@ class Desk(ModelView):
                 ('Pay Bills', 'nline_desk.url_desk_pay_bills'),
                 ]),
         ('Customers', True, [
-                ('Sales Orders', 'sale.act_sale_form'),
-                ('Ship', 'stock.act_shipment_out_form'),
-                ('Create Invoices', 'nline_desk.url_desk_invoices'),
+                ('Order Entry', 'nline_desk.url_desk_orders'),
+                ('Shipping', 'nline_desk.url_desk_shipping'),
+                ('Invoicing', 'nline_desk.url_desk_invoicing'),
                 ('Receive Payments', 'nline_desk.url_desk_receive'),
                 ('Make Deposits', 'nline_desk.url_desk_deposits'),
                 ]),
         ('Customer Activities', False, [
+                ('Create Invoices', 'nline_desk.url_desk_invoices'),
                 ('Sales Receipts', 'nline_desk.url_desk_sales_receipts'),
                 ('Credit Memos', 'nline_desk.url_desk_credits'),
                 ('Statements', 'nline_desk.url_desk_statements'),
@@ -217,7 +218,8 @@ class Desk(ModelView):
         ('Centers', False, [
                 ('Customer Center', 'nline_desk.url_desk_customers'),
                 ('Vendor Center', 'nline_desk.url_desk_vendors'),
-                ('Parts', 'product.act_template_form'),
+                ('Customers', 'nline_desk.url_desk_customer_window'),
+                ('Parts', 'nline_desk.url_desk_parts'),
                 ]),
         ]
 

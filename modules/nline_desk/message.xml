@@ -51,5 +51,17 @@ this repository contains the full copyright notices and license terms. -->
         <record model="ir.message" id="msg_unknown_report">
             <field name="text">Unknown report: %(report)s.</field>
         </record>
+        <record model="ir.message" id="msg_sale_not_draft">
+            <field name="text">Sale %(sale)s is not a draft any more: its lines cannot change here.</field>
+        </record>
+        <record model="ir.message" id="msg_sale_not_confirmed">
+            <field name="text">Confirm sale %(sale)s before creating its work orders.</field>
+        </record>
+        <record model="ir.message" id="msg_not_producible">
+            <field name="text">%(product)s is not a producible part: it has no engineering master.</field>
+        </record>
+        <record model="ir.message" id="msg_line_has_work_order">
+            <field name="text">Line %(line)s already has its work order.</field>
+        </record>
     </data>
 </tryton>
