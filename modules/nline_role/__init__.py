@@ -11,6 +11,9 @@ def register():
         role.Role,
         role.RoleGroup,
         role.User,
+        role.Action,
+        role.ActionURL,
+        role.Menu,
         role.ModelAccess,
         role.ModelButton,
         module='nline_role', type_='model')

@@ -13,6 +13,12 @@
  * - directly on the ERP server, http://nlvdc01:8000/ (when N-Line BI is
  *   down): Tryton's own sign-in, shared with the N-Line Desk, and the same
  *   header from desk/shared/nline_header.js.
+ *
+ * The N-Line screens (bills, checks, payments, work order cards...) open in
+ * Tryton tabs like any Tryton screen: their menus are ir.action.url to
+ * desk/index.html#/<screen>, shown here in a frame without the desk's header.
+ * An address typed by hand opens only what the user's menus open
+ * (ir.ui.menu.nline_allowed, module nline_role).
  */
 (function () {
     'use strict';
@@ -21,7 +27,7 @@
     var BEHIND_NLBI = BASE !== '';
 
     document.write(
-        '<script src="desk/shared/nline_header.js?v=20261027b"><\/script>');
+        '<script src="desk/shared/nline_header.js?v=20261027c"><\/script>');
 
     Sao.config.title = 'Tryton ERP';
 
@@ -115,6 +121,169 @@
             }
         });
     };
+
+    /* ---- The N-Line screens in Tryton tabs ---------------------------- */
+    var DESK = 'desk/index.html#/';
+    var NAMES = {
+        'workorders': 'Work Orders (cards)',
+        'bills/new': 'Enter Bills',
+        'bills/pay': 'Pay Bills',
+        'checks/new': 'Write Checks',
+        'invoices/new': 'Create Invoices',
+        'payments/receive': 'Receive Payments',
+        'deposits/new': 'Make Deposits',
+        'register': 'Check Register',
+        'customers': 'Customer Center',
+        'vendors': 'Vendor Center'
+    };
+
+    /* The screen of a route: "workorders/12?x" is the work orders screen */
+    function screenOf(route) {
+        route = route.replace(/\?.*$/, '');
+        for (var name in NAMES) {
+            if (route === name || route.indexOf(name + '/') === 0) {
+                return name;
+            }
+        }
+        return route;
+    }
+
+    var allowedPrm = null, allowedSession = null;
+    function allowed() {
+        var session = Sao.Session.current_session;
+        if (!allowedPrm || allowedSession !== (session && session.session)) {
+            allowedSession = session && session.session;
+            allowedPrm = Sao.rpc({
+                method: 'model.ir.ui.menu.nline_allowed',
+                params: [{}]
+            }, session, true, false).then(function (result) {
+                return result;
+            }, function () {
+                /* A server without module nline_role: no restriction */
+                return jQuery.when({all: true});
+            });
+        }
+        return allowedPrm;
+    }
+
+    function refuse() {
+        Sao.common.message.run(
+            'This screen is not in your menus: ask an administrator for ' +
+            'access.', 'tryton-warning');
+    }
+
+    Sao.Tab.NLine = Sao.class_(Sao.Tab, {
+        class_: 'tab-nline',
+        init: function (attributes) {
+            Sao.Tab.NLine._super.init.call(this, attributes);
+            this.route = attributes.route;
+            this.screen_name = screenOf(this.route);
+            this.set_name(attributes.name || NAMES[this.screen_name] ||
+                this.route);
+            this.create_tabcontent();
+            this.main.css('padding-top', 0);
+            this.frame = jQuery('<iframe/>', {
+                'class': 'nl-screen',
+                'title': this.name,
+                'src': BASE + '/' + DESK.replace('#/', '?embed=1#/') +
+                    this.route
+            });
+            this.content.append(this.frame);
+        },
+        create_toolbar: function () {
+            return jQuery('<span/>');
+        },
+        compare: function (attributes) {
+            return Boolean(attributes) &&
+                attributes.nline_screen === this.screen_name;
+        },
+        get_url: function () {
+            return 'nline/' + this.route;
+        },
+        reload: function () {
+            this.frame[0].contentWindow.location.reload();
+        },
+        refresh_resources: function () {
+        },
+        update_resources: function () {
+        }
+    });
+
+    function openScreen(route, name) {
+        var screen = screenOf(route);
+        allowed().then(function (allow) {
+            if (!allow.all && !allow.urls.some(function (url) {
+                    return url.indexOf(DESK) === 0 &&
+                        screenOf(url.substr(DESK.length)) === screen;
+                })) {
+                refuse();
+                return;
+            }
+            for (var i = 0; i < Sao.Tab.tabs.length; i++) {
+                var other = Sao.Tab.tabs[i];
+                if (other instanceof Sao.Tab.NLine &&
+                        other.compare({nline_screen: screen})) {
+                    jQuery('#tablist').find('a[href="#' + other.id + '"]')
+                        .tab('show');
+                    return;
+                }
+            }
+            Sao.Tab.add(new Sao.Tab.NLine({route: route, name: name}));
+        });
+    }
+
+    var execAction = Sao.Action.exec_action;
+    Sao.Action.exec_action = function (action) {
+        if (action && action.type === 'ir.action.url' && action.url &&
+                action.url.indexOf(DESK) === 0) {
+            openScreen(action.url.substr(DESK.length), action.name);
+            return;
+        }
+        return execAction.apply(this, arguments);
+    };
+
+    /* An address typed by hand (or a bookmark): only what the menus open */
+    var openUrl = Sao.open_url;
+    Sao.open_url = function (url) {
+        var self = this, args = arguments;
+        if (url === undefined) {
+            url = location.hash.substr(1);
+        }
+        var path = url.split(';')[0].split('/');
+        var type = path[1], name = decodeURIComponent(path[2] || '');
+        if (type === 'nline') {
+            openScreen(decodeURIComponent(path.slice(2).join('/')));
+            return;
+        }
+        if (type !== 'model' && type !== 'wizard') {
+            return openUrl.apply(self, args);
+        }
+        allowed().then(function (allow) {
+            if (allow.all || (type === 'model' ? allow.models :
+                    allow.wizards).indexOf(name) >= 0) {
+                openUrl.apply(self, args);
+            } else {
+                refuse();
+            }
+        });
+    };
+
+    /* From a screen: open another one in its own tab, or close (Save & Close) */
+    window.addEventListener('message', function (event) {
+        var data = event.data;
+        if (event.origin !== location.origin || !data || !data.nline) {
+            return;
+        }
+        if (data.nline === 'open' && data.route) {
+            openScreen(String(data.route));
+        } else if (data.nline === 'close') {
+            Sao.Tab.tabs.slice().forEach(function (tab) {
+                if (tab.frame && tab.frame[0].contentWindow === event.source) {
+                    tab.close();
+                }
+            });
+        }
+    });
 
     function module(src) {
         var script = document.createElement('script');

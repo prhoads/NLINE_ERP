@@ -168,6 +168,13 @@ class Desk(ModelView):
     # ---- Helpers ---------------------------------------------------------
 
     @classmethod
+    def _check_read(cls, *models):
+        "Refuse a user who may not read these records in Tryton"
+        ModelAccess = Pool().get('ir.model.access')
+        for model in models:
+            ModelAccess.check(model, 'read')
+
+    @classmethod
     def _check_create(cls, *models):
         """Refuse a user who may not create these records in Tryton: the
         screens create them through server code, which Tryton does not check
@@ -403,6 +410,7 @@ class Desk(ModelView):
     @classmethod
     def open_bills(cls, party=None, pay_date=None):
         "Return the open supplier bills with the discount available"
+        cls._check_read('account.invoice')
         return cls._open_items('in', party, pay_date)
 
     @classmethod
@@ -518,6 +526,7 @@ class Desk(ModelView):
     @classmethod
     def open_invoices(cls, party=None, pay_date=None):
         "Return the open customer invoices"
+        cls._check_read('account.invoice')
         return cls._open_items('out', party, pay_date)
 
     @classmethod
@@ -587,6 +596,7 @@ class Desk(ModelView):
     @classmethod
     def undeposited_payments(cls):
         "Return the received payments not deposited yet"
+        cls._check_read('account.move.line')
         pool = Pool()
         Line = pool.get('account.move.line')
         account = cls._config('undeposited_account')
@@ -651,6 +661,7 @@ class Desk(ModelView):
         """Return the checkbook register of the bank of the payment journal:
         the cleared lines of the bank GL account and the outstanding checks
         and deposits of its clearing account, with a running balance"""
+        cls._check_read('account.move.line')
         pool = Pool()
         Line = pool.get('account.move.line')
         PaymentJournal = pool.get('account.payment.journal')
@@ -699,6 +710,7 @@ class Desk(ModelView):
     def party_center(cls, party, kind='customer'):
         """Return the balance and the transactions of a customer or a
         supplier"""
+        cls._check_read('account.invoice')
         pool = Pool()
         Invoice = pool.get('account.invoice')
         Payment = pool.get('account.payment')
@@ -754,6 +766,7 @@ class Desk(ModelView):
     def masters(cls, text='', limit=50):
         """Return the producible parts matching the text with their
         engineering masters (revisions)"""
+        cls._check_read('production')
         pool = Pool()
         Product = pool.get('product.product')
         domain = [('producible', '=', True), ('boms', '!=', None)]
@@ -782,6 +795,7 @@ class Desk(ModelView):
     @classmethod
     def work_order(cls, production):
         "Return the build tree of the work order"
+        cls._check_read('production')
         pool = Pool()
         Production = pool.get('production')
         tree, = Production.get_build_tree([Production(production)])

@@ -238,3 +238,8 @@ table.data tfoot td { font-weight: 600; border-top: 2px solid var(--line); backg
 .badge.open, .badge.paid, .badge[class*="st-"] { color: #1d2733; }
 .check { color: #1d2733; }
 .check input { color: #1d2733; }
+
+/* One screen inside a Tryton tab (index.html?embed=1) */
+html.embed #topbar { display: none; }
+html.embed body { background: var(--paper); }
+html.embed #main { padding: 12px 16px; max-width: none; }

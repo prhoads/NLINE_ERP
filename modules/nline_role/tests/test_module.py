@@ -123,5 +123,50 @@ class NlineRoleTestCase(ModuleTestCase):
         self.assertTrue(access['production']['create'])
         self.assertNotEqual(groups, {-1})
 
+    @with_transaction()
+    def test_menus(self):
+        "Test the menus a role sees"
+        pool = Pool()
+        User = pool.get('res.user')
+        Menu = pool.get('ir.ui.menu')
+        reader, production = User.create([{
+                    'login': 'reader', 'name': "Reader",
+                    'nline_role': self.role('accounting_user').id,
+                    }, {
+                    'login': 'prod', 'name': "Production",
+                    'nline_role': self.role('production_specialist').id,
+                    }])
+        financial = self.group('account.menu_account')
+        productions = self.group('production.menu_production')
+
+        def visible(user):
+            with Transaction().set_user(user.id), \
+                    Transaction().set_context(_check_access=True):
+                Menu._nline_folders.clear()
+                menus = Menu.search([])
+                allowed = Menu.nline_allowed()
+            return menus, allowed
+
+        menus, allowed = visible(reader)
+        ids = {m.id for m in menus}
+        self.assertIn(financial, ids)
+        self.assertFalse([m for m in menus if Menu._nline_hidden(m)])
+        self.assertIn('account.move', allowed['models'])
+        self.assertFalse(allowed['wizards'])
+        # No folder without anything to open
+        for menu in menus:
+            if not menu.action_keywords:
+                self.assertTrue(any(m.parent == menu for m in menus),
+                    menu.rec_name)
+
+        menus, allowed = visible(production)
+        ids = {m.id for m in menus}
+        self.assertNotIn(financial, ids)
+        self.assertIn(productions, ids)
+        self.assertNotIn('account.move', allowed['models'])
+        self.assertIn('production', allowed['models'])
+
+        self.assertEqual(Menu.nline_allowed(), {'all': True})
+
 
 del ModuleTestCase

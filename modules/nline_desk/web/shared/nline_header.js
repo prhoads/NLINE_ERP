@@ -111,9 +111,6 @@
         return [
             {key: 'erp', title: 'Tryton ERP', note: 'the full ERP',
                 path: '/#' + encodeURIComponent(database || '')},
-            {key: 'desk', title: 'N-Line Desk',
-                note: 'work order cards, checks, bills, payments',
-                path: '/desk/index.html#/'},
             {group: 'N-Line BI'},
             {key: 'acct', title: 'Accounting', path: BI_URL + '/Acct/'},
             {key: 'bom', title: 'BOM Tool', path: BI_URL + '/bom/'},

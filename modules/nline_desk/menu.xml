@@ -3,90 +3,164 @@
 this repository contains the full copyright notices and license terms. -->
 <tryton>
     <data>
-        <!-- The N-Line screens in the Tryton menu: they open the desk in a
-             new tab, already signed in with the Tryton session -->
-        <menuitem
-            name="N-Line"
-            sequence="1"
-            id="menu_nline"
-            icon="tryton-star"/>
-
-        <record model="ir.action.url" id="url_desk_home">
-            <field name="name">Home (N-Line Desk)</field>
-            <field name="url">desk/index.html#/</field>
-        </record>
-        <menuitem parent="menu_nline" action="url_desk_home"
-            sequence="10" id="menu_desk_home"/>
-
-        <record model="ir.action.url" id="url_desk_workorders">
-            <field name="name">Work Orders (cards)</field>
-            <field name="url">desk/index.html#/workorders</field>
-        </record>
-        <menuitem parent="menu_nline" action="url_desk_workorders"
-            sequence="20" id="menu_desk_workorders"/>
-
+        <!-- The N-Line screens in the Tryton menus: each opens in a Tryton
+             tab (custom.js), only for the groups that may use it; the ones
+             that write are hidden from read-only users -->
         <record model="ir.action.url" id="url_desk_bills">
             <field name="name">Enter Bills</field>
+            <field name="nline_writes" eval="True"/>
             <field name="url">desk/index.html#/bills/new</field>
         </record>
-        <menuitem parent="menu_nline" action="url_desk_bills"
-            sequence="30" id="menu_desk_bills"/>
+        <menuitem parent="purchase.menu_purchase" action="url_desk_bills"
+            sequence="1" id="menu_desk_bills"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_bills_group">
+            <field name="menu" ref="menu_desk_bills"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+        <record model="ir.action-res.group" id="url_desk_bills_group">
+            <field name="action" ref="url_desk_bills"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
 
         <record model="ir.action.url" id="url_desk_pay_bills">
             <field name="name">Pay Bills</field>
+            <field name="nline_writes" eval="True"/>
             <field name="url">desk/index.html#/bills/pay</field>
         </record>
-        <menuitem parent="menu_nline" action="url_desk_pay_bills"
-            sequence="40" id="menu_desk_pay_bills"/>
-
-        <record model="ir.action.url" id="url_desk_checks">
-            <field name="name">Write Checks</field>
-            <field name="url">desk/index.html#/checks/new</field>
+        <menuitem parent="purchase.menu_purchase" action="url_desk_pay_bills"
+            sequence="2" id="menu_desk_pay_bills"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_pay_bills_group">
+            <field name="menu" ref="menu_desk_pay_bills"/>
+            <field name="group" ref="account.group_account"/>
         </record>
-        <menuitem parent="menu_nline" action="url_desk_checks"
-            sequence="50" id="menu_desk_checks"/>
-
-        <record model="ir.action.url" id="url_desk_invoices">
-            <field name="name">Create Invoices</field>
-            <field name="url">desk/index.html#/invoices/new</field>
+        <record model="ir.action-res.group" id="url_desk_pay_bills_group">
+            <field name="action" ref="url_desk_pay_bills"/>
+            <field name="group" ref="account.group_account"/>
         </record>
-        <menuitem parent="menu_nline" action="url_desk_invoices"
-            sequence="60" id="menu_desk_invoices"/>
-
-        <record model="ir.action.url" id="url_desk_receive">
-            <field name="name">Receive Payments</field>
-            <field name="url">desk/index.html#/payments/receive</field>
-        </record>
-        <menuitem parent="menu_nline" action="url_desk_receive"
-            sequence="70" id="menu_desk_receive"/>
-
-        <record model="ir.action.url" id="url_desk_deposits">
-            <field name="name">Make Deposits</field>
-            <field name="url">desk/index.html#/deposits/new</field>
-        </record>
-        <menuitem parent="menu_nline" action="url_desk_deposits"
-            sequence="80" id="menu_desk_deposits"/>
-
-        <record model="ir.action.url" id="url_desk_register">
-            <field name="name">Check Register</field>
-            <field name="url">desk/index.html#/register</field>
-        </record>
-        <menuitem parent="menu_nline" action="url_desk_register"
-            sequence="90" id="menu_desk_register"/>
-
-        <record model="ir.action.url" id="url_desk_customers">
-            <field name="name">Customer Center</field>
-            <field name="url">desk/index.html#/customers</field>
-        </record>
-        <menuitem parent="menu_nline" action="url_desk_customers"
-            sequence="100" id="menu_desk_customers"/>
 
         <record model="ir.action.url" id="url_desk_vendors">
             <field name="name">Vendor Center</field>
             <field name="url">desk/index.html#/vendors</field>
         </record>
-        <menuitem parent="menu_nline" action="url_desk_vendors"
-            sequence="110" id="menu_desk_vendors"/>
+        <menuitem parent="purchase.menu_purchase" action="url_desk_vendors"
+            sequence="3" id="menu_desk_vendors"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_vendors_group">
+            <field name="menu" ref="menu_desk_vendors"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+        <record model="ir.action-res.group" id="url_desk_vendors_group">
+            <field name="action" ref="url_desk_vendors"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+
+        <record model="ir.action.url" id="url_desk_invoices">
+            <field name="name">Create Invoices</field>
+            <field name="nline_writes" eval="True"/>
+            <field name="url">desk/index.html#/invoices/new</field>
+        </record>
+        <menuitem parent="sale.menu_sale" action="url_desk_invoices"
+            sequence="1" id="menu_desk_invoices"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_invoices_group">
+            <field name="menu" ref="menu_desk_invoices"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+        <record model="ir.action-res.group" id="url_desk_invoices_group">
+            <field name="action" ref="url_desk_invoices"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+
+        <record model="ir.action.url" id="url_desk_receive">
+            <field name="name">Receive Payments</field>
+            <field name="nline_writes" eval="True"/>
+            <field name="url">desk/index.html#/payments/receive</field>
+        </record>
+        <menuitem parent="sale.menu_sale" action="url_desk_receive"
+            sequence="2" id="menu_desk_receive"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_receive_group">
+            <field name="menu" ref="menu_desk_receive"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+        <record model="ir.action-res.group" id="url_desk_receive_group">
+            <field name="action" ref="url_desk_receive"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+
+        <record model="ir.action.url" id="url_desk_customers">
+            <field name="name">Customer Center</field>
+            <field name="url">desk/index.html#/customers</field>
+        </record>
+        <menuitem parent="sale.menu_sale" action="url_desk_customers"
+            sequence="3" id="menu_desk_customers"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_customers_group">
+            <field name="menu" ref="menu_desk_customers"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+        <record model="ir.action-res.group" id="url_desk_customers_group">
+            <field name="action" ref="url_desk_customers"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+
+        <record model="ir.action.url" id="url_desk_checks">
+            <field name="name">Write Checks</field>
+            <field name="nline_writes" eval="True"/>
+            <field name="url">desk/index.html#/checks/new</field>
+        </record>
+        <menuitem parent="bank.menu_banking" action="url_desk_checks"
+            sequence="1" id="menu_desk_checks"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_checks_group">
+            <field name="menu" ref="menu_desk_checks"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+        <record model="ir.action-res.group" id="url_desk_checks_group">
+            <field name="action" ref="url_desk_checks"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+
+        <record model="ir.action.url" id="url_desk_deposits">
+            <field name="name">Make Deposits</field>
+            <field name="nline_writes" eval="True"/>
+            <field name="url">desk/index.html#/deposits/new</field>
+        </record>
+        <menuitem parent="bank.menu_banking" action="url_desk_deposits"
+            sequence="2" id="menu_desk_deposits"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_deposits_group">
+            <field name="menu" ref="menu_desk_deposits"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+        <record model="ir.action-res.group" id="url_desk_deposits_group">
+            <field name="action" ref="url_desk_deposits"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+
+        <record model="ir.action.url" id="url_desk_register">
+            <field name="name">Check Register</field>
+            <field name="url">desk/index.html#/register</field>
+        </record>
+        <menuitem parent="bank.menu_banking" action="url_desk_register"
+            sequence="3" id="menu_desk_register"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_register_group">
+            <field name="menu" ref="menu_desk_register"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+        <record model="ir.action-res.group" id="url_desk_register_group">
+            <field name="action" ref="url_desk_register"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+
+        <record model="ir.action.url" id="url_desk_workorders">
+            <field name="name">Work Orders (cards)</field>
+            <field name="url">desk/index.html#/workorders</field>
+        </record>
+        <menuitem parent="production.menu_production" action="url_desk_workorders"
+            sequence="1" id="menu_desk_workorders"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_workorders_group">
+            <field name="menu" ref="menu_desk_workorders"/>
+            <field name="group" ref="production.group_production"/>
+        </record>
+        <record model="ir.action-res.group" id="url_desk_workorders_group">
+            <field name="action" ref="url_desk_workorders"/>
+            <field name="group" ref="production.group_production"/>
+        </record>
 
         <!-- The administrator hides the standard menus N-Line replaces -->
         <record model="ir.ui.view" id="superseded_menu_view_list">
@@ -113,7 +187,7 @@ this repository contains the full copyright notices and license terms. -->
             <field name="view" ref="superseded_menu_view_form"/>
             <field name="act_window" ref="act_superseded_menu"/>
         </record>
-        <menuitem parent="menu_nline" action="act_superseded_menu"
+        <menuitem parent="ir.menu_administration" action="act_superseded_menu"
             sequence="900" id="menu_superseded_menu"/>
         <record model="ir.ui.menu-res.group" id="menu_superseded_menu_group_admin">
             <field name="menu" ref="menu_superseded_menu"/>

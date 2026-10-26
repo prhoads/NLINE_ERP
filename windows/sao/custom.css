@@ -96,7 +96,8 @@ a:hover, a:focus { color: var(--nl-accent-dark); }
     :root:not([data-theme="light"]) img,
     :root:not([data-theme="light"]) video,
     :root:not([data-theme="light"]) canvas,
-    :root:not([data-theme="light"]) .nl-pop {
+    :root:not([data-theme="light"]) .nl-pop,
+    :root:not([data-theme="light"]) iframe.nl-screen {
         filter: invert(1) hue-rotate(180deg);
     }
 }
@@ -107,6 +108,14 @@ a:hover, a:focus { color: var(--nl-accent-dark); }
 :root[data-theme="dark"] img,
 :root[data-theme="dark"] video,
 :root[data-theme="dark"] canvas,
-:root[data-theme="dark"] .nl-pop {
+:root[data-theme="dark"] .nl-pop,
+:root[data-theme="dark"] iframe.nl-screen {
     filter: invert(1) hue-rotate(180deg);
+}
+
+/* An N-Line screen in a Tryton tab (custom.js Sao.Tab.NLine) */
+.tab-nline > .panel-body { padding: 0; }
+.tab-nline iframe.nl-screen {
+    display: block; width: 100%; border: 0;
+    height: calc(100vh - 110px);
 }

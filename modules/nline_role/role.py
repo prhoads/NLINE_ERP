@@ -13,9 +13,11 @@ nor click the buttons of records (post, confirm...).
 """
 import json
 
+from trytond.cache import Cache
 from trytond.model import ModelSQL, ModelView, Unique, fields
 from trytond.pool import Pool, PoolMeta
 from trytond.pyson import Eval
+from trytond.rpc import RPC
 from trytond.transaction import Transaction, without_check_access
 
 # What a read-only user still writes: their own screen settings, saved
@@ -192,6 +194,132 @@ class User(metaclass=PoolMeta):
                 # The groups of an "All Groups" role grow with new modules
                 cls.apply_nline_role([user])
         return role
+
+
+class Action(metaclass=PoolMeta):
+    __name__ = 'ir.action'
+    nline_writes = fields.Boolean("Creates or Changes Records",
+        help="Its menus are hidden from read-only users.")
+
+    @staticmethod
+    def default_nline_writes():
+        return False
+
+
+class ActionURL(metaclass=PoolMeta):
+    __name__ = 'ir.action.url'
+    # (the other ir.action fields are mirrored when ir is set up, before
+    # this module extends ir.action)
+    nline_writes = fields.Function(fields.Boolean(
+            "Creates or Changes Records"),
+        'get_action', setter='set_action', searcher='search_action')
+
+    @staticmethod
+    def default_nline_writes():
+        return False
+
+
+class Menu(metaclass=PoolMeta):
+    __name__ = 'ir.ui.menu'
+    # The folders with a menu the groups may open: {groups: {folder ids}}
+    _nline_folders = Cache('ir.ui.menu.nline_folders', duration=300,
+        context=False)
+
+    @classmethod
+    def __setup__(cls):
+        super().__setup__()
+        cls.__rpc__['nline_allowed'] = RPC()
+
+    @classmethod
+    def create(cls, vlist):
+        cls._nline_folders.clear()
+        return super().create(vlist)
+
+    @classmethod
+    def write(cls, *args):
+        cls._nline_folders.clear()
+        super().write(*args)
+
+    @classmethod
+    def delete(cls, menus):
+        cls._nline_folders.clear()
+        super().delete(menus)
+
+    @classmethod
+    def _nline_hidden(cls, menu):
+        "Tell if a read-only user does not see the menu"
+        return any(
+            k.action.type == 'ir.action.wizard' or k.action.nline_writes
+            for k in menu.action_keywords)
+
+    @classmethod
+    def search(cls, domain, offset=0, limit=None, order=None, count=False,
+            query=False):
+        transaction = Transaction()
+        menus = super().search(domain, offset=offset, limit=limit,
+            order=order, count=False, query=query)
+        if (query or not transaction.check_access or transaction.user == 0
+                or transaction.context.get('_nline_menus')):
+            return len(menus) if count else menus
+        if read_only_user():
+            menus = [m for m in menus if not cls._nline_hidden(m)]
+        # A folder without any menu the user may open is removed
+        folders = cls._nline_open_folders()
+        menus = [m for m in menus
+            if m.action_keywords or m.id in folders]
+        return len(menus) if count else menus
+
+    @classmethod
+    def _nline_open_folders(cls):
+        "Return the ids of the folders with a menu the user may open"
+        User = Pool().get('res.user')
+        key = User.get_groups()
+        folders = cls._nline_folders.get(key)
+        if folders is not None:
+            return set(folders)
+        with Transaction().set_context(_nline_menus=True):
+            menus = cls.search([])
+        read_only = read_only_user()
+        by_id = {m.id: m for m in menus}
+        folders = set()
+        for menu in menus:
+            if not menu.action_keywords or (
+                    read_only and cls._nline_hidden(menu)):
+                continue
+            parent = menu.parent
+            while parent and parent.id in by_id and parent.id not in folders:
+                folders.add(parent.id)
+                parent = parent.parent
+        cls._nline_folders.set(key, sorted(folders))
+        return folders
+
+    @classmethod
+    def nline_allowed(cls):
+        """Return what the user's menus open: the client refuses an address
+        typed by hand to anything else ({'all': True} for administrators)"""
+        pool = Pool()
+        ModelData = pool.get('ir.model.data')
+        User = pool.get('res.user')
+        if ModelData.get_id('res', 'group_admin') in User.get_groups():
+            return {'all': True}
+        models, wizards, urls = set(), set(), set()
+        for menu in cls.search([]):
+            action = menu.action
+            if not action or action.id < 0:
+                continue
+            if action.__name__ == 'ir.action.act_window':
+                if action.res_model:
+                    models.add(action.res_model)
+            elif action.__name__ == 'ir.action.wizard':
+                wizards.add(action.wiz_name)
+            elif action.__name__ == 'ir.action.url':
+                urls.add(action.url)
+        return {
+            'all': False,
+            'models': sorted(models),
+            'wizards': sorted(wizards),
+            'urls': sorted(urls),
+            }
 
 
 class ModelAccess(metaclass=PoolMeta):

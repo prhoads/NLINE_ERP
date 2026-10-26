@@ -215,8 +215,17 @@ The administrator hides a superseded standard menu and shows it again::
     >>> len(Menu.find([('id', '=', menu_id)]))
     1
 
-The N-Line screens are in the Tryton menu::
+The N-Line screens are in the Tryton menus, opened in Tryton tabs::
 
-    >>> nline, = Menu.find([('name', '=', "N-Line"), ('parent', '=', None)])
-    >>> len(nline.childs) >= 11
+    >>> purchases, = Menu.find([('name', '=', "Purchases"), ('parent', '=', None)])
+    >>> {'Enter Bills', 'Pay Bills', 'Vendor Center'} <= {
+    ...     m.name for m in purchases.childs}
+    True
+    >>> Menu.find([('name', '=', "N-Line"), ('parent', '=', None)])
+    []
+
+The administrator may open them all, the screens that write included::
+
+    >>> allowed = Menu.nline_allowed({})
+    >>> allowed['all']
     True

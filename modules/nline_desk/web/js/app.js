@@ -4,6 +4,10 @@
 
     var el = UI.el;
     var Screens = global.Screens = global.Screens || {};
+    /* Inside a Tryton tab (custom.js): one screen, no header; other
+     * screens open in their own Tryton tab */
+    var EMBED = /[?&]embed=1(&|$)/.test(global.location.search);
+    Screens.embedded = EMBED;
     var NAV = [
         ['#/', 'Home'],
         ['#/workorders', 'Work Orders'],
@@ -121,7 +125,7 @@
 
     function renderNav(route) {
         var nav = UI.clear(document.getElementById('nav'));
-        if (!Rpc.session()) {
+        if (EMBED || !Rpc.session()) {
             return;
         }
         NAV.forEach(function (item) {
@@ -170,6 +174,9 @@
     }
 
     function renderUser() {
+        if (EMBED) {
+            return;
+        }
         if (Rpc.behindNlbi) {
             renderNlbiHeader();
             return;
@@ -216,8 +223,44 @@
         [/^#\/vendors$/, 'vendors']
     ];
 
+    /* The Tryton tab of a screen: a work order card stays in the work
+     * orders tab */
+    function tabOf(hash) {
+        for (var i = 0; i < ROUTES.length; i++) {
+            if (hash.replace(/\?.*$/, '').match(ROUTES[i][0])) {
+                return ROUTES[i][1].replace(/^workorder$/, 'workorders');
+            }
+        }
+        return null;
+    }
+
+    function toTryton(message) {
+        global.parent.postMessage(message, global.location.origin);
+    }
+
+    var shownHash = null;
+    var frameTab = null;
+
     function route() {
         var hash = global.location.hash || '#/';
+        if (EMBED) {
+            if (!Rpc.session()) {
+                UI.clear(document.getElementById('main')).appendChild(
+                    el('p', 'Sign in to Tryton ERP first, then open this ' +
+                        'screen again from the menu.'));
+                return;
+            }
+            var tab = tabOf(hash);
+            if (frameTab === null) {
+                frameTab = tab;
+            } else if (tab !== frameTab) {
+                /* Save & Close: the screen is done, its tab closes */
+                global.history.replaceState(null, '', shownHash);
+                toTryton({nline: 'close'});
+                return;
+            }
+            shownHash = hash;
+        }
         if (!Rpc.session() && hash !== '#/login') {
             /* Back to the asked screen after signing in */
             pending = hash;
@@ -251,6 +294,20 @@
     };
 
     global.addEventListener('hashchange', route);
+    if (EMBED) {
+        /* A link to another screen opens it in a new Tryton tab */
+        document.addEventListener('click', function (event) {
+            var link = event.target.closest && event.target.closest('a[href]');
+            if (!link || event.defaultPrevented) {
+                return;
+            }
+            var href = link.getAttribute('href');
+            if (href.indexOf('#/') === 0 && tabOf(href) !== frameTab) {
+                event.preventDefault();
+                toTryton({nline: 'open', route: href.slice(2)});
+            }
+        });
+    }
     Rpc.restore();
     /* Signed in to the Tryton client already: no second sign-in */
     Rpc.adopt().then(function () {
