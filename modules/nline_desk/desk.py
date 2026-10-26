@@ -185,6 +185,17 @@ class Desk(ModelView):
                 ('Receive Payments', 'nline_desk.url_desk_receive'),
                 ('Make Deposits', 'nline_desk.url_desk_deposits'),
                 ]),
+        ('Customer Activities', False, [
+                ('Sales Receipts', 'nline_desk.url_desk_sales_receipts'),
+                ('Credit Memos', 'nline_desk.url_desk_credits'),
+                ('Statements', 'nline_desk.url_desk_statements'),
+                ('Income Tracker', 'nline_desk.url_desk_income_tracker'),
+                ]),
+        ('Vendor Activities', False, [
+                ('Vendor Credits', 'nline_desk.url_desk_vendor_credits'),
+                ('Bill Tracker', 'nline_desk.url_desk_bill_tracker'),
+                ('Credit Card Charges', 'nline_desk.url_desk_cards'),
+                ]),
         ('Shop Floor', True, [
                 ('Bills of Materials', 'production.act_bom_list'),
                 ('Work Orders', 'nline_desk.url_desk_workorders'),
@@ -194,14 +205,14 @@ class Desk(ModelView):
         ('Banking', False, [
                 ('Write Checks', 'nline_desk.url_desk_checks'),
                 ('Check Register', 'nline_desk.url_desk_register'),
+                ('Reconcile', 'nline_desk.url_desk_reconcile'),
                 ('Bank Statements', 'account_statement.act_statement_form'),
                 ]),
         ('Company', False, [
-                ('Chart of Accounts', 'account.act_account_tree'),
-                ('Journal Entries', 'account.act_move_form'),
-                ('Balance Sheet', 'account.act_account_balance_sheet_tree'),
-                ('Income Statement',
-                    'account.act_account_income_statement_tree'),
+                ('Chart of Accounts', 'nline_desk.url_desk_accounts'),
+                ('Journal Entries', 'nline_desk.url_desk_journal'),
+                ('Report Center', 'nline_desk.url_desk_reports'),
+                ('Items', 'nline_desk.url_desk_items'),
                 ]),
         ('Centers', False, [
                 ('Customer Center', 'nline_desk.url_desk_customers'),
@@ -429,6 +440,15 @@ class Desk(ModelView):
         return [l for l in move.lines if l.account == account][0]
 
     @classmethod
+    def _applied_credit_lines(cls, line):
+        "The lines of the credits applied to the invoice of the line"
+        Invoice = Pool().get('account.invoice')
+        origin = line.move.origin
+        if not isinstance(origin, Invoice):
+            return []
+        return [l.id for l in origin.payment_lines if not l.reconciliation]
+
+    @classmethod
     def _reconcile_paid(cls, lines):
         "Reconcile the party lines that sum to zero"
         pool = Pool()
@@ -515,12 +535,19 @@ class Desk(ModelView):
             for line in invoice.lines_to_pay:
                 if line.reconciliation:
                     continue
+                # A credit applied to another invoice is not open any more
+                used_by = getattr(line, 'invoice_payment', None)
+                if used_by and used_by != invoice:
+                    continue
                 if type_ == 'in':
                     amount = line.credit - line.debit
                 else:
                     amount = line.debit - line.credit
                 pending = line.payment_amount if hasattr(
                     line, 'payment_amount') else amount
+                if invoice.payment_lines and len(invoice.lines_to_pay) == 1:
+                    # Less the credits applied to it
+                    pending = min(pending, invoice.amount_to_pay)
                 discount = Decimal(0)
                 if invoice.payment_term:
                     discount = invoice.payment_term.early_discount(
@@ -560,7 +587,8 @@ class Desk(ModelView):
             line = Line(item['line'])
             amount = _decimal(item.get('amount'))
             discount = _decimal(item.get('discount'))
-            group_lines = [line.id]
+            # with the credits applied to the invoice (apply_credit)
+            group_lines = [line.id] + cls._applied_credit_lines(line)
             if discount:
                 if discount_account is None:
                     discount_account = cls._config('early_discount_account')
@@ -637,7 +665,8 @@ class Desk(ModelView):
             line = Line(item['line'])
             amount = _decimal(item.get('amount'))
             discount = _decimal(item.get('discount'))
-            group_lines = [line.id]
+            # with the credits applied to the invoice (apply_credit)
+            group_lines = [line.id] + cls._applied_credit_lines(line)
             if discount:
                 if discount_account is None:
                     discount_account = cls._config('sales_discount_account')

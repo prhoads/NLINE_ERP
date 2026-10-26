@@ -142,18 +142,48 @@
         'register': 'Check Register',
         'customers': 'Customer Center',
         'vendors': 'Vendor Center',
-        '': 'Home'
+        '': 'Home',
+        'sales-receipts/new': 'Enter Sales Receipts',
+        'credits/new': 'Credit Memos/Refunds',
+        'vendor-credits/new': 'Vendor Credits',
+        'statements': 'Create Statements',
+        'cards/new': 'Credit Card Charges',
+        'journal/new': 'General Journal Entries',
+        'accounts': 'Chart of Accounts',
+        'reconcile': 'Reconcile',
+        'income-tracker': 'Income Tracker',
+        'bill-tracker': 'Bill Tracker',
+        'items': 'Item List',
+        'reports': 'Report Center'
     };
 
-    /* The screen of a route: "workorders/12?x" is the work orders screen */
+    /* Screens with a tab per item: a register per account, a tab per
+     * report */
+    var PER_ITEM = ['accounts', 'reports'];
+
+    /* The screen of a route: "workorders/12?x" is the work orders screen,
+     * "accounts/12" the register of account 12 */
     function screenOf(route) {
         route = route.replace(/\?.*$/, '');
         for (var name in NAMES) {
-            if (route === name || route.indexOf(name + '/') === 0) {
+            if (route === name || (route.indexOf(name + '/') === 0 &&
+                    PER_ITEM.indexOf(name) < 0)) {
                 return name;
             }
         }
         return route;
+    }
+
+    /* Allowed: a menu opens the screen, or the screen of its items */
+    function screenAllowed(allow, screen) {
+        return allow.all || allow.urls.some(function (url) {
+            if (url.indexOf(DESK) !== 0) {
+                return false;
+            }
+            var menu = screenOf(url.substr(DESK.length));
+            return menu === screen || (PER_ITEM.indexOf(menu) >= 0 &&
+                screen.indexOf(menu + '/') === 0);
+        });
     }
 
     var allowedPrm = null, allowedSession = null;
@@ -222,10 +252,7 @@
     function openScreen(route, name) {
         var screen = screenOf(route);
         allowed().then(function (allow) {
-            if (!allow.all && !allow.urls.some(function (url) {
-                    return url.indexOf(DESK) === 0 &&
-                        screenOf(url.substr(DESK.length)) === screen;
-                })) {
+            if (!screenAllowed(allow, screen)) {
                 refuse();
                 return;
             }
@@ -302,7 +329,7 @@
             return;
         }
         if (data.nline === 'open' && typeof data.route === 'string') {
-            openScreen(data.route);
+            openScreen(data.route, data.name ? String(data.name) : null);
         } else if (data.nline === 'record' && data.model && data.id) {
             Sao.Tab.create({
                 model: String(data.model),
@@ -312,6 +339,12 @@
                 domain: [],
                 context: {},
                 name: String(data.name || '')
+            });
+        } else if (data.nline === 'title' && data.name) {
+            Sao.Tab.tabs.forEach(function (tab) {
+                if (tab.frame && tab.frame[0].contentWindow === event.source) {
+                    tab.set_name(String(data.name));
+                }
             });
         } else if (data.nline === 'toast' && data.message) {
             toast(String(data.message), String(data.kind || ''));

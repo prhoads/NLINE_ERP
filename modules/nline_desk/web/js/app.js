@@ -103,7 +103,12 @@
         'Chart of Accounts': '\u{1F5C2}', 'Journal Entries': '\u{1F4D3}',
         'Balance Sheet': '⚖', 'Income Statement': '\u{1F4C8}',
         'Customer Center': '\u{1F465}', 'Vendor Center': '\u{1F3E2}',
-        'Parts': '⚙'
+        'Parts': '\u2699', 'Sales Receipts': '\u{1F9FE}',
+        'Credit Memos': '\u21A9', 'Statements': '\u{1F4C4}',
+        'Income Tracker': '\u{1F4CA}', 'Vendor Credits': '\u21A9',
+        'Bill Tracker': '\u{1F4CA}', 'Credit Card Charges': '\u{1F4B3}',
+        'Reconcile': '\u2714', 'Report Center': '\u{1F4C8}',
+        'Items': '\u{1F4E6}'
     };
 
     function tile(item) {
@@ -239,7 +244,21 @@
         [/^#\/deposits\/new$/, 'makeDeposit'],
         [/^#\/register$/, 'register'],
         [/^#\/customers$/, 'customers'],
-        [/^#\/vendors$/, 'vendors']
+        [/^#\/vendors$/, 'vendors'],
+        [/^#\/sales-receipts\/new$/, 'salesReceipt'],
+        [/^#\/credits\/new$/, 'creditMemo'],
+        [/^#\/vendor-credits\/new$/, 'vendorCredit'],
+        [/^#\/statements$/, 'statements'],
+        [/^#\/cards\/new$/, 'creditCard'],
+        [/^#\/journal\/new$/, 'journalEntry'],
+        [/^#\/accounts$/, 'accounts'],
+        [/^#\/accounts\/(\d+)$/, 'accountRegister'],
+        [/^#\/reconcile$/, 'reconcile'],
+        [/^#\/income-tracker$/, 'incomeTracker'],
+        [/^#\/bill-tracker$/, 'billTracker'],
+        [/^#\/items$/, 'items'],
+        [/^#\/reports$/, 'reportCenter'],
+        [/^#\/reports\/(\w+)$/, 'report']
     ];
 
     /* The Tryton tab of a screen: a work order card stays in the work

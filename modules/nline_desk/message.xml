@@ -21,5 +21,35 @@ this repository contains the full copyright notices and license terms. -->
         <record model="ir.message" id="msg_master_wrong_part">
             <field name="text">Master "%(master)s" makes "%(part)s", not the part of card "%(card)s".</field>
         </record>
+        <record model="ir.message" id="msg_credit_other_party">
+            <field name="text">Credit %(credit)s and invoice %(invoice)s are not of the same party and kind.</field>
+        </record>
+        <record model="ir.message" id="msg_credit_too_large">
+            <field name="text">Credit %(credit)s can be applied only whole, to an invoice of at least its amount: %(invoice)s is smaller. Apply it to a larger invoice or refund it.</field>
+        </record>
+        <record model="ir.message" id="msg_no_general_journal">
+            <field name="text">There is no general journal (Financial &gt; Configuration &gt; Journals): create one of type General.</field>
+        </record>
+        <record model="ir.message" id="msg_party_required">
+            <field name="text">Account %(account)s needs a customer or vendor on its line.</field>
+        </record>
+        <record model="ir.message" id="msg_empty_entry">
+            <field name="text">Enter at least one line with an amount.</field>
+        </record>
+        <record model="ir.message" id="msg_unbalanced_entry">
+            <field name="text">The debits and the credits are not equal.</field>
+        </record>
+        <record model="ir.message" id="msg_no_bank_clearing">
+            <field name="text">Payment journal %(journal)s needs its bank GL account and clearing account to be reconciled.</field>
+        </record>
+        <record model="ir.message" id="msg_no_statement_journal">
+            <field name="text">There is no statement journal for bank account %(account)s (Financial &gt; Configuration &gt; Statement Journals): create one.</field>
+        </record>
+        <record model="ir.message" id="msg_reconcile_name">
+            <field name="text">Reconciliation %(date)s</field>
+        </record>
+        <record model="ir.message" id="msg_unknown_report">
+            <field name="text">Unknown report: %(report)s.</field>
+        </record>
     </data>
 </tryton>

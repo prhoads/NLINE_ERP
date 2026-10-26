@@ -33,10 +33,15 @@
     }
 
     /* An N-Line screen, by its route (e.g. 'bills/new') */
-    function openScreen(route) {
-        if (!toTryton({nline: 'open', route: route})) {
+    function openScreen(route, name) {
+        if (!toTryton({nline: 'open', route: route, name: name || ''})) {
             global.location.hash = '#/' + route;
         }
+    }
+
+    /* The name of the screen's Tryton tab (e.g. the report's title) */
+    function setTitle(name) {
+        toTryton({nline: 'title', name: name});
     }
 
     /* A Tryton action (ir.action id): a list, a report, a wizard */
@@ -298,16 +303,23 @@
     /* ---- The line grid ------------------------------------------------ */
 
     /* grid({columns: [{key, label, width, kind: 'text'|'money'|'number'|
-     * 'picker', picker: {model, domain, placeholder, fields}}], total: key,
+     * 'picker'|'computed', picker: {model, domain, placeholder, fields,
+     * onselect(record, controls)}, compute(values) -> number}], total: key,
      * onchange(total)}) -> {node, rows(), total(), addRow(values), clear()}.
      * A row is a {key: control}; the last column's Enter adds a row. */
     function grid(options) {
         var columns = options.columns;
+        var lastAmount = columns.filter(function (c) {
+            return c.kind === 'money' || c.kind === 'number';
+        }).pop();
         var body = el('tbody');
         var totalCell = el('td.num', '0.00');
         var rows = [];
 
         function value(control, column) {
+            if (column.kind === 'computed') {
+                return control.amount || 0;
+            }
             if (column.kind === 'picker') {
                 return control.value();
             }
@@ -318,6 +330,23 @@
         }
 
         function update() {
+            rows.forEach(function (row) {
+                columns.forEach(function (column) {
+                    if (column.kind !== 'computed') {
+                        return;
+                    }
+                    var values = {};
+                    columns.forEach(function (c) {
+                        if (c.kind !== 'computed') {
+                            values[c.key] = value(row.controls[c.key], c);
+                        }
+                    });
+                    var control = row.controls[column.key];
+                    control.amount = column.compute(values) || 0;
+                    control.textContent = control.amount ?
+                        UI.money(control.amount) : '';
+                });
+            });
             var sum = total();
             totalCell.textContent = UI.money(sum);
             if (options.onchange) {
@@ -342,9 +371,25 @@
             var marker = el('td.marker', {title: 'New line'}, '+');
             var cells = columns.map(function (column, index) {
                 var control;
-                if (column.kind === 'picker') {
+                if (column.kind === 'computed') {
+                    control = el('span');
+                    row.controls[column.key] = control;
+                    return el('td.num', {style: column.width ? {width:
+                        column.width} : null}, control);
+                } else if (column.kind === 'picker') {
                     control = UI.picker(column.picker.model, Object.assign({
-                        label: column.label}, column.picker));
+                        label: column.label}, column.picker, {
+                            onselect: function (record) {
+                                if (!row.edited) {
+                                    row.edited = true;
+                                    marker.textContent = '✎';
+                                }
+                                if (column.picker.onselect) {
+                                    column.picker.onselect(record,
+                                        row.controls);
+                                }
+                                update();
+                            }}));
                 } else if (column.kind === 'money') {
                     control = UI.moneyInput({'aria-label': column.label});
                 } else {
@@ -356,6 +401,9 @@
                     }
                 }
                 row.controls[column.key] = control;
+                if (column.default !== undefined) {
+                    control.value = column.default;
+                }
                 var input = control.input || control;
                 input.addEventListener('input', function () {
                     if (!row.edited) {
@@ -373,7 +421,9 @@
                         return;
                     }
                     event.preventDefault();
-                    var next = columns[index + 1];
+                    var next = columns.slice(index + 1).filter(function (c) {
+                        return c.kind !== 'computed';
+                    })[0];
                     if (next) {
                         var target = row.controls[next.key];
                         (target.input || target).focus();
@@ -387,8 +437,14 @@
                 if (column.kind === 'money' || column.kind === 'number') {
                     input.addEventListener('blur', function () {
                         update();
-                        if (rows[rows.length - 1] === row &&
-                                value(control, column)) {
+                        /* A filled last line gets a new one after it */
+                        var key = options.total || column.key;
+                        if (column === lastAmount &&
+                                rows[rows.length - 1] === row &&
+                                value(row.controls[key], columns.filter(
+                                    function (c) {
+                                        return c.key === key;
+                                    })[0])) {
                             addRow();
                         }
                     });
@@ -439,6 +495,7 @@
                     totalIndex + 1}, 'Total'), totalCell, el('td',
                     {colspan: columns.length - totalIndex}, ''))) :
                     null)),
+            update: update,
             /* The lines with a value in a column of options.required (the
              * total column by default), as {key: value} */
             rows: function () {
@@ -545,7 +602,184 @@
         return {reload: load};
     }
 
+    /* ---- The report viewer ------------------------------------------- */
+
+    var PERIODS = [
+        ['this-month', 'This Month'], ['last-month', 'Last Month'],
+        ['this-quarter', 'This Quarter'], ['this-year', 'This Year'],
+        ['last-year', 'Last Year'], ['all', 'All'], ['custom', 'Custom']];
+
+    function iso(d) {
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2,
+            '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function period(name) {
+        var now = new Date(), y = now.getFullYear(), m = now.getMonth();
+        var q = Math.floor(m / 3) * 3;
+        switch (name) {
+            case 'this-month':
+                return [iso(new Date(y, m, 1)), iso(new Date(y, m + 1, 0))];
+            case 'last-month':
+                return [iso(new Date(y, m - 1, 1)), iso(new Date(y, m, 0))];
+            case 'this-quarter':
+                return [iso(new Date(y, q, 1)), iso(new Date(y, q + 3, 0))];
+            case 'this-year':
+                return [iso(new Date(y, 0, 1)), iso(new Date(y, 11, 31))];
+            case 'last-year':
+                return [iso(new Date(y - 1, 0, 1)), iso(new Date(y - 1, 11,
+                    31))];
+            default:
+                return ['', ''];
+        }
+    }
+
+    function csvValue(v) {
+        v = v === null || v === undefined ? '' : String(v);
+        return /[",\n]/.test(v) ? '"' + v.split('"').join('""') + '"' : v;
+    }
+
+    /* report(main, {name, title, dates: 'range'|'asof'|'none', period,
+     * params}): the QuickBooks report window: Dates, Refresh, Print, Export
+     * (CSV); double-click a row to see its detail (QuickZoom) */
+    function report(main, options) {
+        var range = options.dates !== 'asof' && options.dates !== 'none';
+        var choice = el('select', {'aria-label': 'Dates'}, PERIODS.filter(
+            function (p) {
+                return range || p[0] !== 'all';
+            }).map(function (p) {
+                return el('option', {value: p[0]}, p[1]);
+            }));
+        var from = el('input', {type: 'date', 'aria-label': 'From'});
+        var to = el('input', {type: 'date', 'aria-label': 'To'});
+        var head = el('div.report-head');
+        var table = el('table.data.report');
+        var data = null;
+        choice.value = options.period || (range ? 'this-year' : 'custom');
+
+        function setPeriod() {
+            if (choice.value === 'custom') {
+                if (!range && !to.value) {
+                    to.value = UI.today();
+                }
+                return;
+            }
+            var dates = period(choice.value);
+            from.value = dates[0];
+            to.value = range ? dates[1] : (dates[1] || UI.today());
+        }
+
+        function load() {
+            global.Rpc.desk('report', [options.name, Object.assign({
+                from_date: range ? from.value || null : null,
+                to_date: to.value || null}, options.params || {})]).then(
+                function (result) {
+                    data = result;
+                    setTitle(data.title);
+                    render();
+                }, UI.showError);
+        }
+
+        function render() {
+            UI.clear(head).appendChild(el('div.report-company',
+                global.Rpc.context()['company.rec_name'] || ''));
+            head.appendChild(el('div.report-title', data.title));
+            head.appendChild(el('div.report-subtitle', data.subtitle || ''));
+            UI.clear(table);
+            table.appendChild(el('thead', el('tr', el('th', ''),
+                data.columns.map(function (c) {
+                    return el('th' + (c.money ? '.num' : ''), c.label);
+                }))));
+            var body = el('tbody');
+            data.rows.forEach(function (row) {
+                body.appendChild(el('tr' + (row.total ? '.total' : '') +
+                    (row.drill ? '.drill' : ''), {
+                    title: row.drill ? 'Double-click to see the detail' :
+                        null,
+                    ondblclick: function () {
+                        drill(row.drill, row.label);
+                    }}, el('td', {style: {paddingLeft: (8 + row.level * 18) +
+                        'px'}}, row.label),
+                    row.values.map(function (v, i) {
+                        var c = data.columns[i] || {};
+                        return el('td' + (c.money ? '.num' : ''), c.money ?
+                            UI.money(v) : v === null || v === undefined ?
+                            '' : String(v));
+                    })));
+            });
+            if (!data.rows.length) {
+                body.appendChild(el('tr', el('td', {colspan:
+                    data.columns.length + 1}, 'Nothing to report.')));
+            }
+            table.appendChild(body);
+        }
+
+        function drill(target, label) {
+            if (!target) {
+                return;
+            }
+            if (target.type === 'account') {
+                openScreen('accounts/' + target.id, label);
+            } else if (target.type === 'party') {
+                openRecord('party.party', target.id, label);
+            } else if (target.type === 'record') {
+                openRecord(target.model, target.id, label);
+            } else if (target.type === 'screen') {
+                openScreen(target.route, label);
+            }
+        }
+
+        function csv() {
+            if (!data) {
+                return;
+            }
+            var lines = [[''].concat(data.columns.map(function (c) {
+                return c.label;
+            })).map(csvValue).join(',')];
+            data.rows.forEach(function (row) {
+                lines.push([new Array(row.level + 1).join('  ') + row.label]
+                    .concat(row.values).map(csvValue).join(','));
+            });
+            var link = el('a', {href: global.URL.createObjectURL(new Blob(
+                [lines.join('\r\n')], {type: 'text/csv'})), download:
+                data.title.replace(/\W+/g, '_') + '.csv'});
+            global.document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+
+        choice.addEventListener('change', function () {
+            setPeriod();
+            load();
+        });
+        [from, to].forEach(function (input) {
+            input.addEventListener('change', function () {
+                choice.value = 'custom';
+                load();
+            });
+        });
+        main.appendChild(el('div.ribbon', {role: 'toolbar'},
+            el('span.ribbon-title', options.title),
+            options.dates === 'none' ? null :
+                el('label.ribbon-field', 'Dates ', choice),
+            range ? el('label.ribbon-field', 'From ', from) : null,
+            options.dates === 'none' ? null :
+                el('label.ribbon-field', range ? 'To ' : 'As of ', to),
+            el('span.spacer'),
+            el('button', {type: 'button', onclick: load}, 'Refresh'),
+            el('button', {type: 'button', onclick: function () {
+                global.print();
+            }}, 'Print'),
+            el('button', {type: 'button', onclick: csv}, 'Export')));
+        main.appendChild(el('div.report-page', head, table));
+        setPeriod();
+        load();
+        return {reload: load};
+    }
+
     Object.assign(UI, {
+        report: report,
+        setTitle: setTitle,
         browse: browse,
         form: form,
         grid: grid,

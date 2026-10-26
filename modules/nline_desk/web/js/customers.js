@@ -6,103 +6,59 @@
     var el = UI.el;
     var Screens = global.Screens = global.Screens || {};
 
-    /* The item grid of an invoice: item, description, quantity, rate */
-    function itemGrid(onchange) {
-        var body = el('tbody');
-        var total = el('td.num', '0.00');
-        var rows = [];
-
-        function addRow() {
-            var row = {};
-            row.item = UI.picker('product.product', {domain: [
-                ['salable', '=', true]], placeholder: 'Item', label: 'Item',
-                fields: ['list_price'], onselect: function (record) {
-                    row.description.value = record.rec_name.replace(
-                        /^\[[^\]]*\]\s*/, '');
-                    if (record.list_price) {
-                        row.rate.value = UI.money(record.list_price);
-                    }
-                    update();
-                }});
-            row.account = UI.picker('account.account', {domain: [
-                ['type.revenue', '=', true], ['closed', '!=', true]],
-                placeholder: 'or income account', label: 'Income account'});
-            row.description = el('input', {type: 'text', 'aria-label':
-                'Description'});
-            row.quantity = el('input', {type: 'text', value: '1',
-                style: {textAlign: 'right'}, 'aria-label': 'Quantity'});
-            row.rate = UI.moneyInput({'aria-label': 'Rate'});
-            row.amount = el('td.num', '');
-            var tr = el('tr', el('td', {style: {width: '22%'}},
-                row.item.node, row.account.node), el('td', row.description),
-                el('td', {style: {width: '8%'}}, row.quantity),
-                el('td', {style: {width: '12%'}}, row.rate), row.amount,
-                el('td', {style: {width: '30px'}}, el('button', {type:
-                    'button', 'aria-label': 'Remove line', onclick:
-                    function () {
-                        rows.splice(rows.indexOf(row), 1);
-                        tr.remove();
-                        update();
-                    }}, '✕')));
-            [row.quantity, row.rate].forEach(function (input) {
-                input.addEventListener('input', update);
-                input.addEventListener('blur', function () {
-                    update();
-                    if (rows[rows.length - 1] === row && lineAmount(row)) {
-                        addRow();
-                    }
-                });
-            });
-            rows.push(row);
-            body.appendChild(tr);
-        }
-
-        function lineAmount(row) {
-            var quantity = parseFloat(row.quantity.value) || 0;
-            return Math.round(quantity * UI.parseMoney(row.rate.value) * 100) /
-                100;
-        }
-
-        function update() {
-            var sum = 0;
-            rows.forEach(function (row) {
-                var amount = lineAmount(row);
-                row.amount.textContent = amount ? UI.money(amount) : '';
-                sum += amount;
-            });
-            total.textContent = UI.money(sum);
-            if (onchange) {
-                onchange(sum);
-            }
-        }
-
-        addRow();
+    /* The item grid of an invoice: item (or income account), description,
+     * quantity, rate and amount (UI.grid) */
+    function itemGrid(onchange, sign) {
+        var grid = UI.grid({total: 'amount', required: 'amount',
+            onchange: onchange, columns: [
+                {key: 'item', label: 'Item', width: '20%', kind: 'picker',
+                    picker: {model: 'product.product', domain: [
+                        ['salable', '=', true]], placeholder: 'Item',
+                        fields: ['list_price'],
+                        onselect: function (record, controls) {
+                            controls.description.value = record.rec_name
+                                .replace(/^\[[^\]]*\]\s*/, '');
+                            if (record.list_price) {
+                                controls.rate.value = UI.money(
+                                    record.list_price);
+                            }
+                        }}},
+                {key: 'account', label: 'or Income Account', width: '18%',
+                    kind: 'picker', picker: {model: 'account.account',
+                        domain: [['type.revenue', '=', true],
+                            ['closed', '!=', true]], placeholder:
+                            'Income account'}},
+                {key: 'description', label: 'Description'},
+                {key: 'quantity', label: 'Qty', width: '8%', kind: 'number',
+                    default: '1'},
+                {key: 'rate', label: 'Rate', width: '12%', kind: 'money'},
+                {key: 'amount', label: 'Amount', width: '12%', kind:
+                    'computed', compute: function (v) {
+                        return Math.round((v.quantity || 0) * (v.rate || 0) *
+                            100) / 100;
+                    }}
+            ]});
         return {
-            node: el('div.table-wrap', el('table.data',
-                el('thead', el('tr', el('th', 'Item'),
-                    el('th', 'Description'), el('th.num', 'Qty'),
-                    el('th.num', 'Rate'), el('th.num', 'Amount'),
-                    el('th', ''))), body,
-                el('tfoot', el('tr', el('td', {colspan: 4}, 'Subtotal'),
-                    total, el('td', ''))))),
+            node: grid.node,
             lines: function () {
-                return rows.filter(lineAmount).map(function (row) {
-                    if (!row.item.value() && !row.account.value()) {
+                return grid.rows().map(function (row) {
+                    if (!row.item && !row.account) {
                         throw new Error('Choose the item or the income ' +
                             'account of every line.');
                     }
                     return {
-                        product: row.item.value(),
-                        account: row.item.value() ? null :
-                            row.account.value(),
-                        description: row.description.value || null,
-                        quantity: parseFloat(row.quantity.value) || 1,
-                        unit_price: String(UI.parseMoney(row.rate.value))
+                        product: row.item,
+                        account: row.item ? null : row.account,
+                        description: row.description || null,
+                        quantity: (row.quantity || 1) * (sign || 1),
+                        unit_price: String(row.rate)
                     };
                 });
-            }
+            },
+            total: grid.total
         };
     }
+    Screens.itemGrid = itemGrid;
 
     Screens.createInvoice = function (main) {
         var form = UI.form(main, {title: 'Create Invoices', kind: 'customer',

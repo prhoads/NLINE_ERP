@@ -282,3 +282,38 @@ table.lines td.row-delete button { padding: 2px 7px; color: var(--muted); }
 .home .flow-section { grid-column: 1 / -1; }
 .home .flow.arrows { flex-wrap: nowrap; overflow-x: auto; }
 @media (max-width: 900px) { .home { grid-template-columns: minmax(0, 1fr); } }
+/* Report viewer (UI.report) */
+.ribbon-field { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); }
+.report-page { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 18px 22px; max-width: 1000px; margin: 0 auto; }
+.report-head { text-align: center; margin-bottom: 14px; }
+.report-company { font-weight: 600; }
+.report-title { font-size: 18px; font-weight: 700; }
+.report-subtitle { color: var(--muted); font-size: 13px; }
+table.report td, table.report th { border-bottom: none; }
+table.report tr.total td { font-weight: 600; border-top: 1px solid var(--line); }
+table.report tr.drill { cursor: zoom-in; }
+@media print {
+    .ribbon, #toasts { display: none !important; }
+    .report-page { border: none; max-width: none; padding: 0; }
+}
+/* ---- Phase 2 screens (js/accounting.js) ----------------------------- */
+.big-total { font-size: 18px; font-weight: 600; text-align: right; }
+.reconcile { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.reconcile .table-wrap { max-height: 46vh; overflow-y: auto; }
+.reconcile-totals { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.reconcile-totals .spacer { flex: 1; }
+.reconcile-totals .bad { color: var(--bad); }
+@media (max-width: 900px) { .reconcile { grid-template-columns: 1fr; } }
+.tracker-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.tracker-tile { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 6px; color: #fff; text-decoration: none; opacity: .92; }
+.tracker-tile strong { font-size: 18px; }
+.tracker-tile.active, .tracker-tile:hover { opacity: 1; outline: 3px solid var(--ink); }
+.tracker-tile.unbilled { background: #3d6fb6; }
+.tracker-tile.open { background: #b26a00; }
+.tracker-tile.overdue { background: #b3261e; }
+.tracker-tile.paid { background: #1d6b55; }
+@media (max-width: 900px) { .tracker-tiles { grid-template-columns: 1fr 1fr; } }
+.report-center { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.report-center h2 { margin-top: 0; color: var(--accent); }
+.report-link { display: flex; flex-direction: column; padding: 8px 6px; border-bottom: 1px solid var(--line-soft); text-decoration: none; color: var(--ink); }
+.report-link:hover { background: var(--accent-soft); }
