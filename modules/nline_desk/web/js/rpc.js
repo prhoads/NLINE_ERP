@@ -53,6 +53,13 @@
         return value;
     }
 
+    /* The name the Tryton client shows: "Administrator [USD]" without the
+     * currency */
+    function userName(preferences, login) {
+        return String(preferences.status_bar || login).replace(
+            /\s*\[[^\]]*\]\s*$/, '');
+    }
+
     function RpcError(type, message, description, args) {
         this.type = type;
         this.message = message;
@@ -118,6 +125,60 @@
             session = storageGet('nline.desk.session');
             return session;
         },
+        /* One sign-in with the Tryton web client: it keeps its session in
+         * localStorage as sao_session_<database> on the same server. Adopt
+         * it (the database last used first) when the desk has none. */
+        adopt: function () {
+            if (session) {
+                return Promise.resolve(session);
+            }
+            var databases = [];
+            try {
+                var last = global.localStorage.getItem('nline.desk.database');
+                if (last) {
+                    databases.push(last);
+                }
+                for (var i = 0; i < global.localStorage.length; i++) {
+                    var key = global.localStorage.key(i);
+                    if (key.indexOf('sao_session_') === 0 &&
+                            databases.indexOf(key.slice(12)) < 0) {
+                        databases.push(key.slice(12));
+                    }
+                }
+            } catch (e) {
+                return Promise.resolve(null);
+            }
+            var tryNext = function () {
+                var database = databases.shift();
+                if (!database) {
+                    return Promise.resolve(null);
+                }
+                var stored = null;
+                try {
+                    stored = JSON.parse(global.localStorage.getItem(
+                        'sao_session_' + database));
+                } catch (e) {
+                    stored = null;
+                }
+                if (!stored || !stored.session) {
+                    return tryNext();
+                }
+                session = {database: database, login: stored.login,
+                    user: stored.user_id, key: stored.session, context: {}};
+                return call('model.res.user.get_preferences', [true, {}])
+                    .then(function (preferences) {
+                        session.context = preferences;
+                        session.name = userName(preferences,
+                            stored.login);
+                        storageSet('nline.desk.session', session);
+                        return session;
+                    }, function () {
+                        session = null;
+                        return tryNext();
+                    });
+            };
+            return tryNext();
+        },
         login: function (database, login, password) {
             session = {database: database};
             return call('common.db.login', [login, {password: password},
@@ -132,8 +193,16 @@
                 return call('model.res.user.get_preferences', [true, {}]);
             }).then(function (preferences) {
                 session.context = preferences;
-                session.name = preferences.user_name || login;
+                session.name = userName(preferences, login);
                 storageSet('nline.desk.session', session);
+                /* Signed in to the Tryton web client too */
+                try {
+                    global.localStorage.setItem('sao_session_' + database,
+                        JSON.stringify({login: login, user_id: session.user,
+                            session: session.key}));
+                } catch (e) {
+                    /* The Tryton client asks again */
+                }
                 return session;
             }, function (error) {
                 session = null;
@@ -143,6 +212,15 @@
         logout: function () {
             var promise = session ? call('common.db.logout', []) :
                 Promise.resolve();
+            if (session) {
+                /* One sign-in: signing out of the desk signs out of Tryton */
+                try {
+                    global.localStorage.removeItem('sao_session_' +
+                        session.database);
+                } catch (e) {
+                    /* Nothing stored */
+                }
+            }
             session = null;
             storageSet('nline.desk.session', null);
             return promise.catch(function () {});

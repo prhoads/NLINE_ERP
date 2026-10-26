@@ -195,3 +195,28 @@ The customer center::
     Decimal('0.00')
     >>> [(t['type'], t['amount']) for t in center['transactions']]
     [('invoice', Decimal('2500.00')), ('payment', Decimal('2500.00'))]
+
+The administrator hides a superseded standard menu and shows it again::
+
+    >>> SupersededMenu = Model.get('nline.desk.menu')
+    >>> superseded = SupersededMenu.find([
+    ...         ('superseded_by', '=', "Enter Bills, Vendor Center")])
+    >>> superseded, = superseded
+    >>> bool(superseded.hidden)
+    False
+    >>> superseded.hidden = True
+    >>> superseded.save()
+    >>> Menu = Model.get('ir.ui.menu')
+    >>> menu_id = superseded.menu.id
+    >>> Menu.find([('id', '=', menu_id)])
+    []
+    >>> superseded.hidden = False
+    >>> superseded.save()
+    >>> len(Menu.find([('id', '=', menu_id)]))
+    1
+
+The N-Line screens are in the Tryton menu::
+
+    >>> nline, = Menu.find([('name', '=', "N-Line"), ('parent', '=', None)])
+    >>> len(nline.childs) >= 11
+    True

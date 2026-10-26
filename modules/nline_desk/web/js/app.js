@@ -36,15 +36,15 @@
                     } catch (e) {
                         /* Remembering the database is a convenience */
                     }
-                    global.location.hash = '#/';
                     renderUser();
+                    Screens.afterLogin();
                 }, function (error) {
                     button.disabled = false;
                     UI.showError(error.type === 'server' ?
                         'Wrong user or password.' : error);
                 });
         }},
-            el('h1', 'Sign in to N-Line ERP'),
+            el('h1', 'Sign in to Tryton ERP'), el('p.muted', 'For N-Line Valves. The same sign-in opens the Tryton client.'),
             el('div', el('label.field', 'Database'), database),
             el('div', el('label.field', 'User'), login),
             el('div', el('label.field', 'Password'), password),
@@ -101,7 +101,8 @@
                 tile('#/deposits/new', '\u{1F3E6}', 'Make Deposits'))),
             el('div.panel', el('h2', 'Manufacturing'), el('div.flow',
                 tile('#/workorders', '\u{1F527}', 'Work Orders'),
-                tile('/#', '\u{1F5C2}', 'Full ERP client')))));
+                tile('/#' + encodeURIComponent(Rpc.session().database),
+                    '\u{1F5C2}', 'Tryton ERP')))));
     };
 
     function renderNav(route) {
@@ -118,20 +119,31 @@
     }
 
     function renderUser() {
-        var box = UI.clear(document.getElementById('user'));
+        var apps = UI.clear(document.getElementById('nl-apps'));
+        var right = UI.clear(document.getElementById('nl-right'));
         var session = Rpc.session();
-        if (session) {
-            box.appendChild(document.createTextNode(session.name + ' · ' +
-                session.database));
-            box.appendChild(el('button', {type: 'button', onclick:
-                function () {
+        if (session && global.NLineHeader) {
+            NLineHeader.mount({
+                apps: apps,
+                right: right,
+                user: {name: session.name, login: session.login,
+                    database: session.database},
+                here: 'desk',
+                onPreferences: function () {
+                    /* The preferences are those of the Tryton client */
+                    global.open('/#' + encodeURIComponent(session.database),
+                        '_blank');
+                },
+                onSignOut: function () {
                     Rpc.logout().then(function () {
                         global.location.hash = '#/login';
                         renderUser();
                     });
-                }}, 'Sign out'));
+                }
+            });
         }
     }
+    Screens.renderUser = renderUser;
 
     var ROUTES = [
         [/^#\/login$/, 'login'],
@@ -152,6 +164,8 @@
     function route() {
         var hash = global.location.hash || '#/';
         if (!Rpc.session() && hash !== '#/login') {
+            /* Back to the asked screen after signing in */
+            pending = hash;
             global.location.hash = '#/login';
             return;
         }
@@ -166,7 +180,7 @@
                 } catch (error) {
                     UI.showError(error);
                 }
-                document.title = 'N-Line Desk';
+                document.title = 'Desk - Tryton ERP';
                 return;
             }
         }
@@ -174,8 +188,21 @@
             'Home')));
     }
 
+    var pending = null;
+    Screens.afterLogin = function () {
+        var target = pending || '#/';
+        pending = null;
+        global.location.hash = target;
+    };
+
     global.addEventListener('hashchange', route);
     Rpc.restore();
-    renderUser();
-    route();
+    /* Signed in to the Tryton client already: no second sign-in */
+    Rpc.adopt().then(function () {
+        renderUser();
+        route();
+    }, function () {
+        renderUser();
+        route();
+    });
 }(window));

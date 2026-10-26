@@ -1,0 +1,105 @@
+/* Tryton ERP for N-Line Valves: the look of the N-Line BI apps on the Tryton
+ * web client (loaded by the client by design, see custom.js) */
+:root {
+    --nl-bg: #f6f6f3;
+    --nl-surface: #ffffff;
+    --nl-ink: #1f2328;
+    --nl-ink-2: #4a5059;
+    --nl-ink-3: #7a808a;
+    --nl-line: #dcdcd6;
+    --nl-accent: #1d6b55;
+    --nl-accent-dark: #16543f;
+    --nl-soft: #eef4f1;
+}
+
+body { background: var(--nl-bg); }
+
+/* The header: a light bar like the N-Line BI apps */
+.navbar-inverse {
+    background: var(--nl-surface);
+    border-color: var(--nl-line);
+    border-width: 0 0 1px 0;
+}
+.navbar-inverse .navbar-brand,
+.navbar-inverse .navbar-brand:hover,
+.navbar-inverse .navbar-brand:focus {
+    color: var(--nl-ink);
+    font-weight: 700;
+}
+.navbar-inverse .navbar-brand .icon { color: var(--nl-ink-2); }
+.nl-tagline {
+    font-weight: 450;
+    font-size: 13px;
+    color: var(--nl-ink-3);
+    margin-left: 8px;
+}
+.navbar-inverse .navbar-text,
+.navbar-inverse .navbar-nav > li > a { color: var(--nl-ink-2); }
+.navbar-inverse .navbar-nav > li > a:hover,
+.navbar-inverse .navbar-nav > li > a:focus { color: var(--nl-ink); }
+.navbar-inverse .navbar-toggle { border-color: var(--nl-line); }
+.navbar-inverse .navbar-toggle .caret { color: var(--nl-ink-2); }
+.navbar-inverse .navbar-collapse { border-color: var(--nl-line); }
+.navbar-inverse .form-control {
+    background: var(--nl-surface);
+    border-color: var(--nl-line);
+    color: var(--nl-ink);
+}
+.nav-pills > li.active > a,
+.nav-pills > li.active > a:hover,
+.nav-pills > li.active > a:focus {
+    background-color: var(--nl-accent);
+    color: #fff;
+}
+.navbar-inverse .nav-pills > li > a { border-radius: 6px; }
+
+/* The Apps button right after the name; Claude, light / dark and the name
+ * menu on the right (desk/shared/nline_header.js) replace the preferences
+ * and logout links */
+.nl-apps-slot { margin: 9px 0 0 4px; color: var(--nl-ink-2); }
+.navbar-nav > li.nl-right-item { padding: 9px 4px 0; color: var(--nl-ink-2); }
+#user-preferences, #user-logout { display: none !important; }
+
+/* Accent of the N-Line BI apps */
+a { color: var(--nl-accent); }
+a:hover, a:focus { color: var(--nl-accent-dark); }
+.btn-primary {
+    background-color: var(--nl-accent);
+    border-color: var(--nl-accent-dark);
+}
+.btn-primary:hover, .btn-primary:focus, .btn-primary:active {
+    background-color: var(--nl-accent-dark);
+    border-color: var(--nl-accent-dark);
+}
+.list-group-item.active,
+.list-group-item.active:hover,
+.list-group-item.active:focus {
+    background-color: var(--nl-accent);
+    border-color: var(--nl-accent);
+}
+
+/* Dark: the client has hundreds of widgets without color variables, so the
+ * page is inverted (hues kept) and the pictures and the N-Line menus, which
+ * have their own dark colors, are turned back */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        filter: invert(0.92) hue-rotate(180deg);
+        background: #ffffff;
+    }
+    :root:not([data-theme="light"]) img,
+    :root:not([data-theme="light"]) video,
+    :root:not([data-theme="light"]) canvas,
+    :root:not([data-theme="light"]) .nl-pop {
+        filter: invert(1) hue-rotate(180deg);
+    }
+}
+:root[data-theme="dark"] {
+    filter: invert(0.92) hue-rotate(180deg);
+    background: #ffffff;
+}
+:root[data-theme="dark"] img,
+:root[data-theme="dark"] video,
+:root[data-theme="dark"] canvas,
+:root[data-theme="dark"] .nl-pop {
+    filter: invert(1) hue-rotate(180deg);
+}

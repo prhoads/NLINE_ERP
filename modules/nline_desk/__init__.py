@@ -3,7 +3,7 @@
 
 from trytond.pool import Pool
 
-from . import desk
+from . import desk, menu
 
 
 def register():
@@ -13,4 +13,5 @@ def register():
         desk.PaymentTerm,
         desk.PaymentJournal,
         desk.Desk,
+        menu.SupersededMenu,
         module='nline_desk', type_='model')

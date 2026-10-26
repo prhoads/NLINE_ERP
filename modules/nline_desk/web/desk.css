@@ -1,17 +1,25 @@
 /* N-Line Desk */
 :root {
-    --ink: #1d2733;
-    --muted: #66717d;
-    --line: #c9d2dc;
+    /* The palette of the N-Line BI apps */
+    --ink: #1f2328;
+    --muted: #7a808a;
+    --line: #dcdcd6;
+    --line-soft: #e8e8e3;
     --paper: #ffffff;
-    --page: #eef2f6;
-    --head: #2f5d8a;
-    --head-ink: #ffffff;
-    --accent: #2f6fb0;
-    --accent-soft: #e3eefa;
-    --ok: #2e7d32;
+    --page: #f6f6f3;
+    --field: #ffffff;
+    --button: #f7f7f4;
+    --button-hover: #eeeee9;
+    --table-head: #eef0ec;
+    --row-hover: #f6f8f6;
+    --head: #ffffff;
+    --head-ink: #1f2328;
+    --accent: #1d6b55;
+    --accent-dark: #16543f;
+    --accent-soft: #eef4f1;
+    --ok: #1d6b55;
     --warn: #b26a00;
-    --bad: #c62828;
+    --bad: #b3261e;
     --check: #eaf4ea;
     --check-line: #9db89d;
     --request: #d5dae1;
@@ -23,48 +31,69 @@
     --cancelled: #f4c2c2;
     --leg: #7b55b8;
     --job: #1c8c8c;
+    color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --ink: #e8e9eb; --muted: #8d939b; --line: #33373d; --line-soft: #2a2e33;
+        --paper: #202327; --page: #17191c; --field: #17191c; --button: #2a2e33;
+        --button-hover: #33373d; --table-head: #262a2f; --row-hover: #23272b;
+        --head: #202327; --head-ink: #e8e9eb; --accent: #4fb393; --accent-dark: #3f9a7d;
+        --accent-soft: #1f2b27; --ok: #4fb393; --bad: #ff8a80; --leg: #a888dd; --job: #4fc4c4;
+        color-scheme: dark;
+    }
+}
+:root[data-theme="dark"] {
+    --ink: #e8e9eb; --muted: #8d939b; --line: #33373d; --line-soft: #2a2e33;
+    --paper: #202327; --page: #17191c; --field: #17191c; --button: #2a2e33;
+    --button-hover: #33373d; --table-head: #262a2f; --row-hover: #23272b;
+    --head: #202327; --head-ink: #e8e9eb; --accent: #4fb393; --accent-dark: #3f9a7d;
+    --accent-soft: #1f2b27; --ok: #4fb393; --bad: #ff8a80; --leg: #a888dd; --job: #4fc4c4;
+    color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
     background: var(--page);
     color: var(--ink);
-    font: 14px/1.4 "Segoe UI", Arial, Helvetica, sans-serif;
+    font: 14px/1.4 system-ui, "Segoe UI", Arial, Helvetica, sans-serif;
 }
 button, input, select, textarea { font: inherit; }
 a { color: var(--accent); }
 .muted { color: var(--muted); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 
+/* The header of the N-Line BI apps: name, Apps, screens, then Claude, light /
+ * dark and the name menu (shared/nline_header.js) */
 #topbar {
-    display: flex; align-items: center; gap: 18px;
+    display: flex; align-items: center; gap: 12px;
     background: var(--head); color: var(--head-ink);
-    padding: 0 16px; height: 46px;
+    border-bottom: 1px solid var(--line);
+    padding: 0 16px; height: 48px;
     position: sticky; top: 0; z-index: 20;
 }
-.brand { color: #fff; font-weight: 700; font-size: 17px; text-decoration: none; white-space: nowrap; }
-.brand span { font-weight: 400; opacity: .8; }
+.brand { color: var(--head-ink); font-weight: 700; font-size: 16px; text-decoration: none; white-space: nowrap; }
+.brand span { font-weight: 450; color: var(--muted); margin-left: 6px; font-size: 13px; }
 #nav { display: flex; gap: 2px; flex: 1; overflow-x: auto; }
 #nav a {
-    color: #dce8f5; text-decoration: none; padding: 13px 10px; white-space: nowrap;
+    color: var(--muted); text-decoration: none; padding: 13px 8px; white-space: nowrap; font-size: 13.5px;
     border-bottom: 3px solid transparent;
 }
-#nav a.active, #nav a:hover { color: #fff; border-bottom-color: #ffd36b; }
-#user { font-size: 13px; white-space: nowrap; }
-#user button { background: transparent; border: 1px solid #a9c2dc; color: #fff; border-radius: 4px; padding: 3px 8px; margin-left: 8px; cursor: pointer; }
+#nav a.active, #nav a:hover { color: var(--head-ink); border-bottom-color: var(--accent); }
+#nl-right { white-space: nowrap; }
 
 #main { padding: 18px; max-width: 1400px; margin: 0 auto; }
 h1 { font-size: 20px; margin: 0 0 14px; font-weight: 600; }
 h2 { font-size: 16px; margin: 18px 0 8px; font-weight: 600; }
 
-button { cursor: pointer; border: 1px solid var(--line); background: #f7f9fb; color: var(--ink); border-radius: 4px; padding: 6px 14px; }
-button:hover { background: #edf1f5; }
+button { cursor: pointer; border: 1px solid var(--line); background: var(--button); color: var(--ink); border-radius: 4px; padding: 6px 14px; }
+button:hover { background: var(--button-hover); }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-button.primary:hover { background: #255d96; }
+button.primary:hover { background: var(--accent-dark); }
 button.danger { color: var(--bad); }
 button:disabled { opacity: .5; cursor: default; }
 input[type=text], input[type=date], input[type=password], select, textarea {
-    border: 1px solid var(--line); border-radius: 3px; padding: 5px 7px; background: #fff; width: 100%;
+    border: 1px solid var(--line); border-radius: 3px; padding: 5px 7px; background: var(--field); color: var(--ink); width: 100%;
 }
 input.money { text-align: right; font-variant-numeric: tabular-nums; }
 label.field { display: block; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
@@ -74,12 +103,12 @@ label.field { display: block; font-size: 12px; color: var(--muted); margin-botto
 .toolbar .spacer { flex: 1; }
 .grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 14px; }
 
-table.data { width: 100%; border-collapse: collapse; background: #fff; }
-table.data th { background: #e7edf3; text-align: left; font-weight: 600; font-size: 12px; color: #3c4a58; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-table.data td { padding: 5px 8px; border-bottom: 1px solid #e3e8ee; vertical-align: middle; }
-table.data tr:hover td { background: #f6f9fc; }
+table.data { width: 100%; border-collapse: collapse; background: var(--paper); }
+table.data th { background: var(--table-head); text-align: left; font-weight: 600; font-size: 12px; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.data td { padding: 5px 8px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+table.data tr:hover td { background: var(--row-hover); }
 table.data td input, table.data td select { padding: 3px 5px; }
-table.data tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: #f7f9fb; }
+table.data tfoot td { font-weight: 600; border-top: 2px solid var(--line); background: var(--table-head); }
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; }
 
 /* Home: the QuickBooks-style flow */
@@ -87,7 +116,7 @@ table.data tfoot td { font-weight: 600; border-top: 2px solid var(--line); backg
 .home .panel h2 { margin-top: 0; color: var(--head); }
 .flow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .flow a { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 96px; height: 78px; border: 1px solid var(--line); border-radius: 8px; background: var(--accent-soft); color: var(--ink); text-decoration: none; font-size: 12.5px; text-align: center; padding: 6px; }
-.flow a:hover { border-color: var(--accent); background: #d3e5f8; }
+.flow a:hover { border-color: var(--accent); background: var(--button-hover); }
 .flow a .icon { font-size: 22px; line-height: 1; margin-bottom: 4px; }
 .flow .arrow { color: var(--muted); font-size: 18px; }
 
@@ -97,13 +126,13 @@ table.data tfoot td { font-weight: 600; border-top: 2px solid var(--line); backg
 
 /* Picker */
 .picker { position: relative; }
-.picker-list { display: none; position: absolute; left: 0; right: 0; top: 100%; z-index: 30; background: #fff; border: 1px solid var(--line); border-radius: 0 0 4px 4px; box-shadow: 0 6px 16px rgba(0,0,0,.12); max-height: 260px; overflow-y: auto; }
+.picker-list { display: none; position: absolute; left: 0; right: 0; top: 100%; z-index: 30; background: var(--paper); border: 1px solid var(--line); border-radius: 0 0 4px 4px; box-shadow: 0 6px 16px rgba(0,0,0,.12); max-height: 260px; overflow-y: auto; }
 .picker-item { padding: 5px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .picker-item.active, .picker-item:hover { background: var(--accent-soft); }
 
 /* Modal and toasts */
 .overlay { position: fixed; inset: 0; background: rgba(20,30,40,.35); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
-.modal { background: #fff; border-radius: 8px; width: 100%; max-width: 480px; box-shadow: 0 16px 40px rgba(0,0,0,.25); }
+.modal { background: var(--paper); border-radius: 8px; width: 100%; max-width: 480px; box-shadow: 0 16px 40px rgba(0,0,0,.25); }
 .modal-title { font-weight: 600; padding: 12px 16px; border-bottom: 1px solid var(--line); }
 .modal-body { padding: 14px 16px; }
 .modal-body p { margin: 0 0 8px; }
@@ -142,14 +171,14 @@ table.data tfoot td { font-weight: 600; border-top: 2px solid var(--line); backg
 /* Work order card view */
 .wo-layout { display: grid; grid-template-columns: 280px 1fr; gap: 14px; align-items: start; }
 .masters { position: sticky; top: 62px; max-height: calc(100vh - 80px); overflow-y: auto; }
-.master { border: 1px solid var(--line); border-radius: 5px; margin-bottom: 8px; background: #fbfcfd; }
+.master { border: 1px solid var(--line); border-radius: 5px; margin-bottom: 8px; background: var(--page); }
 .master .name { font-weight: 600; padding: 6px 8px 2px; font-size: 13px; }
 .master .meta { font-size: 11.5px; color: var(--muted); padding: 0 8px 4px; }
 .master .revs { display: flex; flex-wrap: wrap; gap: 5px; padding: 2px 8px 8px; }
-.rev { border: 1px solid #9fb5cc; background: #fff; border-radius: 12px; padding: 2px 10px; font-size: 12px; cursor: grab; user-select: none; }
+.rev { border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 12px; padding: 2px 10px; font-size: 12px; cursor: grab; user-select: none; }
 .rev.current { background: var(--accent); color: #fff; border-color: var(--accent); }
 .rev:active { cursor: grabbing; }
-.canvas-wrap { overflow: auto; background: #fff; border: 1px solid var(--line); border-radius: 6px; min-height: 480px; }
+.canvas-wrap { overflow: auto; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; min-height: 480px; }
 .canvas { position: relative; }
 .canvas svg { position: absolute; left: 0; top: 0; pointer-events: none; }
 .node { position: absolute; border-radius: 5px; border: 1px solid #8796a5; font-size: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.12); background: #fff; overflow: hidden; }
@@ -180,14 +209,14 @@ table.data tfoot td { font-weight: 600; border-top: 2px solid var(--line); backg
 
 /* Register */
 .register td.cleared { text-align: center; color: var(--ok); font-weight: 700; }
-.badge { display: inline-block; font-size: 11px; border-radius: 3px; padding: 0 6px; background: #e7edf3; color: #3c4a58; }
+.badge { display: inline-block; font-size: 11px; border-radius: 3px; padding: 0 6px; background: var(--table-head); color: var(--muted); }
 .badge.open { background: #fff0b8; }
 .badge.paid { background: #d9f0d4; }
 
 /* Centers */
 .center { display: grid; grid-template-columns: 300px 1fr; gap: 14px; align-items: start; }
 .party-list { max-height: calc(100vh - 140px); overflow-y: auto; }
-.party-row { display: flex; justify-content: space-between; padding: 6px 8px; border-bottom: 1px solid #e3e8ee; cursor: pointer; }
+.party-row { display: flex; justify-content: space-between; padding: 6px 8px; border-bottom: 1px solid var(--line-soft); cursor: pointer; }
 .party-row:hover, .party-row.active { background: var(--accent-soft); }
 
 @media (max-width: 860px) {
@@ -202,3 +231,10 @@ table.data tfoot td { font-weight: 600; border-top: 2px solid var(--line); backg
     #topbar, .toolbar, .masters { display: none; }
     #main { padding: 0; }
 }
+
+/* The cards of the work order stay like paper cards in the dark too: their
+ * state colors carry the meaning */
+.node { color: #1d2733; }
+.badge.open, .badge.paid, .badge[class*="st-"] { color: #1d2733; }
+.check { color: #1d2733; }
+.check input { color: #1d2733; }

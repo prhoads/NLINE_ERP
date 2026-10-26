@@ -1,0 +1,167 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data>
+        <!-- The N-Line screens in the Tryton menu: they open the desk in a
+             new tab, already signed in with the Tryton session -->
+        <menuitem
+            name="N-Line"
+            sequence="1"
+            id="menu_nline"
+            icon="tryton-star"/>
+
+        <record model="ir.action.url" id="url_desk_home">
+            <field name="name">Home (N-Line Desk)</field>
+            <field name="url">/desk/index.html#/</field>
+        </record>
+        <menuitem parent="menu_nline" action="url_desk_home"
+            sequence="10" id="menu_desk_home"/>
+
+        <record model="ir.action.url" id="url_desk_workorders">
+            <field name="name">Work Orders (cards)</field>
+            <field name="url">/desk/index.html#/workorders</field>
+        </record>
+        <menuitem parent="menu_nline" action="url_desk_workorders"
+            sequence="20" id="menu_desk_workorders"/>
+
+        <record model="ir.action.url" id="url_desk_bills">
+            <field name="name">Enter Bills</field>
+            <field name="url">/desk/index.html#/bills/new</field>
+        </record>
+        <menuitem parent="menu_nline" action="url_desk_bills"
+            sequence="30" id="menu_desk_bills"/>
+
+        <record model="ir.action.url" id="url_desk_pay_bills">
+            <field name="name">Pay Bills</field>
+            <field name="url">/desk/index.html#/bills/pay</field>
+        </record>
+        <menuitem parent="menu_nline" action="url_desk_pay_bills"
+            sequence="40" id="menu_desk_pay_bills"/>
+
+        <record model="ir.action.url" id="url_desk_checks">
+            <field name="name">Write Checks</field>
+            <field name="url">/desk/index.html#/checks/new</field>
+        </record>
+        <menuitem parent="menu_nline" action="url_desk_checks"
+            sequence="50" id="menu_desk_checks"/>
+
+        <record model="ir.action.url" id="url_desk_invoices">
+            <field name="name">Create Invoices</field>
+            <field name="url">/desk/index.html#/invoices/new</field>
+        </record>
+        <menuitem parent="menu_nline" action="url_desk_invoices"
+            sequence="60" id="menu_desk_invoices"/>
+
+        <record model="ir.action.url" id="url_desk_receive">
+            <field name="name">Receive Payments</field>
+            <field name="url">/desk/index.html#/payments/receive</field>
+        </record>
+        <menuitem parent="menu_nline" action="url_desk_receive"
+            sequence="70" id="menu_desk_receive"/>
+
+        <record model="ir.action.url" id="url_desk_deposits">
+            <field name="name">Make Deposits</field>
+            <field name="url">/desk/index.html#/deposits/new</field>
+        </record>
+        <menuitem parent="menu_nline" action="url_desk_deposits"
+            sequence="80" id="menu_desk_deposits"/>
+
+        <record model="ir.action.url" id="url_desk_register">
+            <field name="name">Check Register</field>
+            <field name="url">/desk/index.html#/register</field>
+        </record>
+        <menuitem parent="menu_nline" action="url_desk_register"
+            sequence="90" id="menu_desk_register"/>
+
+        <record model="ir.action.url" id="url_desk_customers">
+            <field name="name">Customer Center</field>
+            <field name="url">/desk/index.html#/customers</field>
+        </record>
+        <menuitem parent="menu_nline" action="url_desk_customers"
+            sequence="100" id="menu_desk_customers"/>
+
+        <record model="ir.action.url" id="url_desk_vendors">
+            <field name="name">Vendor Center</field>
+            <field name="url">/desk/index.html#/vendors</field>
+        </record>
+        <menuitem parent="menu_nline" action="url_desk_vendors"
+            sequence="110" id="menu_desk_vendors"/>
+
+        <!-- The administrator hides the standard menus N-Line replaces -->
+        <record model="ir.ui.view" id="superseded_menu_view_list">
+            <field name="model">nline.desk.menu</field>
+            <field name="type">tree</field>
+            <field name="name">superseded_menu_list</field>
+        </record>
+        <record model="ir.ui.view" id="superseded_menu_view_form">
+            <field name="model">nline.desk.menu</field>
+            <field name="type">form</field>
+            <field name="name">superseded_menu_form</field>
+        </record>
+        <record model="ir.action.act_window" id="act_superseded_menu">
+            <field name="name">Superseded Menus</field>
+            <field name="res_model">nline.desk.menu</field>
+        </record>
+        <record model="ir.action.act_window.view" id="act_superseded_menu_view1">
+            <field name="sequence" eval="10"/>
+            <field name="view" ref="superseded_menu_view_list"/>
+            <field name="act_window" ref="act_superseded_menu"/>
+        </record>
+        <record model="ir.action.act_window.view" id="act_superseded_menu_view2">
+            <field name="sequence" eval="20"/>
+            <field name="view" ref="superseded_menu_view_form"/>
+            <field name="act_window" ref="act_superseded_menu"/>
+        </record>
+        <menuitem parent="menu_nline" action="act_superseded_menu"
+            sequence="900" id="menu_superseded_menu"/>
+        <record model="ir.ui.menu-res.group" id="menu_superseded_menu_group_admin">
+            <field name="menu" ref="menu_superseded_menu"/>
+            <field name="group" ref="res.group_admin"/>
+        </record>
+
+        <record model="ir.model.access" id="access_superseded_menu">
+            <field name="model" search="[('model', '=', 'nline.desk.menu')]"/>
+            <field name="perm_read" eval="False"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_superseded_menu_admin">
+            <field name="model" search="[('model', '=', 'nline.desk.menu')]"/>
+            <field name="group" ref="res.group_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+    </data>
+    <data noupdate="1">
+        <!-- Proposed; nothing is hidden until the administrator ticks it -->
+        <record model="nline.desk.menu" id="superseded_supplier_invoices">
+            <field name="menu" ref="account_invoice.menu_invoice_in_form"/>
+            <field name="superseded_by">Enter Bills, Vendor Center</field>
+            <field name="hidden" eval="False"/>
+        </record>
+        <record model="nline.desk.menu" id="superseded_customer_invoices">
+            <field name="menu" ref="account_invoice.menu_invoice_out_form"/>
+            <field name="superseded_by">Create Invoices, Customer Center</field>
+            <field name="hidden" eval="False"/>
+        </record>
+        <record model="nline.desk.menu" id="superseded_payable_payments">
+            <field name="menu" ref="account_payment.menu_payment_form_payable"/>
+            <field name="superseded_by">Pay Bills, Write Checks</field>
+            <field name="hidden" eval="False"/>
+        </record>
+        <record model="nline.desk.menu" id="superseded_receivable_payments">
+            <field name="menu" ref="account_payment.menu_payment_form_receivable"/>
+            <field name="superseded_by">Receive Payments</field>
+            <field name="hidden" eval="False"/>
+        </record>
+        <record model="nline.desk.menu" id="superseded_build_tree">
+            <field name="menu" ref="nline_build_tree.menu_build_tree"/>
+            <field name="superseded_by">Work Orders (cards)</field>
+            <field name="hidden" eval="False"/>
+        </record>
+    </data>
+</tryton>
