@@ -8,6 +8,17 @@
      * screens open in their own Tryton tab */
     var EMBED = /[?&]embed=1(&|$)/.test(global.location.search);
     Screens.embedded = EMBED;
+    if (!EMBED && global.top === global) {
+        /* No separate desk: the screen opens in its Tryton tab */
+        try {
+            global.sessionStorage.setItem('nline.open',
+                (global.location.hash || '').replace(/^#\/?/, ''));
+        } catch (e) {
+            /* No storage: Tryton opens Home */
+        }
+        global.location.replace(Rpc.base + '/');
+        return;
+    }
     var NAV = [
         ['#/', 'Home'],
         ['#/workorders', 'Work Orders'],

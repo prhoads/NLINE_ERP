@@ -100,6 +100,18 @@
         userMenu.apply(this, arguments);
         /* Signed in without a screen to open: the Home tab */
         setTimeout(function () {
+            /* A desk address opened directly: its screen in a tab */
+            var asked = null;
+            try {
+                asked = sessionStorage.getItem('nline.open');
+                sessionStorage.removeItem('nline.open');
+            } catch (e) {
+                /* No storage: nothing asked */
+            }
+            if (asked) {
+                openScreen(asked, NAMES[screenOf(asked)] || null);
+                return;
+            }
             var hash = location.hash.replace(/^#!?/, '');
             if (!Sao.Tab.tabs.length && hash.indexOf('/') < 0) {
                 openScreen('', 'Home');
