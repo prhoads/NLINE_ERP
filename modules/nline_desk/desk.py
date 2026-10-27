@@ -179,6 +179,7 @@ class Desk(ModelView):
                 ('Pay Bills', 'nline_desk.url_desk_pay_bills'),
                 ]),
         ('Customers', True, [
+                ('Quotes', 'nline_desk.url_desk_quotes'),
                 ('Order Entry', 'nline_desk.url_desk_orders'),
                 ('Shipping', 'nline_desk.url_desk_shipping'),
                 ('Invoicing', 'nline_desk.url_desk_invoicing'),
@@ -206,6 +207,10 @@ class Desk(ModelView):
                 ('Material Issues', 'nline_desk.url_desk_issues'),
                 ('Labor Entry', 'nline_desk.url_desk_labor'),
                 ('Work Order Receipts', 'nline_desk.url_desk_wo_receipts'),
+                ]),
+        ('Planning', False, [
+                ('Material Planning', 'nline_desk.url_desk_planning'),
+                ('Scheduling', 'nline_desk.url_desk_scheduling'),
                 ]),
         ('Shop Activities', False, [
                 ('Work Orders', 'nline_desk.url_desk_workorders'),

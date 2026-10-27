@@ -325,3 +325,19 @@ table.report tr.drill { cursor: zoom-in; }
 .tabs .tab.active { background: var(--paper); font-weight: 600; border-color: var(--line); position: relative; top: 1px; }
 .tab-panes > .tab-pane { border-top-left-radius: 0; }
 textarea { width: 100%; box-sizing: border-box; background: var(--field); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }
+/* ---- Phase 6 screens (js/planning.js) -------------------------------- */
+table.data tr.short td { background: rgba(178, 106, 0, .08); }
+.gantt { --days: 60; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; }
+.gantt-row { display: grid; grid-template-columns: 240px minmax(600px, 1fr); border-bottom: 1px solid var(--line-soft); min-height: 30px; align-items: center; }
+.gantt-head { position: sticky; top: 0; background: var(--table-head); font-size: 11px; color: var(--muted); z-index: 2; }
+.gantt-label { padding: 4px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.gantt-scale { display: grid; grid-template-columns: repeat(var(--days), 1fr); }
+.gantt-day { text-align: center; border-left: 1px solid var(--line-soft); padding: 3px 0; }
+.gantt-day.weekend { background: rgba(0, 0, 0, .04); }
+.gantt-day.today { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.gantt-track { position: relative; height: 24px; }
+.gantt-bar { position: absolute; top: 2px; height: 20px; border-radius: 4px; color: #fff; font-size: 11px; padding: 2px 6px; box-sizing: border-box; overflow: hidden; white-space: nowrap; cursor: grab; background: #6b7a8c; }
+.gantt-bar.waiting { background: #b08a00; }
+.gantt-bar.assigned { background: #3d8f5f; }
+.gantt-bar.running { background: #2f6fb6; }
+.gantt-bar.late { outline: 2px solid var(--bad); }

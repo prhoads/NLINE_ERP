@@ -58,6 +58,9 @@ SCREENS = {
     'masters': ('Engineering Master', 'masters', False, PROD),
     'resources': ('Shop Resources', 'resources', False, PROD),
     'employees': ('Employees', 'employees', False, None),
+    'planning': ('Material Planning', 'planning', False, PROD),
+    'scheduling': ('Scheduling', 'scheduling', False, PROD),
+    'quotes': ('Quotes', 'quotes', True, SALE),
     'items': ('Item List', 'items', False, None),
     'parts': ('Parts', 'parts', False, None),
     'accounts': ('Chart of Accounts', 'accounts', False, ACC),
@@ -71,6 +74,7 @@ FOLDERS = [
         ('customers', 'screen:customers', [ACC]),
         ('income_tracker', 'screen:income_tracker', [ACC]),
         ('customer_window', 'screen:customer_window', []),
+        ('quotes', 'screen:quotes', [SALE]),
         ('orders', 'screen:orders', [SALE]),
         ('shipping', 'screen:shipping', [STOCK]),
         ('invoicing', 'screen:invoicing', [ACC]),
@@ -119,6 +123,10 @@ FOLDERS = [
         ('productions', 'production.act_production_list', [PROD]),
         ('jobs', 'nline_job.act_job_list', [PROD]),
         ('works', 'production_work.act_work_list', [PROD]),
+        ]),
+    ('planning', 'Planning', 'tryton-production', [
+        ('planning', 'screen:planning', [PROD]),
+        ('scheduling', 'screen:scheduling', [PROD]),
         ]),
     ('engineering', 'Engineering', 'tryton-product', [
         ('part_window', 'screen:parts', []),

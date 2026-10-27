@@ -170,7 +170,10 @@
         'wo-receipts': 'Work Order Receipts',
         'masters': 'Engineering Master',
         'resources': 'Shop Resources',
-        'employees': 'Employees'
+        'employees': 'Employees',
+        'planning': 'Material Planning',
+        'scheduling': 'Scheduling',
+        'quotes': 'Quotes'
     };
 
     /* Screens with a tab per item: a register per account, a tab per

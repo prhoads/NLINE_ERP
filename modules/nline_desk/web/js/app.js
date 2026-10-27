@@ -121,7 +121,10 @@
         'Labor Entry': '\u23F1',
         'Work Order Receipts': '\u{1F4E5}',
         'Shop Resources': '\u{1F3ED}',
-        'Employees': '\u{1F477}'
+        'Employees': '\u{1F477}',
+        'Quotes': '\u{1F4AC}',
+        'Material Planning': '\u{1F4CB}',
+        'Scheduling': '\u{1F4C5}'
     };
 
     function tile(item) {
@@ -290,7 +293,10 @@
         [/^#\/wo-receipts$/, 'woReceipts'],
         [/^#\/masters$/, 'engineeringMaster'],
         [/^#\/resources$/, 'resources'],
-        [/^#\/employees$/, 'employees']
+        [/^#\/employees$/, 'employees'],
+        [/^#\/planning$/, 'materialPlanning'],
+        [/^#\/scheduling$/, 'scheduling'],
+        [/^#\/quotes$/, 'quotes']
     ];
 
     /* The Tryton tab of a screen: a work order card stays in the work
