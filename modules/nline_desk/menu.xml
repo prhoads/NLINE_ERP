@@ -325,6 +325,52 @@ this repository contains the full copyright notices and license terms. -->
             <field name="action" ref="url_desk_quotes"/>
             <field name="group" ref="sale.group_sale"/>
         </record>
+        <record model="ir.action.url" id="url_desk_company_info">
+            <field name="name">Company Information</field>
+            <field name="nline_writes" eval="False"/>
+            <field name="url">desk/index.html#/company-info</field>
+        </record>
+        <record model="ir.action.url" id="url_desk_settings">
+            <field name="name">N-Line Settings</field>
+            <field name="nline_writes" eval="False"/>
+            <field name="url">desk/index.html#/settings</field>
+        </record>
+        <record model="ir.action-res.group" id="url_desk_settings_group">
+            <field name="action" ref="url_desk_settings"/>
+            <field name="group" ref="res.group_admin"/>
+        </record>
+        <record model="ir.action.url" id="url_desk_terms">
+            <field name="name">Terms</field>
+            <field name="nline_writes" eval="False"/>
+            <field name="url">desk/index.html#/terms</field>
+        </record>
+        <record model="ir.action-res.group" id="url_desk_terms_group">
+            <field name="action" ref="url_desk_terms"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+        <record model="ir.action.url" id="url_desk_lists">
+            <field name="name">Lists</field>
+            <field name="nline_writes" eval="False"/>
+            <field name="url">desk/index.html#/lists</field>
+        </record>
+        <record model="ir.action.url" id="url_desk_import">
+            <field name="name">Import</field>
+            <field name="nline_writes" eval="True"/>
+            <field name="url">desk/index.html#/import</field>
+        </record>
+        <record model="ir.action-res.group" id="url_desk_import_group">
+            <field name="action" ref="url_desk_import"/>
+            <field name="group" ref="res.group_admin"/>
+        </record>
+        <record model="ir.action.url" id="url_desk_closing">
+            <field name="name">Set Closing Date</field>
+            <field name="nline_writes" eval="True"/>
+            <field name="url">desk/index.html#/closing</field>
+        </record>
+        <record model="ir.action-res.group" id="url_desk_closing_group">
+            <field name="action" ref="url_desk_closing"/>
+            <field name="group" ref="account.group_account_admin"/>
+        </record>
         <record model="ir.action.url" id="url_desk_items">
             <field name="name">Item List</field>
             <field name="nline_writes" eval="False"/>
@@ -707,44 +753,76 @@ this repository contains the full copyright notices and license terms. -->
         <menuitem name="Company" sequence="9" id="menu_nl_company" icon="tryton-account"/>
         <menuitem parent="menu_nl_company" action="url_desk_reports"
             sequence="10" id="menu_desk_reports"/>
+        <menuitem parent="menu_nl_company" action="url_desk_company_info"
+            sequence="20" id="menu_desk_company_info"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_company_info_group_admin">
+            <field name="menu" ref="menu_desk_company_info"/>
+            <field name="group" ref="res.group_admin"/>
+        </record>
+        <menuitem parent="menu_nl_company" action="url_desk_settings"
+            sequence="30" id="menu_desk_settings"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_settings_group_admin">
+            <field name="menu" ref="menu_desk_settings"/>
+            <field name="group" ref="res.group_admin"/>
+        </record>
+        <menuitem parent="menu_nl_company" action="url_desk_terms"
+            sequence="40" id="menu_desk_terms"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_terms_group_account">
+            <field name="menu" ref="menu_desk_terms"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+        <menuitem parent="menu_nl_company" action="url_desk_lists"
+            sequence="50" id="menu_desk_lists"/>
+        <menuitem parent="menu_nl_company" action="url_desk_import"
+            sequence="60" id="menu_desk_import"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_import_group_admin">
+            <field name="menu" ref="menu_desk_import"/>
+            <field name="group" ref="res.group_admin"/>
+        </record>
+        <menuitem parent="menu_nl_company" action="url_desk_closing"
+            sequence="70" id="menu_desk_closing"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_closing_group_account_admin">
+            <field name="menu" ref="menu_desk_closing"/>
+            <field name="group" ref="account.group_account_admin"/>
+        </record>
         <menuitem parent="menu_nl_company" action="url_desk_accounts"
-            sequence="20" id="menu_desk_accounts"/>
+            sequence="80" id="menu_desk_accounts"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_accounts_group_account">
             <field name="menu" ref="menu_desk_accounts"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_company" action="url_desk_journal"
-            sequence="30" id="menu_desk_journal"/>
+            sequence="90" id="menu_desk_journal"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_journal_group_account">
             <field name="menu" ref="menu_desk_journal"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_company" action="account.act_move_form"
-            sequence="40" id="menu_nl_company_moves"/>
+            sequence="100" id="menu_nl_company_moves"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_company_moves_group_account">
             <field name="menu" ref="menu_nl_company_moves"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_company" action="account.act_general_ledger_account_form"
-            sequence="50" id="menu_nl_company_general_ledger"/>
+            sequence="110" id="menu_nl_company_general_ledger"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_company_general_ledger_group_account">
             <field name="menu" ref="menu_nl_company_general_ledger"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_company" action="account.act_account_balance_sheet_tree"
-            sequence="60" id="menu_nl_company_balance_sheet"/>
+            sequence="120" id="menu_nl_company_balance_sheet"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_company_balance_sheet_group_account">
             <field name="menu" ref="menu_nl_company_balance_sheet"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_company" action="account.act_account_income_statement_tree"
-            sequence="70" id="menu_nl_company_income_statement"/>
+            sequence="130" id="menu_nl_company_income_statement"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_company_income_statement_group_account">
             <field name="menu" ref="menu_nl_company_income_statement"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_company" action="account.act_aged_balance_list"
-            sequence="80" id="menu_nl_company_aged_balance"/>
+            sequence="140" id="menu_nl_company_aged_balance"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_company_aged_balance_group_account">
             <field name="menu" ref="menu_nl_company_aged_balance"/>
             <field name="group" ref="account.group_account"/>

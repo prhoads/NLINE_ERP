@@ -229,6 +229,9 @@ class Desk(ModelView):
                 ('Journal Entries', 'nline_desk.url_desk_journal'),
                 ('Report Center', 'nline_desk.url_desk_reports'),
                 ('Items', 'nline_desk.url_desk_items'),
+                ('Terms', 'nline_desk.url_desk_terms'),
+                ('Lists', 'nline_desk.url_desk_lists'),
+                ('Set Closing Date', 'nline_desk.url_desk_closing'),
                 ]),
         ('Centers', False, [
                 ('Customer Center', 'nline_desk.url_desk_customers'),

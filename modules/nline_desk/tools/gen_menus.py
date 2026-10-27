@@ -17,6 +17,8 @@ PROD = 'production.group_production'
 STOCK = 'stock.group_stock'
 SALE = 'sale.group_sale'
 PURCHASE = 'purchase.group_purchase'
+ADMIN = 'res.group_admin'
+ACC_ADMIN = 'account.group_account_admin'
 
 # N-Line screens: id: (name, route, writes, group of the action)
 SCREENS = {
@@ -61,6 +63,12 @@ SCREENS = {
     'planning': ('Material Planning', 'planning', False, PROD),
     'scheduling': ('Scheduling', 'scheduling', False, PROD),
     'quotes': ('Quotes', 'quotes', True, SALE),
+    'company_info': ('Company Information', 'company-info', False, None),
+    'settings': ('N-Line Settings', 'settings', False, ADMIN),
+    'terms': ('Terms', 'terms', False, ACC),
+    'lists': ('Lists', 'lists', False, None),
+    'import': ('Import', 'import', True, ADMIN),
+    'closing': ('Set Closing Date', 'closing', True, ACC_ADMIN),
     'items': ('Item List', 'items', False, None),
     'parts': ('Parts', 'parts', False, None),
     'accounts': ('Chart of Accounts', 'accounts', False, ACC),
@@ -146,6 +154,12 @@ FOLDERS = [
         ]),
     ('company', 'Company', 'tryton-account', [
         ('reports', 'screen:reports', []),
+        ('company_info', 'screen:company_info', [ADMIN]),
+        ('settings', 'screen:settings', [ADMIN]),
+        ('terms', 'screen:terms', [ACC]),
+        ('lists', 'screen:lists', []),
+        ('import', 'screen:import', [ADMIN]),
+        ('closing', 'screen:closing', [ACC_ADMIN]),
         ('accounts', 'screen:accounts', [ACC]),
         ('journal', 'screen:journal', [ACC]),
         ('moves', 'account.act_move_form', [ACC]),

@@ -233,3 +233,15 @@ The reports::
     >>> aging = Desk.report('ar_aging', {'to_date': today}, config.context)
     >>> aging['rows'][-1]['values'][-1]
     Decimal('775.00')
+
+Set the closing date: the periods before this month are closed::
+
+    >>> first = today.replace(day=1)
+    >>> before = [p for p in Desk.periods(config.context)
+    ...     if p['end_date'] < first]
+    >>> Desk.close_periods(first - dt.timedelta(days=1),
+    ...     config.context) == len(before)
+    True
+    >>> {p['state'] for p in Desk.periods(config.context)
+    ...     if p['end_date'] < first} <= {'closed'}
+    True

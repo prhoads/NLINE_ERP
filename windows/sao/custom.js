@@ -173,13 +173,19 @@
         'employees': 'Employees',
         'planning': 'Material Planning',
         'scheduling': 'Scheduling',
-        'quotes': 'Quotes'
+        'quotes': 'Quotes',
+        'terms': 'Terms',
+        'lists': 'Lists',
+        'import': 'Import',
+        'closing': 'Set Closing Date',
+        'settings': 'N-Line Settings',
+        'company-info': 'Company Information'
     };
 
     /* Screens with a tab per item: a register per account, a tab per
      * report */
     var PER_ITEM = ['accounts', 'reports', 'orders', 'purchase-orders',
-        'work-orders'];
+        'work-orders', 'lists'];
 
     /* The screen of a route: "workorders/12?x" is the work orders screen,
      * "accounts/12" the register of account 12 */

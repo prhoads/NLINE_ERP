@@ -328,7 +328,7 @@ textarea { width: 100%; box-sizing: border-box; background: var(--field); color:
 /* ---- Phase 6 screens (js/planning.js) -------------------------------- */
 table.data tr.short td { background: rgba(178, 106, 0, .08); }
 .gantt { --days: 60; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; }
-.gantt-row { display: grid; grid-template-columns: 240px minmax(600px, 1fr); border-bottom: 1px solid var(--line-soft); min-height: 30px; align-items: center; }
+.gantt-row { display: grid; grid-template-columns: 240px calc(var(--days) * 26px); width: max-content; min-width: 100%; border-bottom: 1px solid var(--line-soft); min-height: 30px; align-items: center; }
 .gantt-head { position: sticky; top: 0; background: var(--table-head); font-size: 11px; color: var(--muted); z-index: 2; }
 .gantt-label { padding: 4px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
 .gantt-scale { display: grid; grid-template-columns: repeat(var(--days), 1fr); }
@@ -341,3 +341,4 @@ table.data tr.short td { background: rgba(178, 106, 0, .08); }
 .gantt-bar.assigned { background: #3d8f5f; }
 .gantt-bar.running { background: #2f6fb6; }
 .gantt-bar.late { outline: 2px solid var(--bad); }
+.toolbar select, .toolbar input[type=date] { width: auto; }

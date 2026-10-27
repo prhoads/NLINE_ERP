@@ -4,7 +4,7 @@
 from trytond.pool import Pool
 
 from . import (
-    accounting, desk, menu, planning, purchasing, sales, shopfloor)
+    accounting, company, desk, menu, planning, purchasing, sales, shopfloor)
 
 
 def register():
@@ -19,5 +19,6 @@ def register():
         purchasing.DeskPurchasing,
         shopfloor.DeskShopfloor,
         planning.DeskPlanning,
+        company.DeskCompany,
         menu.SupersededMenu,
         module='nline_desk', type_='model')

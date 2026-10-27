@@ -844,7 +844,7 @@
             input = UI.moneyInput(attrs);
             get = function () {
                 return input.value === '' ? null :
-                    String(UI.parseMoney(input.value));
+                    global.Rpc.decimal(UI.parseMoney(input.value));
             };
             set = function (value) {
                 input.value = value === null || value === undefined ? '' :
@@ -853,7 +853,8 @@
         } else {
             input = el('input', Object.assign({type: f.type === 'date' ?
                 'date' : 'text'}, attrs));
-            if (f.type === 'integer' || f.type === 'float') {
+            if (f.type === 'integer' || f.type === 'float' ||
+                    f.type === 'decimal') {
                 input.classList.add('money');
             }
             get = function () {
@@ -865,6 +866,12 @@
                 }
                 if (f.type === 'float') {
                     return parseFloat(input.value);
+                }
+                if (f.type === 'decimal') {
+                    return global.Rpc.decimal(input.value);
+                }
+                if (f.type === 'date') {
+                    return global.Rpc.date(input.value);
                 }
                 return input.value;
             };
@@ -1034,7 +1041,7 @@
                 item.onclick(record, load);
             }};
         });
-        if (writes) {
+        if (writes && !options.single) {
             extra = extra.concat([{label: 'Copy', onclick: copy},
                 {label: 'Delete', onclick: remove}]);
         }

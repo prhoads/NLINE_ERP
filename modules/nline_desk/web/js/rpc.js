@@ -308,6 +308,10 @@
             var parts = iso.split('-');
             return {__class__: 'date', year: +parts[0], month: +parts[1],
                 day: +parts[2]};
+        },
+        decimal: function (value) {
+            /* Encode a number for a Numeric field */
+            return {__class__: 'Decimal', decimal: String(value)};
         }
     };
 

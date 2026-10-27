@@ -124,7 +124,10 @@
         'Employees': '\u{1F477}',
         'Quotes': '\u{1F4AC}',
         'Material Planning': '\u{1F4CB}',
-        'Scheduling': '\u{1F4C5}'
+        'Scheduling': '\u{1F4C5}',
+        'Terms': '\u{1F4C6}',
+        'Lists': '\u{1F4C3}',
+        'Set Closing Date': '\u{1F512}'
     };
 
     function tile(item) {
@@ -296,7 +299,14 @@
         [/^#\/employees$/, 'employees'],
         [/^#\/planning$/, 'materialPlanning'],
         [/^#\/scheduling$/, 'scheduling'],
-        [/^#\/quotes$/, 'quotes']
+        [/^#\/quotes$/, 'quotes'],
+        [/^#\/terms$/, 'terms'],
+        [/^#\/lists$/, 'lists'],
+        [/^#\/lists\/(\w+)$/, 'list'],
+        [/^#\/import$/, 'importData'],
+        [/^#\/closing$/, 'closing'],
+        [/^#\/settings$/, 'settings'],
+        [/^#\/company-info$/, 'companyInfo']
     ];
 
     /* The Tryton tab of a screen: a work order card stays in the work
