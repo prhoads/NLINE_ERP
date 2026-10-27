@@ -413,7 +413,59 @@
         document.head.appendChild(script);
     }
 
+    /* The menu's width: drag its right edge (double-click: back to the
+     * default); kept per browser */
+    function menuEdge() {
+        var root = document.documentElement;
+        var key = 'nline.menu.width';
+        var set = function (width) {
+            width = Math.max(160, Math.min(600, Math.round(width)));
+            root.style.setProperty('--nl-menu-w', width + 'px');
+            return width;
+        };
+        try {
+            var saved = parseInt(localStorage.getItem(key), 10);
+            if (saved) {
+                set(saved);
+            }
+        } catch (e) {
+            /* No storage: the default width */
+        }
+        var edge = jQuery('<div/>', {'id': 'nl-menu-edge',
+            'title': 'Drag to change the menu width (double-click: default)',
+            'role': 'separator', 'aria-orientation': 'vertical'});
+        jQuery('#menu').after(edge);
+        edge.on('mousedown', function (event) {
+            event.preventDefault();
+            var left = jQuery('#menu').offset().left;
+            var width = null;
+            jQuery('body').addClass('nl-resizing');
+            jQuery(document).on('mousemove.nlmenu', function (move) {
+                width = set(move.pageX - left);
+            }).on('mouseup.nlmenu', function () {
+                jQuery(document).off('.nlmenu');
+                jQuery('body').removeClass('nl-resizing');
+                if (width) {
+                    try {
+                        localStorage.setItem(key, String(width));
+                    } catch (e) {
+                        /* No storage: this page only */
+                    }
+                }
+            });
+        });
+        edge.on('dblclick', function () {
+            root.style.removeProperty('--nl-menu-w');
+            try {
+                localStorage.removeItem(key);
+            } catch (e) {
+                /* No storage */
+            }
+        });
+    }
+
     jQuery(function () {
+        menuEdge();
         jQuery('#title').after(jQuery('<span/>', {
             'class': 'nl-tagline hidden-xs',
             'text': 'For N-Line Valves'

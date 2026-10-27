@@ -125,3 +125,18 @@ a:hover, a:focus { color: var(--nl-accent-dark); }
 .nl-toast { background: #24323f; color: #fff; padding: 9px 14px; border-radius: 6px; box-shadow: 0 6px 18px rgba(0,0,0,.2); max-width: 380px; }
 .nl-toast.ok { background: #1d6b55; }
 .nl-toast.error { background: #b3261e; }
+
+/* The menu: a width of its own, set by dragging its edge (custom.js) */
+@media (min-width: 768px) {
+    :root { --nl-menu-w: 260px; }
+    .row-offcanvas-left.active { left: 0; }
+    .row-offcanvas-left #menu { width: var(--nl-menu-w); left: calc(-1 * var(--nl-menu-w)); }
+    .row-offcanvas-left.active #menu { left: 0; }
+    .row-offcanvas-left.active #tabs { margin-left: var(--nl-menu-w); width: calc(100% - var(--nl-menu-w)); }
+    .row-offcanvas-left:not(.active) #tabs { margin-left: 0; width: 100%; }
+    #nl-menu-edge { position: absolute; top: 5px; bottom: 0; left: var(--nl-menu-w); width: 7px; margin-left: -3px; cursor: col-resize; z-index: 5; }
+    #nl-menu-edge:hover, body.nl-resizing #nl-menu-edge { background: rgba(29, 107, 85, .35); }
+    .row-offcanvas-left:not(.active) #nl-menu-edge { display: none; }
+    body.nl-resizing, body.nl-resizing * { cursor: col-resize !important; user-select: none; }
+    body.nl-resizing iframe { pointer-events: none; }
+}
