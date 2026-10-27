@@ -201,10 +201,17 @@ class Desk(ModelView):
                 ('Credit Card Charges', 'nline_desk.url_desk_cards'),
                 ]),
         ('Shop Floor', True, [
-                ('Bills of Materials', 'production.act_bom_list'),
+                ('Engineering Master', 'nline_desk.url_desk_masters'),
+                ('Work Order', 'nline_desk.url_desk_work_order'),
+                ('Material Issues', 'nline_desk.url_desk_issues'),
+                ('Labor Entry', 'nline_desk.url_desk_labor'),
+                ('Work Order Receipts', 'nline_desk.url_desk_wo_receipts'),
+                ]),
+        ('Shop Activities', False, [
                 ('Work Orders', 'nline_desk.url_desk_workorders'),
-                ('Productions', 'production.act_production_list'),
+                ('Shop Resources', 'nline_desk.url_desk_resources'),
                 ('Inventory Counts', 'stock.act_inventory_form'),
+                ('Employees', 'nline_desk.url_desk_employees'),
                 ]),
         ('Banking', False, [
                 ('Write Checks', 'nline_desk.url_desk_checks'),

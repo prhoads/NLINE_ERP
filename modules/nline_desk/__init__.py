@@ -3,7 +3,7 @@
 
 from trytond.pool import Pool
 
-from . import accounting, desk, menu, purchasing, sales
+from . import accounting, desk, menu, purchasing, sales, shopfloor
 
 
 def register():
@@ -16,5 +16,6 @@ def register():
         accounting.DeskAccounting,
         sales.DeskSales,
         purchasing.DeskPurchasing,
+        shopfloor.DeskShopfloor,
         menu.SupersededMenu,
         module='nline_desk', type_='model')

@@ -163,7 +163,14 @@
         'invoicing': 'Invoicing',
         'purchase-orders/new': 'Purchase Order',
         'receiving': 'Receiving',
-        'bill-receipts': 'Bills Against Inventory'
+        'bill-receipts': 'Bills Against Inventory',
+        'work-orders/new': 'Work Order',
+        'labor': 'Labor Entry',
+        'issues': 'Material Issues',
+        'wo-receipts': 'Work Order Receipts',
+        'masters': 'Engineering Master',
+        'resources': 'Shop Resources',
+        'employees': 'Employees'
     };
 
     /* Screens with a tab per item: a register per account, a tab per

@@ -942,6 +942,11 @@
                     return ids[0];
                 });
             return call.then(function (newId) {
+                return Promise.resolve(options.afterSave ?
+                    options.afterSave(newId) : null).then(function () {
+                        return newId;
+                    });
+            }).then(function (newId) {
                 UI.toast(options.title + ' saved', 'ok');
                 if (andNew) {
                     clear();

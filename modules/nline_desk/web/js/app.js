@@ -114,7 +114,14 @@
         'Invoicing': '\u{1F9FE}',
         'Customers': '\u{1F465}',
         'Bills Against Inventory': '\u{1F4C4}',
-        'Suppliers': '\u{1F3ED}'
+        'Suppliers': '\u{1F3ED}',
+        'Engineering Master': '\u{1F4D0}',
+        'Work Order': '\u{1F527}',
+        'Material Issues': '\u{1F4E4}',
+        'Labor Entry': '\u23F1',
+        'Work Order Receipts': '\u{1F4E5}',
+        'Shop Resources': '\u{1F3ED}',
+        'Employees': '\u{1F477}'
     };
 
     function tile(item) {
@@ -275,7 +282,15 @@
         [/^#\/purchase-orders\/new$/, 'purchaseOrder'],
         [/^#\/purchase-orders\/(\d+)$/, 'purchaseOrder'],
         [/^#\/receiving$/, 'receiving'],
-        [/^#\/bill-receipts$/, 'billReceipts']
+        [/^#\/bill-receipts$/, 'billReceipts'],
+        [/^#\/work-orders\/new$/, 'workOrderWindow'],
+        [/^#\/work-orders\/(\d+)$/, 'workOrderWindow'],
+        [/^#\/labor$/, 'laborEntry'],
+        [/^#\/issues$/, 'materialIssues'],
+        [/^#\/wo-receipts$/, 'woReceipts'],
+        [/^#\/masters$/, 'engineeringMaster'],
+        [/^#\/resources$/, 'resources'],
+        [/^#\/employees$/, 'employees']
     ];
 
     /* The Tryton tab of a screen: a work order card stays in the work

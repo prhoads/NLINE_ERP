@@ -72,5 +72,14 @@ this repository contains the full copyright notices and license terms. -->
         <record model="ir.message" id="msg_receive_one_supplier">
             <field name="text">Receive (or return) the lines of one supplier and one warehouse at a time.</field>
         </record>
+        <record model="ir.message" id="msg_labor_hours">
+            <field name="text">Enter the hours of the labor ticket.</field>
+        </record>
+        <record model="ir.message" id="msg_work_order_not_open">
+            <field name="text">Work order %(production)s is not released: release it (wait) first.</field>
+        </record>
+        <record model="ir.message" id="msg_nothing_issued">
+            <field name="text">Enter the quantity of at least one material to issue.</field>
+        </record>
     </data>
 </tryton>
