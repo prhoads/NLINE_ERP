@@ -1,9 +1,13 @@
 /* N-Line Desk: work orders like the Jobshop "Details" tab
  *
- * Each order or leg shows its operations as a diagonal stack of cards with
- * the material cards used at each operation underneath. A leg branches off
- * the card it supplies. Dragging a master revision from the left panel onto
- * a material card makes that card a leg.
+ * Each order or leg is one stack of overlapping cards, as in Jobshop: the
+ * order's card at the bottom left, then each next card in sequence / piece
+ * order a little up and to the right (the materials of an operation, then
+ * the operation). An earlier card lies on top of the next one, so the top
+ * line of every card shows. A leg is a stack of its own to the right, joined
+ * to the card it supplies. Dragging a master revision from the left panel
+ * onto a material card makes that card a leg. Zoom with the buttons or
+ * Ctrl + mouse wheel.
  */
 (function (global) {
     'use strict';
@@ -11,12 +15,11 @@
     var el = UI.el;
     var Screens = global.Screens = global.Screens || {};
 
-    var PROD_W = 300, PROD_H = 46;
-    var OP_W = 190, OP_H = 48, OP_DX = 205, OP_DY = 28;
-    var MAT_W = 180, MAT_H = 42, GAP = 7, LEG_INDENT = 46, LEG_GAP = 34;
+    /* A card, and the step from one card to the next of a stack (the
+     * strip of each card left showing) */
+    var CARD_W = 230, CARD_H = 64, STEP_X = 14, STEP_Y = 20;
+    var PROD_W = 250, PROD_H = 72, LEG_GAP = 40, MARGIN = 16;
     var EDITABLE = ['request', 'draft', 'waiting'];
-    var STATES = ['request', 'draft', 'waiting', 'assigned', 'running',
-        'done', 'cancelled'];
 
     Screens.workorders = function (main) {
         main = UI.form(main, {title: 'Work Orders'}).body;
@@ -91,69 +94,90 @@
             name: name || ''};
     }
 
-    /* Compute the positions of the nodes of a production and its legs */
-    function layout(tree) {
-        var nodes = [], links = [];
-        var maxX = 0;
-
-        function place(node, x, y, parentCard) {
-            nodes.push({kind: 'prod', x: x, y: y, w: PROD_W, h: PROD_H,
-                data: node, card: parentCard});
-            maxX = Math.max(maxX, x + PROD_W);
-            var works = (node.works || []).slice().sort(function (a, b) {
-                return (a.sequence || 0) - (b.sequence || 0);
-            });
-            if (!works.length) {
-                works = [{sequence: null, operation: 'Materials',
-                    state: node.state, pseudo: true}];
-            }
-            var byWork = works.map(function () {
-                return [];
-            });
-            (node.cards || []).forEach(function (card) {
-                var index = 0;
-                works.forEach(function (work, i) {
-                    if (work.sequence !== null &&
-                            (card.operation || 0) >= work.sequence) {
-                        index = i;
-                    }
-                });
-                byWork[index].push(card);
-            });
-            var bottom = y + PROD_H;
-            var cardNodes = [];
+    /* The cards of a production in Jobshop's order: for each operation (by
+     * sequence) its material cards (by piece), then the operation */
+    function stackOrder(node) {
+        var works = (node.works || []).slice().sort(function (a, b) {
+            return (a.sequence || 0) - (b.sequence || 0);
+        });
+        var cards = (node.cards || []).slice().sort(function (a, b) {
+            return (a.operation || 0) - (b.operation || 0) ||
+                (a.piece || 0) - (b.piece || 0);
+        });
+        var byWork = works.map(function () {
+            return [];
+        });
+        var loose = [];
+        cards.forEach(function (card) {
+            var index = -1;
             works.forEach(function (work, i) {
-                var ox = x + 18 + i * OP_DX;
-                var oy = y + PROD_H + 14 + i * OP_DY;
-                nodes.push({kind: 'op', x: ox, y: oy, w: OP_W, h: OP_H,
-                    data: work});
-                maxX = Math.max(maxX, ox + OP_W);
-                var cy = oy + OP_H + 6;
-                byWork[i].forEach(function (card) {
-                    var cardNode = {kind: 'mat', x: ox + 10, y: cy,
-                        w: MAT_W, h: MAT_H, data: card, root: node};
-                    nodes.push(cardNode);
-                    cardNodes.push(cardNode);
-                    cy += MAT_H + GAP;
-                });
-                bottom = Math.max(bottom, cy, oy + OP_H);
-            });
-            cardNodes.forEach(function (cardNode) {
-                var leg = cardNode.data.leg;
-                if (!leg) {
-                    return;
+                if (work.sequence !== null &&
+                        (card.operation || 0) >= work.sequence) {
+                    index = i;
                 }
-                var legX = x + LEG_INDENT;
-                var legY = bottom + LEG_GAP;
-                links.push({from: cardNode, toX: legX, toY: legY +
-                    PROD_H / 2});
-                bottom = place(leg, legX, legY, cardNode.data);
             });
-            return bottom;
+            (index < 0 ? loose : byWork[index]).push(card);
+        });
+        var order = loose.map(function (card) {
+            return {kind: 'mat', data: card};
+        });
+        works.forEach(function (work, i) {
+            byWork[i].forEach(function (card) {
+                order.push({kind: 'mat', data: card});
+            });
+            order.push({kind: 'op', data: work});
+        });
+        return order;
+    }
+
+    /* Compute the positions of the cards of a production and its legs:
+     * stacks side by side, all starting on the same bottom line */
+    function layout(tree) {
+        var stacks = [];
+
+        function collect(node, parentCard) {
+            var stack = {node: node, card: parentCard,
+                order: stackOrder(node)};
+            stacks.push(stack);
+            stack.order.forEach(function (item) {
+                if (item.kind === 'mat' && item.data.leg) {
+                    item.legStack = collect(item.data.leg, item.data);
+                }
+            });
+            return stack;
         }
-        var height = place(tree, 16, 16, null) + 24;
-        return {nodes: nodes, links: links, width: maxX + 40,
-            height: height};
+        collect(tree, null);
+        var tallest = 0;
+        stacks.forEach(function (stack) {
+            tallest = Math.max(tallest, stack.order.length * STEP_Y);
+        });
+        var bottom = MARGIN + tallest + PROD_H;
+        var nodes = [], links = [];
+        var x = MARGIN;
+        stacks.forEach(function (stack) {
+            var n = stack.order.length;
+            var z = n + 2;
+            stack.prod = {kind: 'prod', x: x, y: bottom - PROD_H, w: PROD_W,
+                h: PROD_H, z: z, data: stack.node, card: stack.card};
+            nodes.push(stack.prod);
+            stack.order.forEach(function (item, i) {
+                item.node = {kind: item.kind, x: x + (i + 1) * STEP_X,
+                    y: bottom - PROD_H - (i + 1) * STEP_Y, w: CARD_W,
+                    h: CARD_H, z: z - i - 1, data: item.data,
+                    root: stack.node};
+                nodes.push(item.node);
+            });
+            x += Math.max(PROD_W, n * STEP_X + CARD_W) + LEG_GAP;
+        });
+        stacks.forEach(function (stack) {
+            stack.order.forEach(function (item) {
+                if (item.legStack) {
+                    links.push({from: item.node, to: item.legStack.prod});
+                }
+            });
+        });
+        return {nodes: nodes, links: links, width: x + MARGIN,
+            height: bottom + MARGIN};
     }
 
     Screens.workorder = function (main, params) {
@@ -166,6 +190,8 @@
         var masterSearch = el('input', {type: 'text', placeholder:
             'Search masters (part or name)', 'aria-label': 'Search masters'});
         var masterList = el('div');
+        var zoomLabel = el('span.muted', {style: {minWidth: '42px',
+            textAlign: 'center'}}, '100%');
         main.appendChild(title);
         main.appendChild(el('div.toolbar',
             el('a', {href: '#/workorders'}, '← Work orders'),
@@ -179,14 +205,29 @@
                 masterSearch, el('div', {style: {height: '8px'}}),
                 masterList),
             el('div',
-                el('div.legend', STATES.map(function (state) {
-                    return el('span', el('i' + stateClass(state)), state);
-                }), el('span', el('i', {style: {borderLeft:
-                    '5px solid var(--leg)'}}), 'leg'),
+                el('div.legend',
+                    el('span', el('i.card-op'), 'operation'),
+                    el('span', el('i.card-out'), 'outside service'),
+                    el('span', el('i.card-mat'), 'material'),
+                    el('span', el('i.card-closed'), 'closed (C)'),
                     el('span', el('i', {style: {borderLeft:
-                        '5px solid var(--job)'}}), 'Job'),
+                        '5px solid var(--leg)'}}), 'leg'),
                     el('span', el('i', {style: {boxShadow:
-                        '0 0 0 2px var(--bad)'}}), 'short')),
+                        '0 0 0 2px var(--bad)'}}), 'short'),
+                    el('span.spacer'),
+                    el('button', {type: 'button', title: 'Zoom out',
+                        'aria-label': 'Zoom out', onclick: function () {
+                            setZoom(zoom / 1.25);
+                        }}, '−'),
+                    zoomLabel,
+                    el('button', {type: 'button', title: 'Zoom in',
+                        'aria-label': 'Zoom in', onclick: function () {
+                            setZoom(zoom * 1.25);
+                        }}, '+'),
+                    el('button', {type: 'button', title: 'Actual size',
+                        onclick: function () {
+                            setZoom(1);
+                        }}, '100%')),
                 canvasWrap)));
 
         function loadMasters() {
@@ -349,6 +390,12 @@
                     (d.shortage ? ' · SHORT' : '')));
         }
 
+        /* Jobshop's status letter of a card */
+        function letter(state) {
+            return state === 'done' || state === 'finished' ? 'C' :
+                state === 'request' || state === 'draft' ? 'U' : 'R';
+        }
+
         function opNode(n) {
             var w = n.data;
             var where = w.outside ? (w.supplier || 'Outside') +
@@ -356,19 +403,23 @@
                 (w.expected_date ? ' · due ' + UI.date(w.expected_date) :
                     '') : (w.work_center || '') + (w.planned_duration ?
                 ' · ' + w.planned_duration.toFixed(2) + ' h' : '');
-            return el('div.node.op', {style: pos(n), title: w.operation +
-                (where ? ' — ' + where : '')},
-                el('div.hd' + stateClass(w.pseudo ? 'draft' : w.state),
-                    w.sequence !== null ? String(w.sequence) : '',
-                    ' ', w.operation, w.outside ? el('span.tag',
-                        'OUTSIDE') : null),
-                el('div.bd', where || ' '));
+            var done = w.state === 'done' || w.state === 'finished';
+            return el('div.node.card.op' + (w.outside ? '.outside' : '') +
+                (done ? '.closed' : ''), {style: pos(n),
+                    title: w.operation + (where ? ' — ' + where : '')},
+                /* (an operation not done has the order's status) */
+                el('div.hd', '(' + letter(done ? 'done' : n.root.state) +
+                    ') ' + (w.sequence !== null ? w.sequence + ' - ' : '') +
+                    w.operation, w.outside ? el('span.tag', 'OUTSIDE') :
+                    null),
+                el('div.bd', where || ' '));
         }
 
         function matNode(n, editable) {
             var c = n.data;
             var parts = code(c.product);
-            var classes = '.node.mat' + (c.supply === 'leg' ? '.leg' : '') +
+            var classes = '.node.card.mat' + (c.state === 'done' ?
+                '.closed' : '') + (c.supply === 'leg' ? '.leg' : '') +
                 (c.supply === 'job' ? '.job' : '') + (c.short ? '.short' :
                     '');
             var droppable = editable && c.producible && c.supply !== 'leg' &&
@@ -380,9 +431,9 @@
                     (c.operation || '') + ', piece ' + (c.piece || '') +
                     (c.revision ? '\nPinned revision ' + c.revision : '') +
                     (droppable ? '\nDrop a master here to make a leg' : '')},
-                el('div.hd' + stateClass(c.state === 'done' ? 'done' :
-                    'draft'), (c.operation || '') + (c.piece ? '-' + c.piece :
-                    ''), ' ', parts.code || parts.name, el('span.tag', tag)),
+                el('div.hd', '(' + (c.state === 'done' ? 'C' : 'R') + ') ' +
+                    (c.piece ? c.piece + ' - ' : '') + (parts.code ||
+                    parts.name), el('span.tag', tag)),
                 el('div.bd', c.quantity + ' ' + c.unit + (c.revision ?
                     ' · Rev ' + c.revision : '') + ' · ' +
                     (parts.code ? parts.name : ''),
@@ -424,7 +475,7 @@
 
         function pos(n) {
             return {left: n.x + 'px', top: n.y + 'px', width: n.w + 'px',
-                height: n.h + 'px'};
+                height: n.h + 'px', zIndex: n.z};
         }
 
         function render() {
@@ -441,16 +492,17 @@
             svg.setAttribute('width', plan.width);
             svg.setAttribute('height', plan.height);
             plan.links.forEach(function (link) {
-                /* Along the left margin of the cards below the supplied one */
-                var sx = link.from.x, sy = link.from.y + link.from.h / 2;
-                var mx = link.from.x - 5;
+                /* From the right of the supplied card's top line to the
+                 * leg's card */
+                var sx = link.from.x + link.from.w, sy = link.from.y + 10;
+                var tx = link.to.x, ty = link.to.y + link.to.h / 2;
+                var mx = tx - 14;
                 var path = document.createElementNS(svgNS, 'path');
                 path.setAttribute('d', 'M' + sx + ' ' + sy + ' L' + mx +
-                    ' ' + sy + ' L' + mx + ' ' + link.toY + ' L' +
-                    link.toX + ' ' + link.toY);
+                    ' ' + sy + ' L' + mx + ' ' + ty + ' L' + tx + ' ' + ty);
                 path.setAttribute('fill', 'none');
-                path.setAttribute('stroke', '#7b55b8');
-                path.setAttribute('stroke-width', '2');
+                path.setAttribute('stroke', '#333');
+                path.setAttribute('stroke-width', '1.5');
                 path.setAttribute('marker-end', 'url(#arrow)');
                 svg.appendChild(path);
             });
@@ -458,7 +510,7 @@
             defs.innerHTML = '<marker id="arrow" viewBox="0 0 10 10" ' +
                 'refX="9" refY="5" markerWidth="7" markerHeight="7" ' +
                 'orient="auto"><path d="M0 0 L10 5 L0 10 z" ' +
-                'fill="#7b55b8"/></marker>';
+                'fill="#333"/></marker>';
             svg.appendChild(defs);
             canvas.appendChild(svg);
             plan.nodes.forEach(function (n) {
@@ -466,8 +518,38 @@
                     n.kind === 'op' ? opNode(n) : matNode(n, editable);
                 canvas.appendChild(node);
             });
-            UI.clear(canvasWrap).appendChild(canvas);
+            sizer = el('div.canvas-sizer');
+            sizer.appendChild(canvas);
+            UI.clear(canvasWrap).appendChild(sizer);
+            shown = plan;
+            applyZoom();
+            /* The stacks start at the bottom, as in Jobshop */
+            canvasWrap.scrollTop = canvasWrap.scrollHeight;
         }
+
+        /* Zoom: the canvas scaled, its box sized to match (scrollbars) */
+        var zoom = 1, sizer = null, shown = null;
+        function applyZoom() {
+            if (!sizer || !shown) {
+                return;
+            }
+            var canvas = sizer.firstChild;
+            canvas.style.transform = 'scale(' + zoom + ')';
+            canvas.style.transformOrigin = '0 0';
+            sizer.style.width = shown.width * zoom + 'px';
+            sizer.style.height = shown.height * zoom + 'px';
+            zoomLabel.textContent = Math.round(zoom * 100) + '%';
+        }
+        function setZoom(value) {
+            zoom = Math.min(2.5, Math.max(0.3, value));
+            applyZoom();
+        }
+        canvasWrap.addEventListener('wheel', function (event) {
+            if (event.ctrlKey) {
+                event.preventDefault();
+                setZoom(zoom * (event.deltaY < 0 ? 1.1 : 1 / 1.1));
+            }
+        }, {passive: false});
 
         var timer;
         masterSearch.addEventListener('input', function () {
