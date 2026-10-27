@@ -20,10 +20,14 @@
             el('label.field', label), control.node || control);
     }
 
-    function journalSelect(methods, label) {
+    /* bankOnly: only the journals of a bank GL account (reconcile) */
+    function journalSelect(methods, label, bankOnly) {
         var select = el('select', {'aria-label': label});
         Screens.paymentJournals(methods).then(function (rows) {
             rows.forEach(function (row) {
+                if (bankOnly && !row.bank_account) {
+                    return;
+                }
                 select.appendChild(el('option', {value: row.id}, row.name));
             });
         }, UI.showError);
@@ -522,7 +526,7 @@
     Screens.reconcile = function (main) {
         main = UI.form(main, {title: 'Reconcile'}).body;
         var journal = journalSelect(['check', 'manual', 'nacha'],
-            'Account');
+            'Account', true);
         var date = el('input', {type: 'date', value: UI.today(),
             'aria-label': 'Statement date'});
         var ending = UI.moneyInput({'aria-label': 'Ending balance'});
