@@ -1,5 +1,9 @@
 # This file is part of Tryton.  The COPYRIGHT file at the top level of
 # this repository contains the full copyright notices and license terms.
+from decimal import Decimal
+
+from trytond.exceptions import UserError
+from trytond.modules.company.tests import create_company, set_company
 from trytond.pool import Pool
 from trytond.tests.test_tryton import ModuleTestCase, with_transaction
 from trytond.transaction import Transaction
@@ -122,6 +126,61 @@ class NlineRoleTestCase(ModuleTestCase):
         self.assertTrue(access['account.move']['write'])
         self.assertTrue(access['production']['create'])
         self.assertNotEqual(groups, {-1})
+
+    @with_transaction()
+    def test_work_order_options(self):
+        "Test the work order options take away create / change"
+        pool = Pool()
+        User = pool.get('res.user')
+        ModelAccess = pool.get('ir.model.access')
+        user, = User.create([{
+                    'login': 'shop', 'name': "Shop",
+                    'nline_role': self.role('accounts_specialist').id,
+                    }])
+        User.set_nline_options(user, {'wo_create': False})
+        with Transaction().set_user(user.id):
+            access = ModelAccess.get_access(['production'])['production']
+        self.assertFalse(access['create'])
+        self.assertTrue(access['write'])
+        User.set_nline_options(user, {'wo_create': True, 'wo_modify': False})
+        with Transaction().set_user(user.id):
+            access = ModelAccess.get_access(['production'])['production']
+        self.assertTrue(access['create'])
+        self.assertFalse(access['write'])
+
+    @with_transaction()
+    def test_po_limit(self):
+        "Test a purchase order over the user's PO limit is refused"
+        pool = Pool()
+        User = pool.get('res.user')
+        Purchase = pool.get('purchase.purchase')
+        Party = pool.get('party.party')
+        company = create_company()
+        with set_company(company):
+            party, = Party.create([{'name': "Supplier",
+                        'addresses': [('create', [{}])]}])
+            purchase, = Purchase.create([{
+                        'company': company.id,
+                        'party': party.id,
+                        'invoice_address': party.addresses[0].id,
+                        'lines': [('create', [{
+                                        'type': 'line',
+                                        'description': "Valve body",
+                                        'quantity': 2,
+                                        'unit_price': Decimal('600'),
+                                        }])],
+                        }])
+            user = User(Transaction().user)
+            User.set_nline_options(user, {'po_limit': '1000'})
+            self.assertEqual(User(user.id).nline_po_limit, Decimal('1000'))
+            with Transaction().set_user(user.id):
+                with self.assertRaises(UserError):
+                    Purchase.nline_check_limit([Purchase(purchase.id)])
+            User.set_nline_options(user, {'po_limit': '5000'})
+            with Transaction().set_user(user.id):
+                Purchase.nline_check_limit([Purchase(purchase.id)])
+            User.set_nline_options(user, {'po_limit': ''})
+            self.assertIsNone(User(user.id).nline_po_limit)
 
     @with_transaction()
     def test_menus(self):

@@ -14,7 +14,7 @@ server (trytond.conf):
     secret = <the same secret as ERP_SECRET on the BI server>
 
 The token is "<base64 json>.<hmac sha256 hex>", the json holding login, name,
-database, time and role. It is valid for max_age seconds (120). A person signed
+database, time, role and options (po_limit, wo_create, wo_modify). It is valid for max_age seconds (120). A person signed
 in to N-Line BI with access to the ERP gets a Tryton user of the same login on
 the first sign-in, and at each sign-in the N-Line role (module nline_role) of
 their access on the BI Admin page.
@@ -101,6 +101,9 @@ class User(metaclass=PoolMeta):
             if not cls.set_nline_role(user, payload['role']):
                 logger.warning("N-Line BI sign-in of %s: no Tryton role %r",
                     login, payload['role'])
+        if isinstance(payload.get('options'), dict):
+            # The authority of the BI Admin page (PO limit, work orders)
+            cls.set_nline_options(user, payload['options'])
         return user.id
 
     @classmethod

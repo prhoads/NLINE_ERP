@@ -18,7 +18,7 @@
  * Tryton tabs like any Tryton screen: their menus are ir.action.url to
  * desk/index.html#/<screen>, shown here in a frame without the desk's header.
  * An address typed by hand opens only what the user's menus open
- * (ir.ui.menu.nline_allowed, module nline_role).
+ * (ir.ui.menu.nline_allowed, module nline_role): anything else opens Home.
  */
 (function () {
     'use strict';
@@ -214,7 +214,8 @@
 
     /* Allowed: a menu opens the screen, or the screen of its items */
     function screenAllowed(allow, screen) {
-        return allow.all || allow.urls.some(function (url) {
+        /* Home: everyone */
+        return allow.all || screen === '' || allow.urls.some(function (url) {
             if (url.indexOf(DESK) !== 0) {
                 return false;
             }
@@ -243,10 +244,17 @@
         return allowedPrm;
     }
 
+    /* A screen the user may not open: no message, back to Home (the menus
+     * already leave it out) */
     function refuse() {
-        Sao.common.message.run(
-            'This screen is not in your menus: ask an administrator for ' +
-            'access.', 'tryton-warning');
+        if (location.hash.indexOf('/nline/') >= 0 ||
+                location.hash.indexOf('/model/') >= 0 ||
+                location.hash.indexOf('/wizard/') >= 0) {
+            history.replaceState(null, '', location.pathname +
+                location.search + '#' + location.hash.replace(
+                    /^#!?/, '').split('/', 1)[0]);
+        }
+        openScreen('', 'Home');
     }
 
     Sao.Tab.NLine = Sao.class_(Sao.Tab, {

@@ -148,6 +148,8 @@ class DeskPurchasing(metaclass=PoolMeta):
             lines.append(line)
         purchase.lines = lines
         purchase.save()
+        # The user's PO limit (module nline_role)
+        Purchase.nline_check_limit([Purchase(purchase.id)])
         to_delete = [l for i, l in existing.items() if i not in kept]
         if to_delete:
             Line.delete(to_delete)

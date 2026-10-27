@@ -7,6 +7,12 @@ this repository contains the full copyright notices and license terms. -->
         <group id="nline_role" col="2">
             <label name="nline_role"/>
             <field name="nline_role"/>
+            <label name="nline_po_limit"/>
+            <field name="nline_po_limit"/>
+            <label name="nline_wo_create"/>
+            <field name="nline_wo_create"/>
+            <label name="nline_wo_modify"/>
+            <field name="nline_wo_modify"/>
         </group>
     </xpath>
 </data>

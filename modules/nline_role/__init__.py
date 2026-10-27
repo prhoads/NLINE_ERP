@@ -16,4 +16,5 @@ def register():
         role.Menu,
         role.ModelAccess,
         role.ModelButton,
+        role.Purchase,
         module='nline_role', type_='model')

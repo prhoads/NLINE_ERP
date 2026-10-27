@@ -200,26 +200,31 @@
                 title: title, onclick: onclick}, label);
         }
 
+        var saveNew = button('Save & New', 'Save and start a new one ' +
+            '(Alt+N)', function () {
+                save(true);
+            });
+        var saveClose = button('Save & Close', 'Save and close (Alt+S)',
+            function () {
+                save(false);
+            }, true);
+        var extraButtons = {};
+
         var ribbon = el('div.ribbon', {role: 'toolbar', 'aria-label':
                 options.title},
             el('span.ribbon-title', options.title),
             options.find ? button('Find', 'Find a previous one (Ctrl+F)',
                 find) : null,
             (options.extra || []).map(function (item) {
-                return button(item.label, item.title || item.label,
-                    item.onclick);
+                extraButtons[item.label] = button(item.label,
+                    item.title || item.label, item.onclick);
+                return extraButtons[item.label];
             }),
             el('span.spacer'),
             options.onClear ? button('Clear', 'Clear the form (Alt+R)',
                 options.onClear) : null,
-            options.onSave ? button('Save & New', 'Save and start a new ' +
-                'one (Alt+N)', function () {
-                    save(true);
-                }) : null,
-            options.onSave ? button('Save & Close', 'Save and close (Alt+S)',
-                function () {
-                    save(false);
-                }, true) : null);
+            options.onSave ? saveNew : null,
+            options.onSave ? saveClose : null);
 
         var body = el('div.form-main');
         var side = el('aside.history', {'aria-label': 'History'});
@@ -240,10 +245,14 @@
             var key = event.key.toLowerCase();
             if (event.altKey && key === 's') {
                 event.preventDefault();
-                save(false);
+                if (!saveClose.hidden) {
+                    save(false);
+                }
             } else if (event.altKey && key === 'n') {
                 event.preventDefault();
-                save(true);
+                if (!saveNew.hidden) {
+                    save(true);
+                }
             } else if (event.altKey && key === 'r' && options.onClear) {
                 event.preventDefault();
                 options.onClear();
@@ -297,7 +306,17 @@
                 });
         }
 
-        return {body: body, ribbon: ribbon, showParty: showParty};
+        /* Show only what the user may do: canSave false hides the save
+         * buttons, hidden the extra buttons of these labels */
+        function allow(canSave, hidden) {
+            saveNew.hidden = saveClose.hidden = !canSave;
+            Object.keys(extraButtons).forEach(function (label) {
+                extraButtons[label].hidden = (hidden || []).indexOf(label) >= 0;
+            });
+        }
+
+        return {body: body, ribbon: ribbon, showParty: showParty,
+            allow: allow};
     }
 
     /* ---- The line grid ------------------------------------------------ */
@@ -966,10 +985,30 @@
             }, UI.showError);
         }
 
+        /* What the user may do on the model (Tryton's access: roles, the
+         * work order options...): the rest is not shown */
+        var access = {create: true, write: true, delete: true};
+
+        function lock() {
+            var editable = record ? access.write : access.create;
+            Object.keys(controls).forEach(function (name) {
+                var c = controls[name];
+                Array.prototype.forEach.call(c.node.querySelectorAll(
+                    'input, select, textarea, button'), function (node) {
+                    node.disabled = !editable || Boolean(c.field.readonly);
+                });
+            });
+            if (form.allow) {
+                form.allow(editable, [].concat(
+                    access.create ? [] : ['Copy'],
+                    access.delete && record ? [] : ['Delete']));
+            }
+        }
+
         function clear() {
             record = null;
             id.set(null, '');
-            status.textContent = 'New';
+            status.textContent = access.create ? 'New' : '';
             Object.keys(controls).forEach(function (name) {
                 var c = controls[name];
                 c.set(c.field.default !== undefined ? c.field.default : null);
@@ -981,6 +1020,7 @@
                 UI.clear(t.pane).appendChild(el('p.muted',
                     'Save or choose one first.'));
             });
+            lock();
         }
 
         function load(recordId) {
@@ -1004,6 +1044,7 @@
                     if (options.onload) {
                         options.onload(record);
                     }
+                    lock();
                 }, UI.showError);
         }
 
@@ -1152,6 +1193,19 @@
         if (options.open) {
             load(options.open);
         }
+        global.Rpc.model('ir.model.access', 'get_access', [[options.model]])
+            .then(function (result) {
+                var a = result[options.model] || {};
+                access = {create: a.create !== false && writes,
+                    write: a.write !== false && writes,
+                    delete: a.delete !== false && writes};
+                if (!record) {
+                    status.textContent = access.create ? 'New' : '';
+                }
+                lock();
+            }, function () {
+                /* Unknown: the server still refuses what is not allowed */
+            });
         return {load: load, record: function () {
             return record;
         }};

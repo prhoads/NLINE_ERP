@@ -288,7 +288,7 @@ class DeskPlanning(metaclass=PoolMeta):
     def reschedule(cls, values):
         """Move a work order: its start and want dates
         values: production, start, end"""
-        cls._check_create('production')
+        cls._check_write('production')
         Production = Pool().get('production')
         production = Production(values['production'])
         Production.write([production], {

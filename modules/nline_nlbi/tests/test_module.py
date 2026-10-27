@@ -93,6 +93,19 @@ class NlineNlbiTestCase(ModuleTestCase):
         self.assertFalse(user.groups)
 
     @with_transaction()
+    def test_login_options(self):
+        "Test the options of the token set the user's authority"
+        pool = Pool()
+        User = pool.get('res.user')
+        user_id = User.get_login('jdoe', {'nlbi_token': self.token('jdoe',
+                    options={'po_limit': 2500, 'wo_create': False,
+                        'wo_modify': True})})
+        user = User(user_id)
+        self.assertEqual(user.nline_po_limit, 2500)
+        self.assertFalse(user.nline_wo_create)
+        self.assertTrue(user.nline_wo_modify)
+
+    @with_transaction()
     def test_login_refused(self):
         "Test a wrong token signs nobody in"
         pool = Pool()

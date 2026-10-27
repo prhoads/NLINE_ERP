@@ -299,6 +299,13 @@ class Desk(ModelView):
             ModelAccess.check(model, 'create')
 
     @classmethod
+    def _check_write(cls, *models):
+        "Refuse a user who may not change these records in Tryton"
+        ModelAccess = Pool().get('ir.model.access')
+        for model in models:
+            ModelAccess.check(model, 'write')
+
+    @classmethod
     def _company(cls):
         pool = Pool()
         Company = pool.get('company.company')

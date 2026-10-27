@@ -12,8 +12,11 @@ the menus of their other groups but cannot create, change or delete records
 nor click the buttons of records (post, confirm...).
 """
 import json
+from decimal import Decimal
 
 from trytond.cache import Cache
+from trytond.exceptions import UserError
+from trytond.i18n import gettext
 from trytond.model import ModelSQL, ModelView, Unique, fields
 from trytond.pool import Pool, PoolMeta
 from trytond.pyson import Eval
@@ -143,6 +146,24 @@ class User(metaclass=PoolMeta):
         "when the user signs in through N-Line BI).")
     # The groups the role gave, taken away when the role changes
     nline_role_groups = fields.Text("N-Line Role Groups", readonly=True)
+    # The authority of the person (set on the N-Line BI Admin page)
+    nline_po_limit = fields.Numeric("PO Limit", digits=(16, 2),
+        help="The largest purchase order the user may quote or confirm, in "
+        "the company currency (empty: no limit).")
+    nline_wo_create = fields.Boolean("May Create Work Orders",
+        help="Off: the user cannot create work orders, whatever their "
+        "groups.")
+    nline_wo_modify = fields.Boolean("May Change Work Orders",
+        help="Off: the user cannot change work orders, whatever their "
+        "groups (the shop floor buttons stay).")
+
+    @staticmethod
+    def default_nline_wo_create():
+        return True
+
+    @staticmethod
+    def default_nline_wo_modify():
+        return True
 
     @classmethod
     def create(cls, vlist):
@@ -194,6 +215,27 @@ class User(metaclass=PoolMeta):
                 # The groups of an "All Groups" role grow with new modules
                 cls.apply_nline_role([user])
         return role
+
+    @classmethod
+    def set_nline_options(cls, user, options):
+        """Give the user the authority of the N-Line BI Admin page:
+        po_limit (amount or empty), wo_create, wo_modify"""
+        options = options or {}
+        values = {}
+        if 'po_limit' in options:
+            limit = options['po_limit']
+            values['nline_po_limit'] = (Decimal(str(limit)).quantize(
+                    Decimal('0.01'))
+                if limit not in (None, '') else None)
+        for key in ('wo_create', 'wo_modify'):
+            if key in options:
+                values['nline_' + key] = bool(options[key])
+        with Transaction().set_user(0):
+            user = cls(user.id)
+            values = {k: v for k, v in values.items()
+                if getattr(user, k) != v}
+            if values:
+                cls.write([user], values)
 
 
 class Action(metaclass=PoolMeta):
@@ -322,6 +364,16 @@ class Menu(metaclass=PoolMeta):
             }
 
 
+def nline_user():
+    "Return the user of the transaction (None for root)"
+    transaction = Transaction()
+    if transaction.user == 0:
+        return None
+    User = Pool().get('res.user')
+    with transaction.set_context(_check_access=False):
+        return User(transaction.user)
+
+
 class ModelAccess(metaclass=PoolMeta):
     __name__ = 'ir.model.access'
 
@@ -333,7 +385,53 @@ class ModelAccess(metaclass=PoolMeta):
                 m: a if m in WRITABLE else dict(
                     a, write=False, create=False, delete=False)
                 for m, a in access.items()}
+        if 'production' in access:
+            # (empty: users from before the options may do both)
+            user = nline_user()
+            refused = lambda value: value is not None and not value
+            if user and refused(user.nline_wo_create):
+                access['production'] = dict(access['production'],
+                    create=False, delete=False)
+            if user and refused(user.nline_wo_modify):
+                access['production'] = dict(access['production'],
+                    write=False, delete=False)
         return access
+
+
+class Purchase(metaclass=PoolMeta):
+    __name__ = 'purchase.purchase'
+
+    @classmethod
+    def nline_check_limit(cls, purchases):
+        "Refuse purchase orders over the user's PO limit"
+        pool = Pool()
+        Currency = pool.get('currency.currency')
+        user = nline_user()
+        limit = user.nline_po_limit if user else None
+        if limit is None:
+            return
+        for purchase in purchases:
+            amount = purchase.total_amount or Decimal(0)
+            company = purchase.company
+            if company and purchase.currency != company.currency:
+                with Transaction().set_context(
+                        date=purchase.purchase_date):
+                    amount = Currency.compute(
+                        purchase.currency, amount, company.currency)
+            if amount > limit:
+                raise UserError(gettext('nline_role.msg_po_over_limit',
+                        amount=amount,
+                        limit=limit))
+
+    @classmethod
+    def quote(cls, purchases):
+        cls.nline_check_limit(purchases)
+        super().quote(purchases)
+
+    @classmethod
+    def confirm(cls, purchases):
+        cls.nline_check_limit(purchases)
+        super().confirm(purchases)
 
 
 class ModelButton(metaclass=PoolMeta):
