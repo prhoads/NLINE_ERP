@@ -3,9 +3,12 @@
 # Run it ON NLVDC01 as an administrator, in PowerShell:
 #   powershell -ExecutionPolicy Bypass -File G:\NLINE_ERP\update_nline_erp.ps1
 #   ... -Modules nline_role,nline_desk       (only these; default: every N-Line module)
+#   ... -LoadSample                          (then load the Jobshop + QuickBooks sample
+#                                             data, migration\README.md; test database only)
 param(
     [string[]]$Modules,
-    [string]$Database = 'nline_test'
+    [string]$Database = 'nline_test',
+    [switch]$LoadSample
 )
 $ErrorActionPreference = 'Stop'
 $Root = $PSScriptRoot
@@ -31,6 +34,14 @@ $Admin = Join-Path $Root 'venv\Scripts\trytond-admin'
 Write-Host "Updating $Database : $($Modules -join ' ')"
 & $Python $Admin -c (Join-Path $Root 'trytond.conf') -d $Database -m -u @Modules --activate-dependencies
 if ($LASTEXITCODE) { throw 'trytond-admin failed: the ERP is stopped, see above' }
+
+if ($LoadSample) {
+    if ($Database -ne 'nline_test') { throw 'The sample data goes only into nline_test' }
+    # Reads Jobshop and QuickBooks on VJS with this Windows sign-in, read-only
+    & $Python -u (Join-Path $Source 'migration\nline_migrate.py') --config (Join-Path $Root 'trytond.conf') `
+        --database $Database --mode sample
+    if ($LASTEXITCODE) { Write-Warning 'The sample load stopped (see above); the ERP starts anyway' }
+}
 
 & (Join-Path $Root 'stop_nline_erp.ps1') -Restart
 Write-Host 'NLINE ERP updated and restarted.'
