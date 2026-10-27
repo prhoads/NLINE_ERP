@@ -41,6 +41,11 @@
 
     /* ---- Work Order window ------------------------------------------------ */
 
+    /* The work order states in Jobshop's words */
+    var WO_STATUS = {request: 'Planned', draft: 'Unreleased',
+        waiting: 'Released', assigned: 'Released (stock assigned)',
+        running: 'Started', done: 'Closed', cancelled: 'Cancelled'};
+
     function infoTab(render) {
         return function (pane, record) {
             Rpc.desk('work_order_info', [record.id]).then(function (info) {
@@ -106,8 +111,11 @@
                 {title: 'Header', fields: [
                     {name: 'number', label: 'Number', type: 'char',
                         readonly: true},
-                    {name: 'state', label: 'Status', type: 'char',
-                        readonly: true},
+                    {name: 'state', label: 'Status', type: 'selection',
+                        readonly: true, options: Object.keys(WO_STATUS).map(
+                            function (k) {
+                                return [k, WO_STATUS[k]];
+                            })},
                     {name: 'product', label: 'Part', type: 'many2one',
                         model: 'product.product', domain: [['producible',
                             '=', true]], span: 2},
@@ -187,7 +195,7 @@
                 {name: 'product', label: 'Part', type: 'many2one'},
                 {name: 'quantity', label: 'Qty', type: 'float'},
                 {name: 'planned_date', label: 'Want date', type: 'date'},
-                {name: 'state', label: 'Status'}]
+                {name: 'state', label: 'Status', labels: WO_STATUS}]
         });
     };
 
@@ -361,6 +369,12 @@
         {name: 'quantity', label: 'Qty per', type: 'float'},
         {name: 'unit', label: 'Unit', type: 'many2one',
             model: 'product.uom'}];
+    /* A material card: its operation (sequence) and piece, and the
+     * component revision when pinned (nline_engineering) */
+    var INPUT_FIELDS = [
+        {name: 'operation', label: 'Seq', type: 'integer'},
+        {name: 'piece', label: 'Piece', type: 'integer'}].concat(IO_FIELDS,
+        [{name: 'component_revision', label: 'Pinned rev', type: 'char'}]);
 
     Screens.engineeringMaster = function (main) {
         UI.master(main, {
@@ -378,9 +392,42 @@
                         type: 'char'},
                     {name: 'active', label: 'Active', type: 'boolean',
                         default: true}]},
+                {title: 'Operations', render: function (pane, record) {
+                    Rpc.desk('master_info', [record.id]).then(function (m) {
+                        pane.appendChild(el('p', m.parts.length ?
+                            'Makes ' + m.parts.map(function (p) {
+                                return '[' + p.code + '] ' + p.name +
+                                    (p.current && p.current !==
+                                        record.revision ? ' (current ' +
+                                        'revision ' + p.current + ')' : '');
+                            }).join(', ') : 'Makes nothing yet.'));
+                        var rows = [];
+                        m.steps.forEach(function (s) {
+                            rows.push(el('tr.total', num(s.sequence),
+                                el('td', s.operation), el('td'), el('td'),
+                                num(s.setup), num(s.run), el('td',
+                                    s.service ? s.service + (s.supplier ?
+                                    ' (' + s.supplier + ')' : '') :
+                                    'Internal')));
+                            s.materials.forEach(function (i) {
+                                rows.push(el('tr', el('td'), el('td',
+                                    {style: {paddingLeft: '22px'}},
+                                    i.product + (i.piece ? ' (piece ' +
+                                        i.piece + ')' : '')),
+                                    num(i.quantity), el('td', i.unit),
+                                    el('td'), el('td'), el('td')));
+                            });
+                        });
+                        pane.appendChild(table(['#Seq',
+                            'Operation / material', '#Qty', 'Unit',
+                            '#Setup h', '#Run h', 'Outside service'], rows,
+                            m.routing ? 'No steps.' :
+                            'No routing for this master.'));
+                    }, UI.showError);
+                }},
                 {title: 'Materials', lines: {name: 'inputs',
                     model: 'production.bom.input', inverse: 'bom',
-                    fields: IO_FIELDS}},
+                    fields: INPUT_FIELDS}},
                 {title: 'Makes', lines: {name: 'outputs',
                     model: 'production.bom.output', inverse: 'bom',
                     fields: IO_FIELDS}},

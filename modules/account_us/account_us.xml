@@ -135,6 +135,8 @@ this repository contains the full copyright notices and license terms. -->
             <field name="statement">income</field>
             <field name="sequence" eval="20"/>
             <field name="expense" eval="True"/>
+            <!-- the counterpart of stock moves (continental stock) -->
+            <field name="stock" eval="True"/>
         </record>
         <record model="account.account.type.template" id="type_expense_operating">
             <field name="name">Operating Expenses</field>

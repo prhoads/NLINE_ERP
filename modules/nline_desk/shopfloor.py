@@ -31,7 +31,8 @@ class DeskShopfloor(metaclass=PoolMeta):
         for name in ['labor_entry', 'labor_cancel', 'issue_material',
                 'work_order_receive', 'work_order_explode']:
             cls.__rpc__[name] = RPC(readonly=False)
-        for name in ['work_order_info', 'open_work_orders', 'bom_costs']:
+        for name in ['work_order_info', 'open_work_orders', 'bom_costs',
+                'master_info']:
             cls.__rpc__[name] = RPC()
 
     @classmethod
@@ -235,6 +236,51 @@ class DeskShopfloor(metaclass=PoolMeta):
                 production.inputs or production.outputs):
             Production.set_moves([production])
         return True
+
+    @classmethod
+    def master_info(cls, bom):
+        """The engineering master's part and operations (Jobshop's master
+        window: the part it makes, the routing steps in sequence)"""
+        cls._check_read('production.bom')
+        pool = Pool()
+        BOM = pool.get('production.bom')
+        ProductBom = pool.get('product.product-production.bom')
+        bom = BOM(bom)
+        parts = [{'id': o.product.id, 'code': o.product.code,
+                'name': o.product.template.name,
+                'current': o.product.template.engineering_revision
+                if hasattr(o.product.template, 'engineering_revision')
+                else None}
+            for o in bom.outputs]
+        links = ProductBom.search([('bom', '=', bom.id)])
+        routing = next((l.routing for l in links if l.routing), None)
+        steps = []
+        if routing:
+            for step in sorted(routing.steps,
+                    key=lambda s: (s.sequence or 0, s.id)):
+                service = getattr(step, 'service', None)
+                supplier = getattr(step, 'supplier', None)
+                setup = getattr(step, 'setup_duration', None)
+                run = getattr(step, 'run_duration', None)
+                steps.append({
+                        'sequence': step.sequence,
+                        'operation': step.operation.rec_name,
+                        'setup': round(setup.total_seconds() / 3600, 2)
+                        if setup else None,
+                        'run': round(run.total_seconds() / 3600, 2)
+                        if run else None,
+                        'service': service.rec_name if service else None,
+                        'supplier': supplier.rec_name if supplier else None,
+                        'materials': [{
+                                'product': i.product.rec_name,
+                                'quantity': i.quantity,
+                                'unit': i.unit.rec_name,
+                                'piece': getattr(i, 'piece', None)}
+                            for i in bom.inputs
+                            if getattr(i, 'operation', None) == step.sequence],
+                        })
+        return {'parts': parts, 'routing': routing.rec_name
+            if routing else None, 'steps': steps}
 
     @classmethod
     def bom_costs(cls, bom, quantity=1):

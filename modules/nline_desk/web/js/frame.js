@@ -1140,6 +1140,7 @@
                                     c.type === 'float' ? '.num' : ''),
                                     c.type === 'money' ? UI.money(v) :
                                     c.type === 'date' ? UI.date(v) :
+                                    c.labels ? (c.labels[v] || v || '') :
                                     c.type === 'boolean' ? (v ? '✔' :
                                         '') : v === null || v === undefined ?
                                     '' : String(v));
