@@ -112,7 +112,9 @@
         'Order Entry': '\u{1F4DD}',
         'Shipping': '\u{1F69A}',
         'Invoicing': '\u{1F9FE}',
-        'Customers': '\u{1F465}'
+        'Customers': '\u{1F465}',
+        'Bills Against Inventory': '\u{1F4C4}',
+        'Suppliers': '\u{1F3ED}'
     };
 
     function tile(item) {
@@ -269,7 +271,11 @@
         [/^#\/orders\/new$/, 'salesOrder'],
         [/^#\/orders\/(\d+)$/, 'salesOrder'],
         [/^#\/shipping$/, 'shipping'],
-        [/^#\/invoicing$/, 'invoicing']
+        [/^#\/invoicing$/, 'invoicing'],
+        [/^#\/purchase-orders\/new$/, 'purchaseOrder'],
+        [/^#\/purchase-orders\/(\d+)$/, 'purchaseOrder'],
+        [/^#\/receiving$/, 'receiving'],
+        [/^#\/bill-receipts$/, 'billReceipts']
     ];
 
     /* The Tryton tab of a screen: a work order card stays in the work

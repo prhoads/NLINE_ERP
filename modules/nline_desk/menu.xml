@@ -117,6 +117,38 @@ this repository contains the full copyright notices and license terms. -->
             <field name="action" ref="url_desk_vendors"/>
             <field name="group" ref="account.group_account"/>
         </record>
+        <record model="ir.action.url" id="url_desk_supplier_window">
+            <field name="name">Suppliers</field>
+            <field name="nline_writes" eval="False"/>
+            <field name="url">desk/index.html#/supplier-window</field>
+        </record>
+        <record model="ir.action.url" id="url_desk_purchase_orders">
+            <field name="name">Purchase Order Entry</field>
+            <field name="nline_writes" eval="True"/>
+            <field name="url">desk/index.html#/purchase-orders/new</field>
+        </record>
+        <record model="ir.action-res.group" id="url_desk_purchase_orders_group">
+            <field name="action" ref="url_desk_purchase_orders"/>
+            <field name="group" ref="purchase.group_purchase"/>
+        </record>
+        <record model="ir.action.url" id="url_desk_receiving">
+            <field name="name">Receiving</field>
+            <field name="nline_writes" eval="True"/>
+            <field name="url">desk/index.html#/receiving</field>
+        </record>
+        <record model="ir.action-res.group" id="url_desk_receiving_group">
+            <field name="action" ref="url_desk_receiving"/>
+            <field name="group" ref="stock.group_stock"/>
+        </record>
+        <record model="ir.action.url" id="url_desk_bill_receipts">
+            <field name="name">Enter Bills Against Inventory</field>
+            <field name="nline_writes" eval="True"/>
+            <field name="url">desk/index.html#/bill-receipts</field>
+        </record>
+        <record model="ir.action-res.group" id="url_desk_bill_receipts_group">
+            <field name="action" ref="url_desk_bill_receipts"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
         <record model="ir.action.url" id="url_desk_bills">
             <field name="name">Enter Bills</field>
             <field name="nline_writes" eval="True"/>
@@ -339,44 +371,64 @@ this repository contains the full copyright notices and license terms. -->
             <field name="menu" ref="menu_desk_bill_tracker"/>
             <field name="group" ref="account.group_account"/>
         </record>
+        <menuitem parent="menu_nl_vendors" action="url_desk_supplier_window"
+            sequence="30" id="menu_desk_supplier_window"/>
+        <menuitem parent="menu_nl_vendors" action="url_desk_purchase_orders"
+            sequence="40" id="menu_desk_purchase_orders"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_purchase_orders_group_purchase">
+            <field name="menu" ref="menu_desk_purchase_orders"/>
+            <field name="group" ref="purchase.group_purchase"/>
+        </record>
+        <menuitem parent="menu_nl_vendors" action="url_desk_receiving"
+            sequence="50" id="menu_desk_receiving"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_receiving_group_stock">
+            <field name="menu" ref="menu_desk_receiving"/>
+            <field name="group" ref="stock.group_stock"/>
+        </record>
+        <menuitem parent="menu_nl_vendors" action="url_desk_bill_receipts"
+            sequence="60" id="menu_desk_bill_receipts"/>
+        <record model="ir.ui.menu-res.group" id="menu_desk_bill_receipts_group_account">
+            <field name="menu" ref="menu_desk_bill_receipts"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
         <menuitem parent="menu_nl_vendors" action="purchase.act_purchase_form"
-            sequence="30" id="menu_nl_vendors_purchases"/>
+            sequence="70" id="menu_nl_vendors_purchases"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_vendors_purchases_group_purchase">
             <field name="menu" ref="menu_nl_vendors_purchases"/>
             <field name="group" ref="purchase.group_purchase"/>
         </record>
         <menuitem parent="menu_nl_vendors" action="purchase_request.act_purchase_request_form"
-            sequence="40" id="menu_nl_vendors_requests"/>
+            sequence="80" id="menu_nl_vendors_requests"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_vendors_requests_group_purchase_request">
             <field name="menu" ref="menu_nl_vendors_requests"/>
             <field name="group" ref="purchase_request.group_purchase_request"/>
         </record>
         <menuitem parent="menu_nl_vendors" action="stock.act_shipment_in_form"
-            sequence="50" id="menu_nl_vendors_shipments_in"/>
+            sequence="90" id="menu_nl_vendors_shipments_in"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_vendors_shipments_in_group_stock">
             <field name="menu" ref="menu_nl_vendors_shipments_in"/>
             <field name="group" ref="stock.group_stock"/>
         </record>
         <menuitem parent="menu_nl_vendors" action="url_desk_bills"
-            sequence="60" id="menu_desk_bills"/>
+            sequence="100" id="menu_desk_bills"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_bills_group_account">
             <field name="menu" ref="menu_desk_bills"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_vendors" action="url_desk_vendor_credits"
-            sequence="70" id="menu_desk_vendor_credits"/>
+            sequence="110" id="menu_desk_vendor_credits"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_vendor_credits_group_account">
             <field name="menu" ref="menu_desk_vendor_credits"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_vendors" action="url_desk_pay_bills"
-            sequence="80" id="menu_desk_pay_bills"/>
+            sequence="120" id="menu_desk_pay_bills"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_pay_bills_group_account">
             <field name="menu" ref="menu_desk_pay_bills"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_vendors" action="account_invoice.act_invoice_in_form"
-            sequence="90" id="menu_nl_vendors_invoices_in"/>
+            sequence="130" id="menu_nl_vendors_invoices_in"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_vendors_invoices_in_group_account">
             <field name="menu" ref="menu_nl_vendors_invoices_in"/>
             <field name="group" ref="account.group_account"/>

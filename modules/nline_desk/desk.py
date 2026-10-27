@@ -173,8 +173,8 @@ class Desk(ModelView):
     # sections are drawn with arrows
     HOME = [
         ('Vendors', True, [
-                ('Purchase Orders', 'purchase.act_purchase_form'),
-                ('Receive Items', 'stock.act_shipment_in_form'),
+                ('Purchase Orders', 'nline_desk.url_desk_purchase_orders'),
+                ('Receive Items', 'nline_desk.url_desk_receiving'),
                 ('Enter Bills', 'nline_desk.url_desk_bills'),
                 ('Pay Bills', 'nline_desk.url_desk_pay_bills'),
                 ]),
@@ -193,6 +193,9 @@ class Desk(ModelView):
                 ('Income Tracker', 'nline_desk.url_desk_income_tracker'),
                 ]),
         ('Vendor Activities', False, [
+                ('Bills Against Inventory',
+                    'nline_desk.url_desk_bill_receipts'),
+                ('Suppliers', 'nline_desk.url_desk_supplier_window'),
                 ('Vendor Credits', 'nline_desk.url_desk_vendor_credits'),
                 ('Bill Tracker', 'nline_desk.url_desk_bill_tracker'),
                 ('Credit Card Charges', 'nline_desk.url_desk_cards'),

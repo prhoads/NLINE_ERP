@@ -63,5 +63,14 @@ this repository contains the full copyright notices and license terms. -->
         <record model="ir.message" id="msg_line_has_work_order">
             <field name="text">Line %(line)s already has its work order.</field>
         </record>
+        <record model="ir.message" id="msg_purchase_not_draft">
+            <field name="text">Purchase %(purchase)s is not a draft any more: its lines cannot change here.</field>
+        </record>
+        <record model="ir.message" id="msg_nothing_received">
+            <field name="text">Enter the quantity of at least one line.</field>
+        </record>
+        <record model="ir.message" id="msg_receive_one_supplier">
+            <field name="text">Receive (or return) the lines of one supplier and one warehouse at a time.</field>
+        </record>
     </data>
 </tryton>

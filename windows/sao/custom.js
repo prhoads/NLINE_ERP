@@ -160,7 +160,10 @@
         'parts': 'Parts',
         'orders/new': 'Customer Order Entry',
         'shipping': 'Shipping',
-        'invoicing': 'Invoicing'
+        'invoicing': 'Invoicing',
+        'purchase-orders/new': 'Purchase Order',
+        'receiving': 'Receiving',
+        'bill-receipts': 'Bills Against Inventory'
     };
 
     /* Screens with a tab per item: a register per account, a tab per
