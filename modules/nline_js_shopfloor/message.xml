@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data grouped="1">
+        <record model="ir.message" id="msg_members_not_group">
+            <field name="text">Only a resource of type Group has members: "%(resource)s".</field>
+        </record>
+        <record model="ir.message" id="msg_group_nested">
+            <field name="text">A group cannot be a member of another group: "%(resource)s".</field>
+        </record>
+        <record model="ir.message" id="msg_group_itself">
+            <field name="text">A group cannot be its own member: "%(resource)s".</field>
+        </record>
+        <record model="ir.message" id="msg_view_duplicate">
+            <field name="text">Resource "%(resource)s" is already in shop view "%(view)s".</field>
+        </record>
+        <record model="ir.message" id="msg_clock_no_unique">
+            <field name="text">The clock number must be unique.</field>
+        </record>
+        <record model="ir.message" id="msg_employee_delete_labor">
+            <field name="text">Delete denied: employee "%(employee)s" has labor transactions.</field>
+        </record>
+        <record model="ir.message" id="msg_clock_out_before_in">
+            <field name="text">The clock out must be after the clock in.</field>
+        </record>
+        <record model="ir.message" id="msg_deviated_reason">
+            <field name="text">A deviated quantity needs a reason code.</field>
+        </record>
+        <record model="ir.message" id="msg_ticket_operation">
+            <field name="text">Choose the work order operation (Sub/Seq) of the labor.</field>
+        </record>
+        <record model="ir.message" id="msg_ticket_employee">
+            <field name="text">Enter or scan the employee clock number first.</field>
+        </record>
+        <record model="ir.message" id="msg_ticket_delete_saved">
+            <field name="text">Labor transaction "%(ticket)s" is saved: reverse it in Labor Entry instead.</field>
+        </record>
+        <record model="ir.message" id="msg_no_ticket_selected">
+            <field name="text">Select the labor lines first.</field>
+        </record>
+        <record model="ir.message" id="msg_bad_datetime">
+            <field name="text">"%(value)s" is not a date and time.</field>
+        </record>
+        <record model="ir.message" id="msg_return_over_issued">
+            <field name="text">Only %(issued)s of "%(product)s" was issued to the work order.</field>
+        </record>
+        <record model="ir.message" id="msg_nothing_received">
+            <field name="text">Enter the quantity to receive or return.</field>
+        </record>
+        <record model="ir.message" id="msg_return_not_running">
+            <field name="text">Work order "%(production)s" is closed: its parts can no longer be returned to the shop floor.</field>
+        </record>
+        <record model="ir.message" id="msg_return_over_received">
+            <field name="text">Only %(received)s parts of work order "%(production)s" were received.</field>
+        </record>
+        <record model="ir.message" id="msg_not_clocked_in">
+            <field name="text">"%(employee)s" is not clocked in.</field>
+        </record>
+        <record model="ir.message" id="msg_clocked_in">
+            <field name="text">"%(employee)s" is already clocked in.</field>
+        </record>
+    </data>
+</tryton>
