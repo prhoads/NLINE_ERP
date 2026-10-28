@@ -391,9 +391,9 @@ def rfqs(m, codes):
     Desk = m.get('nline.desk')
     done = {r.number for r in RFQ.find([])}
     if m.sample:
+        # Every open RFQ (N-Line's newest is older than the sample's year)
         heads = m.js.rows("select * from PURCHASING_RFQ where RFQ_STATUS in "
-            "('ACTIVE', 'UNRELEASED') and RFQ_DATE >= ? order by ID",
-            m.sample_since)
+            "('ACTIVE', 'UNRELEASED') order by ID")
     else:
         heads = m.js.rows("select * from PURCHASING_RFQ where RFQ_DATE >= ? "
             "or RFQ_STATUS in ('ACTIVE', 'UNRELEASED') order by ID",

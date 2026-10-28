@@ -64,7 +64,9 @@ class Codes:
         key = (model, code)
         if key not in self.cache:
             Model = self.m.get(model)
-            found = Model.find([('code', '=', code)], limit=1)
+            # An inactive code too: the ID is unique among all
+            found = Model.find([('code', '=', code),
+                    ('active', 'in', [True, False])], limit=1)
             if found:
                 self.cache[key] = found[0].id
             else:

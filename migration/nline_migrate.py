@@ -82,7 +82,15 @@ def day(value):
 
 
 def dec(value, default=Decimal(0)):
-    return Decimal(str(value)) if value is not None else default
+    """A Jobshop number as a Decimal the ERP accepts: Jobshop keeps 6 to 8
+    decimals (61.790000), the ERP's prices and rates 4"""
+    if value is None:
+        return default
+    value = Decimal(str(value)).quantize(Decimal('0.0001')).normalize()
+    # Without trailing zeros (0.0000 is refused by a field of 2 digits),
+    # never in exponent form (1E+2)
+    return value.quantize(Decimal(1)) if value == value.to_integral() \
+        else value
 
 
 class Source:
@@ -1171,6 +1179,11 @@ class Migration:
         except ModuleNotFoundError:
             log("jobshop %s: no data to import yet" % area)
             return
+        # Run alone (--steps js_...), the areas still find the parties and
+        # parts imported by earlier runs (both steps keep what exists)
+        if area != 'common' and not self.party_by_js:
+            self.step_parties()
+        self.load_products()
         module.run(self)
 
     # ---- run ----------------------------------------------------------------------

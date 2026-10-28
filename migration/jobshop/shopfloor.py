@@ -188,7 +188,7 @@ def resources(m):
         if kind != 'group' and not center.category:
             categories = Category.find([('name', '=', name)], limit=1)
             category = categories[0] if categories else Category(name=name)
-            if not category.id:
+            if category.id is None or category.id < 0:
                 category.save()
             center.category = category
             center.save()
@@ -271,7 +271,8 @@ def employees(m):
         if not employee:
             parties = Party.find([('name', '=', name)], limit=1)
             party = parties[0] if parties else Party(name=name)
-            if not party.id:
+            if party.id is None or party.id < 0:
+                # (an unsaved proteus record has a negative id)
                 party.save()
             employee = Employee(party=party, company=m.company)
             made += 1

@@ -224,7 +224,8 @@
                     show(index);
                 }}, tab.title));
             var pane = el('div.tab-pane.panel', {role: 'tabpanel'}, tab.node);
-            tab.pane = pane;
+            /* (its element: tab.pane is the tab's fields) */
+            tab.paneNode = pane;
             panes.appendChild(pane);
         });
         container.appendChild(bar);

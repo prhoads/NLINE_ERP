@@ -119,6 +119,8 @@ QuickBooks emulation (Customers, Vendors, Banking, Company folders).
 
 ## Status
 
+All eight areas were built on 28 Oct 2026. Each area's ticked checklist, decisions and gaps are in its status file: [common](status/common.md), [inventory](status/inventory.md), [sales](status/sales.md), [purchasing](status/purchasing.md), [engineering](status/engineering.md) (Engineering, Estimating, Work Order window), [shopfloor](status/shopfloor.md), [planning](status/planning.md), [admin](status/admin.md) (Accounting, Executive Information, Administration, all reports). The list below is the original inventory; the status files are the current truth.
+
 Each checklist item is a Jobshop help topic (window, tab, function). `[x]`
 done, `[~]` partly (see note), `[-]` not emulated on purpose (note why).
 

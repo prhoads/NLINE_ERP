@@ -294,7 +294,7 @@ class DeskExecutive(metaclass=PoolMeta):
         return result
 
     @classmethod
-    def _production_costs(cls, production):
+    def _exec_production_costs(cls, production):
         "Actual material and labor of the work order"
         material = ZERO
         for move in production.inputs:
@@ -332,7 +332,7 @@ class DeskExecutive(metaclass=PoolMeta):
             open_count += 1
             by_state[production.state] += 1
             if production.state in {'waiting', 'assigned', 'running'}:
-                material, labor, _ = cls._production_costs(production)
+                material, labor, _ = cls._exec_production_costs(production)
                 wip_value += material + labor
             date = production.planned_date
             if date and date < today and production.state != 'request':

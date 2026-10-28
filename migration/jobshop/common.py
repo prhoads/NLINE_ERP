@@ -95,7 +95,8 @@ def code_tables(m):
                     value = REASON_TYPES.get((value or '').upper(),
                         'inventory')
                 elif value is not None:
-                    value = Decimal(str(value))
+                    # Jobshop keeps 6 decimals, the ERP field 4
+                    value = Decimal(str(value)).quantize(Decimal('0.0001'))
                 values[field] = value
             record = existing.get(code)
             if record is None:

@@ -221,7 +221,7 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
         return points[0] if points else None
 
     @classmethod
-    def _js_part(cls, product, cache=None):
+    def _planning_part(cls, product, cache=None):
         """The part's planning data as Jobshop's Part window has it (the
         fields of the Inventory area when they exist, else Tryton's)"""
         if cache is not None and product in cache:
@@ -337,7 +337,7 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
                 due = line.quantity
             if due <= 0:
                 continue
-            part = cls._js_part(line.product, cache)
+            part = cls._planning_part(line.product, cache)
             links = cls._js_sale_links(line)
             linked = sum(q for _, q in links)
             if view != 'all' and links and linked >= due:
@@ -504,7 +504,7 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
         cls._check_read('production')
         Product = Pool().get('product.product')
         product = Product(product)
-        part = cls._js_part(product)
+        part = cls._planning_part(product)
         want = _date(want_date) or dt.date.today() + dt.timedelta(
             days=part['lead_time'] or 0)
         get_bom = getattr(product, 'get_bom', None)
@@ -612,7 +612,7 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
             dates = [l.shipping_date or l.sale.sale_date for l, _ in needs]
             dates = [d for d in dates if d]
             want = min(dates) if dates else None
-            part = cls._js_part(product)
+            part = cls._planning_part(product)
             options = {
                 'status': values.get('status') or 'Firm',
                 'want_date': want,
@@ -768,7 +768,7 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
                 ('supply', '!=', 'leg'),
                 ])
         cards = [c for c in cards
-            if not cls._js_part(c.product, cache)['stocked']]
+            if not cls._planning_part(c.product, cache)['stocked']]
         card_links = cls._js_card_links(cards)
         received = cls._js_link_received(
             [l for ls in card_links.values() for l in ls])
@@ -776,7 +776,7 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
         stock = cls._js_stock({c.product for c in cards})
         rows = []
         for card in cards:
-            part = cls._js_part(card.product, cache)
+            part = cls._planning_part(card.product, cache)
             production = card.production
             unit = card.product.default_uom
             calc = Uom.compute_qty(card.unit, card.quantity, unit)
@@ -1015,7 +1015,7 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
             domain.append(('active', 'in', [True, False]))
         products = [p for p in Product.search(domain, order=[
                     ('code', 'ASC'), ('id', 'ASC')])
-            if cls._js_part(p, cache)['stocked']]
+            if cls._planning_part(p, cache)['stocked']]
 
         def in_range(value, low, high):
             value = (value or '').upper()
@@ -1024,7 +1024,7 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
 
         keep = []
         for product in products:
-            part = cls._js_part(product, cache)
+            part = cls._planning_part(product, cache)
             if not in_range(part['part_id'], filters.get('part_from'),
                     filters.get('part_to')):
                 continue
@@ -1045,7 +1045,7 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
         stock = cls._js_stock(keep)
         rows = []
         for product in keep:
-            part = cls._js_part(product, cache)
+            part = cls._planning_part(product, cache)
             on_hand = stock.get(product.id, 0)
             projected = on_hand + supply[product.id] - demand[product.id]
             order_point = part['order_point'] or 0
@@ -1220,7 +1220,7 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
         Uom = pool.get('product.uom')
         product = Product(product)
         unit = product.default_uom
-        part = cls._js_part(product)
+        part = cls._planning_part(product)
 
         sales, demand = [], 0
         for line in SaleLine.search([
