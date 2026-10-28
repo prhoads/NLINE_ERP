@@ -20,7 +20,11 @@ $Source = Join-Path $Root 'src'
 $Site = Join-Path $Root 'venv\Lib\site-packages\trytond\modules'
 $Web = Join-Path $Root 'sao'
 
-# The modules of the source that differ from the venv's copy, and how
+# The files Tryton uses (pip installs these; README, setup.py... it leaves out)
+$Used = '\.(py|xml|cfg|csv|po|svg|png|jpg|gif|fodt|odt|ods|html|js|css|json|txt)$'
+
+# The modules of the source whose used files differ in CONTENT from the venv's
+# copy (pip gives every installed file a new date, so dates say nothing)
 function Get-ModuleChanges {
     $changes = @()
     foreach ($dir in Get-ChildItem (Join-Path $Source 'modules') -Directory) {
@@ -31,11 +35,24 @@ function Get-ModuleChanges {
             }
             continue
         }
-        # /L: list only; /NJH /NJS /NDL: just the files that would be copied or deleted
-        $files = robocopy $dir.FullName $target /MIR /L /XD __pycache__ build tests /XF *.pyc /NJH /NJS /NDL /NP /FP /NS /NC |
-            ForEach-Object { $_.Trim() } | Where-Object { $_ }
+        $files = @()
+        foreach ($file in Get-ChildItem $dir.FullName -Recurse -File) {
+            $relative = $file.FullName.Substring($dir.FullName.Length + 1)
+            if ($relative -notmatch $Used -or $relative -match '^(tests|build|doc)\\|\.egg-info\\|__pycache__|^setup\.py$') {
+                continue
+            }
+            $installed = Join-Path $target $relative
+            if (-not (Test-Path $installed)) {
+                # A file pip did not ship (a test chart...) matters only in
+                # the N-Line modules, where a new file is new code
+                if ($dir.Name -like 'nline_*') { $files += $relative }
+            } elseif ((Get-Item $installed).Length -ne $file.Length -or
+                    (Get-FileHash $installed -Algorithm MD5).Hash -ne (Get-FileHash $file.FullName -Algorithm MD5).Hash) {
+                $files += $relative
+            }
+        }
         if ($files) {
-            $changes += [pscustomobject]@{Module = $dir.Name; New = $false; Files = @($files) }
+            $changes += [pscustomobject]@{Module = $dir.Name; New = $false; Files = $files }
         }
     }
     return $changes
@@ -43,11 +60,11 @@ function Get-ModuleChanges {
 
 $changes = @(Get-ModuleChanges)
 # Files of a module that need the database updated (else a restart is enough)
-$dataPattern = '\.(xml|cfg|csv)$|\\view\\|\\locale\\|\(new module\)'
+$dataPattern = '\.(xml|cfg|csv|po)$|^view\\|^locale\\|\(new module\)'
 $needDb = @($changes | Where-Object {
-        $_.New -or @($_.Files | Where-Object { $_ -notmatch '\\web\\' -and $_ -match $dataPattern }).Count })
+        $_.New -or @($_.Files | Where-Object { $_ -notmatch '^web\\' -and $_ -match $dataPattern }).Count })
 $needRestart = @($changes | Where-Object {
-        $_.New -or @($_.Files | Where-Object { $_ -notmatch '\\web\\' }).Count })
+        $_.New -or @($_.Files | Where-Object { $_ -notmatch '^web\\' }).Count })
 
 Write-Host 'Changed modules:'
 foreach ($c in $changes) { Write-Host ("  {0}: {1} file(s)" -f $c.Module, $c.Files.Count) }
