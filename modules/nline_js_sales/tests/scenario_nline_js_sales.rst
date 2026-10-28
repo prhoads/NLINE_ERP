@@ -197,6 +197,84 @@ The order limit asks to accept the order::
     >>> customer.credit_limit = Decimal('0')
     >>> customer.save()
 
+The Order Line window's fields, the header's Jobshop data and the
+customer's contact fields::
+
+    >>> line1 = order['lines'][0]
+    >>> order = Desk.sale_order_save({'id': order['id'],
+    ...         'party': customer.id, 'reference': 'PO-77',
+    ...         'sale_date': today, 'shipping_date': today,
+    ...         'lines': [dict(line1,
+    ...             product=valve.id, gross_unit_price='1000',
+    ...             trade_discount='10', drawing_id='331-00163',
+    ...             drawing_rev='F', user_0='R:\\331-00163_F.pdf',
+    ...             js_desired_date=today + dt.timedelta(days=30),
+    ...             commissionable=False),
+    ...             dict(order['lines'][1], product=plug.id,
+    ...                 gross_unit_price='40', trade_discount='0')],
+    ...         'charges': order['charges']}, config.context)
+    >>> l = order['lines'][0]
+    >>> l['drawing_id'], l['drawing_rev'], l['user_0'], l['commissionable']
+    ('331-00163', 'F', 'R:\\331-00163_F.pdf', False)
+    >>> l['js_desired_date'] == today + dt.timedelta(days=30)
+    True
+    >>> bool(order['created_by']), order['customer_name']
+    (True, 'Refinery Supply')
+    >>> Desk.sales_order_printed(order['id'], config.context)
+    True
+
+The order's own Sold To / Ship To, Copy Notes to Shipper and the line's
+commission percent and ship via::
+
+    >>> order = Desk.sale_order_save({'id': order['id'],
+    ...         'party': customer.id, 'reference': 'PO-77',
+    ...         'sale_date': today, 'shipping_date': today,
+    ...         'js_sold_name': 'Refinery Supply', 'js_sold_city': 'Houston',
+    ...         'js_ship_name': 'Plant 2', 'js_ship_contact': 'J. Doe',
+    ...         'js_copy_notes': True,
+    ...         'lines': [dict(l, product=valve.id, gross_unit_price='1000',
+    ...                 trade_discount='10', commission_percent='2.5',
+    ...                 js_ship_via=None),
+    ...             dict(order['lines'][1], product=plug.id,
+    ...                 gross_unit_price='40', trade_discount='0')],
+    ...         'charges': order['charges']}, config.context)
+    >>> order['js_sold_city'], order['js_ship_name'], order['js_copy_notes']
+    ('Houston', 'Plant 2', True)
+    >>> float(order['lines'][0]['commission_percent'])
+    2.5
+    >>> order['lines'][0]['quotes_exist'], order['payment_term_descr'] != None
+    (False, True)
+    >>> Note = Model.get('ir.note')
+    >>> note = Note(resource=Model.get('sale.sale')(order['id']),
+    ...     message='Crate')
+    >>> note.save()
+    >>> Desk.sale_order_get(order['id'], config.context)['js_printed_date'] == today
+    True
+    >>> customer.customer_phone = '713-555-0100'
+    >>> customer.customer_mobile = '713-555-0101'
+    >>> customer.customer_exported = True
+    >>> customer.save()
+    >>> customer.reload()
+    >>> customer.customer_phone, customer.customer_exported_date == today
+    ('713-555-0100', True)
+    >>> sorted(m.type for m in customer.contact_mechanisms)
+    ['mobile', 'phone']
+    >>> customer.sold_to_address_1 = '1 Main St'
+    >>> customer.sold_to_address_2 = 'Suite 2'
+    >>> customer.save()
+    >>> customer.reload()
+    >>> customer.sold_to_street.splitlines(), customer.sold_to_address_2
+    (['1 Main St', 'Suite 2'], 'Suite 2')
+    >>> rows = Desk.sales_order_lines({'party': customer.id}, config.context)
+    >>> [r['line_no'] for r in rows]
+    [1, 2]
+    >>> len(Desk.sales_order_lines({'product': plug.id,
+    ...     'statuses': ['closed']}, config.context))
+    0
+    >>> rep.reload()
+    >>> rep.inactive
+    False
+
 Copy it into a new order, then delete the copy::
 
     >>> copy = Desk.sales_order_copy(order['id'], 'order', config.context)
@@ -246,6 +324,11 @@ Ship 3 of the 4 valves: the rest is back ordered::
     ...         }, config.context)
     >>> shipper['state'], shipper['js_tracking_number']
     ('done', '1Z999')
+    >>> [n.message for n in Note.find([('resource', '=',
+    ...     'stock.shipment.out,%s' % shipper['id'])])]
+    ['Crate']
+    >>> 'ship_via' in shipper['lines'][0], 'customer_code' in shipper
+    (True, True)
     >>> order = Desk.sale_order_get(order['id'], config.context)
     >>> [(l['shipped_quantity'], l['js_line_status']) for l in order['lines']]
     [(3.0, 'open'), (2.0, 'closed')]
@@ -253,6 +336,37 @@ Ship 3 of the 4 valves: the rest is back ordered::
     >>> [l['quantity'] for l in Desk.sales_shipper_get(backorder['id'],
     ...     'stock.shipment.out', config.context)['lines']]
     [1.0]
+
+The activity's "Some Can Ship", the shipper's Jobshop status and the
+Shippers/Invoices tab::
+
+    >>> rows = Desk.sales_shipping_activity(False, None, False,
+    ...     config.context)
+    >>> 'some_can_ship' in rows[0], rows[0]['carrier']
+    (True, 'OLD DOMINION')
+    >>> done = Desk.sales_shipper_get(shipper['id'], 'stock.shipment.out',
+    ...     config.context)
+    >>> done['js_shipper_status'], 'could_ship' in done['lines'][0]
+    ('unapproved', True)
+    >>> sorted({d['type'] for d in order['shippers']} & {'Shipment'})
+    ['Shipment']
+    >>> lines = Desk.sales_shipper_lines(order['id'], None, config.context)
+    >>> sorted(l['quantity'] for l in lines)
+    [1.0, 2.0, 3.0]
+    >>> len(Desk.sales_shipper_browse(None, config.context)) >= 2
+    True
+
+Close short the back order: the last valve is not shipped, the line closes::
+
+    >>> backorder = Desk.sales_shipper_get(backorder['id'],
+    ...     'stock.shipment.out', config.context)
+    >>> move = backorder['lines'][0]['move']
+    >>> closed = Desk.sales_ship({'id': backorder['id'], 'ship': False,
+    ...         'lines': [{'move': move, 'quantity': 1,
+    ...             'close_short': True}]}, config.context)
+    >>> order = Desk.sale_order_get(order['id'], config.context)
+    >>> order['lines'][0]['js_line_status']
+    'closed'
 
 Return one valve: a return order, its return shipper and credit memo::
 
@@ -292,6 +406,13 @@ Invoicing: the drafts wait, a charge is added, the invoice is posted::
     >>> invoice.click('post')
     >>> invoice.state
     'posted'
+    >>> Desk.sales_invoice_printed([invoice.id], config.context)
+    True
+    >>> data = Desk.sales_invoice_get(invoice.id, config.context)
+    >>> data['js_printed_date'] == today, data['exported']
+    (True, True)
+    >>> data['customer_code'] == (customer.code or '')
+    True
 
 Issue a credit memo for it::
 

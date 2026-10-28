@@ -273,3 +273,90 @@ marked Private refuse changes.
 - `nline_desk/shopfloor.py` `master_info` / `bom_costs` are no longer used
   by the masters window (eng_tree / eng_costs replace them); keep for other
   callers.
+
+## Second pass (28 Oct): Jobshop's own window definitions
+
+Analysis and gap tables: `docs/jobshop/analysis/engineering.md`.
+
+Changed:
+
+- Work Order, Engineering Master, Quote Master, Operation Template and Quote
+  tabs are placed as Jobshop draws them (`at` / `split`, frames, the "!"
+  drawing button) with the ID lookup in the tab (`idAt`, `idField`).
+- Work order: Work/Lot/Split ID (Function fields `work_id`, `lot_id`,
+  `split_id` on the number `WORK[/LOT][.SPLIT]`), Archived, Linked,
+  Description, Created from Eng Master Rev (read-only once saved), Stock U/M,
+  Project/Ref/Other, code descriptions, Treat Release Date as Hard, Schedule
+  Start/Finish Date, User 0/1 (Other tab), Jobshop's Browse columns; File >
+  New from Engineering / Quote Master (Tools menu); Set Work Order Release
+  Date when releasing from Change Status.
+- Decision: Schedule Work Order now writes Schedule Start / Finish Date and
+  leaves Release / Want Date to the user (Jobshop); Treat Release Date as
+  Hard keeps the start at the release date.
+- Decision: a new work order takes the master's header (engineered by,
+  drawing, codes, specs, user fields, global rank, description).
+- Decision: the ribbon's Release / Assign Stock / Start / Receive / Traveler
+  stay (N-Line extras; Release duplicates Change Status > Released but is the
+  shop's one-click action).
+- Cards: one menu in Jobshop's order; Cut / Copy / Paste (Cut deletes the
+  card when pasted: cards are saved at once), Options > Copy Subordinates,
+  Order / Find Materials By Reference, Resequence Materials for Operation,
+  Request Quote/Purchase this Material/Service dialog with the PO links,
+  Print / Print Preview of a leg, View > Purchase Order Links, Sales Order
+  Links with Jobshop's columns.
+- Masters: Revision / Locked / Inactive, Work Order Special Instructions on
+  the header, Other tab (User 0/1, Tryton's master name).
+- Operation templates: Inactive, Jobshop's labels and Browse, Copy gives a
+  new ID (`<code>-1`; it failed before).
+- Quotes: the Dates and Details tabs are on the Quote tab (Jobshop has one
+  tab); the lines stay on the Quote Lines tab.
+- Models: production `description`, `other_info`, `archived`,
+  `hard_release_date`, `schedule_start_date`, `schedule_finish_date`;
+  production and BOM `user_0`, `user_1`, `stock_um`,
+  `product_code_description`, `commodity_code_description`; BOM and
+  operation template `inactive`; production, BOM, template, quote
+  `created_by`, `modified_by`; bom input and material card `reference`.
+- RPCs: `eng_header`, `eng_po_links`, `eng_resequence`; `eng_purchase`
+  writes `nline.purchase.link` when nline_js_purchasing is installed.
+- Migration: `work_orders()` in step js_engineering; masters' USER_0/1,
+  materials' REFERENCE.
+- Tests: 25 pass (scenario extended: header copy, Work/Lot/Split, hard
+  release scheduling, inactive, template copy, PO links, resequence).
+
+## Screen review fixes (2026-10-28, SCREEN_REVIEW.md)
+
+- Quotes: Customer ID shows the customer's ID (name in the tooltip);
+  Quoted Leadtime in line (split 110, Jobshop's 154 left it off the column);
+  the Sold to/Ship to box (read-only, from the Sold To / Ship To tabs);
+  description boxes beside Sales Rep, Discount Class, Territory, SIC Code,
+  FOB Point, Ship Via, Carrier, Terms, Tax Group; "..." (and F9) on the codes
+  kept as text (Sales Rep, Discount Class, Territory, SIC Code, Carrier, Tax
+  Group: Jobshop's lookup window on their code tables); tabs in Jobshop's
+  order (... Specs, Notes, Charges); Sales Order moved from the Quote tab to
+  the Quote Lines tab; Sold To / Ship To laid out as Jobshop (State/Postal,
+  E-mail captions); Browse Customer ID = the ID.
+- New quote fields `addr_etc`, `contact_mobile` (and `ship_` ones),
+  `copy_notes` (Notes tab: Copy Notes to Sales Order; Win Quote copies the
+  notes): the window shows them once the database has them (fields_get).
+- Work Order: Created from Eng Master Rev = the master's Eng ID, read-only,
+  no "..."; U/M shows Jobshop's IDs (EA for u: `stock_um`); Account Set ID +
+  description (read-only: the part's account set, nline_js_admin's Account
+  Sets); Browse Part ID = the ID, rows one line.
+- Masters: Revision clear of the Part ID's "..."; Part ID shows the part's
+  ID only; Account Set ID + description (read-only); "Part ID (new master)"
+  removed: a new master's part is the Part ID typed in the ID field (as
+  Jobshop); Operations tab removed (the cards show it); Materials / Makes
+  stay after Jobshop's tabs (editable materials and co-products lists).
+  Quote master without a part: U/M EA.
+- Cards: header card = header line (card, number, status) + two lines (part
+  ID, Eng, quantity; description), "..." instead of cut text; card headers
+  "..." before their tags (full text in the tooltip); a card's text keeps out
+  of the strip the next card leaves visible (no stray letters); masters'
+  header "Master Eng A" (the part ID below).
+- Operation Templates: Jobshop's sub-tabs General (costs, operation
+  information, drawing, special instructions placed as Jobshop), Specs,
+  Add'l Resources (Other = user-defined fields, unused at N-Line: left out);
+  Transit Days in the Setup Hrs place for an outside service (Service ID
+  set); Routing Operation (N-Line's) beside Preserved.
+- Left: Quote Lines as Jobshop's editable grid with all its columns (L: the
+  lines table works per quantity; kept), Supplier Svc ID (unused at N-Line).

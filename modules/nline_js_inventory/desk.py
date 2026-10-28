@@ -18,7 +18,7 @@ from trytond.pool import Pool, PoolMeta
 from trytond.rpc import RPC
 from trytond.transaction import Transaction
 
-from .part import on_hand
+from .part import USER_FIELDS, on_hand
 
 ZERO = Decimal(0)
 
@@ -171,7 +171,7 @@ class Desk(metaclass=PoolMeta):
         Configuration = pool.get('nline.desk.configuration')
         warehouse = cls._js_warehouse()
         labels = (Configuration(1).part_user_labels or '').splitlines()
-        labels = (labels + [''] * 10)[:10]
+        labels = (labels + [''] * len(USER_FIELDS))[:len(USER_FIELDS)]
         return {
             'warehouse': {'id': warehouse.id, 'rec_name': warehouse.rec_name},
             'lost_found': cls._js_lost_found(warehouse).id,
@@ -179,117 +179,12 @@ class Desk(metaclass=PoolMeta):
                 if warehouse.storage_location else None),
             'reasons': [{'id': r.id, 'code': r.code,
                     'rec_name': r.rec_name} for r in Reason.search([])],
-            'user_labels': [l.strip() or 'User Defined %s' % (i + 1)
-                for i, l in enumerate(labels)],
+            # Jobshop's caption of a user field without a label: User n
+            'user_labels': [l.strip() or 'User %s' % n
+                for n, l in zip(USER_FIELDS, labels)],
             }
 
     # ---- Part: order tabs ----------------------------------------------
-
-    @classmethod
-    def part_orders(cls, template, kind, statuses=None):
-        """The lines of the part on sales orders (kind 'sale'), purchase
-        orders ('purchase') or the work orders that make it ('production'),
-        in the Jobshop statuses (default Released)"""
-        pool = Pool()
-        template = cls._js_part(template)
-        products = [p.id for p in template.products]
-        rows = []
-        if kind == 'sale':
-            cls._check_read('sale.line')
-            Line = pool.get('sale.line')
-            for line in Line.search([
-                        ('product', 'in', products),
-                        ('sale.state', 'in', _states('sale', statuses)),
-                        ], order=[('sale.sale_date', 'DESC'), ('id', 'DESC')],
-                    limit=500):
-                shipped = cls._js_done_quantity(line, 'customer')
-                price = line.unit_price or ZERO
-                rows.append({
-                        'id': line.sale.id,
-                        'line': line.id,
-                        'linked': bool(getattr(line, 'productions', None)),
-                        'number': line.sale.number or str(line.sale.id),
-                        'party': line.sale.party.rec_name,
-                        'status': _status('sale', line.sale.state),
-                        'line_status': ("Closed" if shipped >= line.quantity
-                            else _status('sale', line.sale.state)),
-                        'sequence': line.sequence,
-                        'quantity': line.quantity,
-                        'shipped': shipped,
-                        'unit': line.unit.symbol if line.unit else '',
-                        'unit_price': price,
-                        'amount': line.amount,
-                        'shipped_amount': (price * Decimal(str(shipped))
-                            ).quantize(Decimal('0.01')),
-                        'date': line.shipping_date,
-                        'reference': line.sale.reference or '',
-                        })
-        elif kind == 'purchase':
-            cls._check_read('purchase.line')
-            Line = pool.get('purchase.line')
-            for line in Line.search([
-                        ('product', 'in', products),
-                        ('purchase.state', 'in',
-                            _states('purchase', statuses)),
-                        ], order=[('purchase.purchase_date', 'DESC'),
-                        ('id', 'DESC')], limit=500):
-                received = cls._js_done_quantity(line, 'supplier')
-                dates = [m.effective_date for m in line.moves
-                    if m.state == 'done' and m.effective_date]
-                price = line.unit_price or ZERO
-                rows.append({
-                        'id': line.purchase.id,
-                        'line': line.id,
-                        'linked': bool(getattr(line, 'requests', None)),
-                        'number': line.purchase.number
-                        or str(line.purchase.id),
-                        'party': line.purchase.party.rec_name,
-                        'status': _status('purchase', line.purchase.state),
-                        'buyer': (line.purchase.create_uid.rec_name
-                            if line.purchase.create_uid else ''),
-                        'sequence': line.sequence,
-                        'quantity': line.quantity,
-                        'received': received,
-                        'unit': line.unit.symbol if line.unit else '',
-                        'unit_price': price,
-                        'amount': line.amount,
-                        'received_amount': (price * Decimal(str(received))
-                            ).quantize(Decimal('0.01')),
-                        'last_received': max(dates) if dates else None,
-                        'date': line.delivery_date,
-                        'reference': line.purchase.reference or '',
-                        })
-        elif kind == 'production':
-            cls._check_read('production')
-            Production = pool.get('production')
-            for production in Production.search([
-                        ('product', 'in', products),
-                        ('state', 'in', _states('production', statuses)),
-                        ], order=[('planned_date', 'DESC'), ('id', 'DESC')],
-                    limit=500):
-                received = sum(m.quantity for m in production.outputs
-                    if m.state == 'done' and m.product.id in products)
-                cost = getattr(production, 'cost', None)
-                rows.append({
-                        'id': production.id,
-                        'number': production.number or str(production.id),
-                        'description': template.name,
-                        'status': _status('production', production.state),
-                        'state': production.state,
-                        'quantity': production.quantity,
-                        'received': received,
-                        'unit': (production.unit.symbol
-                            if production.unit else ''),
-                        'unit_cost': (round_price(cost / Decimal(str(
-                                    production.quantity)))
-                            if cost and production.quantity else None),
-                        'date': production.planned_date,
-                        'start': production.planned_start_date,
-                        'finish': production.planned_date,
-                        })
-        else:
-            raise ValueError(kind)
-        return rows
 
     @classmethod
     def _js_done_quantity(cls, line, party_type):
@@ -313,29 +208,54 @@ class Desk(metaclass=PoolMeta):
     # ---- Part: where used ------------------------------------------------
 
     @classmethod
-    def part_where_used(cls, template, masters=True, work_orders=True):
-        """The engineering masters (BOMs) and the open work orders where the
-        part is a material (Jobshop's Part Where Used)"""
+    def part_where_used(cls, template, masters=True, work_orders=True,
+            quote_masters=False):
+        """The engineering masters, quote masters and work orders where the
+        part is a material (Jobshop's Part Where Used), in its columns"""
         pool = Pool()
         template = cls._js_part(template)
         products = [p.id for p in template.products]
         rows = []
-        if masters:
+        if masters or quote_masters:
             cls._check_read('production.bom')
             Input = pool.get('production.bom.input')
-            for line in Input.search([('product', 'in', products)]):
+            with Transaction().set_context(active_test=False):
+                lines = Input.search([('product', 'in', products)])
+            for line in lines:
                 bom = line.bom
-                outputs = [o.product.rec_name for o in bom.outputs]
+                quote = getattr(bom, 'master_type', None) == 'quote'
+                if (quote and not quote_masters) or (
+                        not quote and not masters):
+                    continue
+                outputs = [o.product for o in bom.outputs]
                 rows.append({
-                        'type': 'Eng Master',
+                        'type': 'Quote Master' if quote else 'Eng Master',
                         'model': 'production.bom',
                         'id': bom.id,
+                        'inactive': not bom.active,
+                        'preserved': bool(getattr(bom, 'private', False)),
+                        'created': bom.create_date.date()
+                        if bom.create_date else None,
                         'document': bom.rec_name,
-                        'part': ', '.join(outputs),
+                        'status': '',
+                        'part': ', '.join(o.template.code or o.rec_name
+                            for o in outputs),
+                        'description': (getattr(bom, 'description', None)
+                            or ', '.join(o.template.name for o in outputs)),
+                        'engineered': None,
+                        'sub_id': '0',
+                        'operation': getattr(line, 'operation', None),
+                        'piece': getattr(line, 'piece', None),
+                        'material_status': '',
                         'revision': getattr(bom, 'revision', None) or '',
+                        'material_description': template.name,
                         'quantity': line.quantity,
                         'unit': line.unit.symbol if line.unit else '',
-                        'status': '',
+                        'drawing': template.drawing_number or '',
+                        'drawing_rev': template.drawing_revision or '',
+                        'drawing_file': template.drawing_file or '',
+                        'mfg_name': template.mfg_name or '',
+                        'mfg_part_id': template.mfg_part_id or '',
                         })
         if work_orders:
             cls._check_read('production')
@@ -348,7 +268,8 @@ class Desk(metaclass=PoolMeta):
             cards = {}
             if Card:
                 for card in Card.search([('product', 'in', products)]):
-                    cards[card.move.id] = card
+                    if card.move:
+                        cards[card.move.id] = card
             for move in Move.search([
                         ('product', 'in', products),
                         ('production_input', '!=', None),
@@ -358,18 +279,42 @@ class Desk(metaclass=PoolMeta):
                         ]):
                 production = move.production_input
                 card = cards.get(move.id)
+                status = getattr(production, 'order_status', None)
                 rows.append({
                         'type': 'Work Order',
                         'model': 'production',
                         'id': production.id,
+                        'inactive': False,
+                        'preserved': False,
+                        'created': production.create_date.date()
+                        if production.create_date else None,
                         'document': production.number or str(production.id),
-                        'part': (production.product.rec_name
+                        'status': (status.capitalize() if status
+                            else _status('production', production.state)),
+                        'part': (production.product.template.code
+                            or production.product.rec_name
                             if production.product else ''),
+                        'description': (production.product.template.name
+                            if production.product else ''),
+                        'engineered': None,
+                        'sub_id': (str(production.leg_index)
+                            if getattr(production, 'leg_index', None)
+                            else '0'),
                         'operation': card.operation if card else None,
                         'piece': card.piece if card else None,
+                        'material_status': {'draft': "Unreleased",
+                            'staging': "Unreleased", 'assigned': "Released",
+                            'done': "Closed"}.get(move.state, move.state),
+                        'revision': (getattr(card, 'component_revision', None)
+                            or '') if card else '',
+                        'material_description': template.name,
                         'quantity': move.quantity,
                         'unit': move.unit.symbol if move.unit else '',
-                        'status': _status('production', production.state),
+                        'drawing': template.drawing_number or '',
+                        'drawing_rev': template.drawing_revision or '',
+                        'drawing_file': template.drawing_file or '',
+                        'mfg_name': template.mfg_name or '',
+                        'mfg_part_id': template.mfg_part_id or '',
                         })
         return rows
 
@@ -784,7 +729,7 @@ class Desk(metaclass=PoolMeta):
         lost_found = cls._js_lost_found(warehouse)
         company = cls._company()
         today = Date.today()
-        moves, costs = [], []
+        moves, costs, counted = [], [], []
         out_needed = defaultdict(float)
         for line in values.get('lines', []):
             kind = line.get('type')
@@ -823,7 +768,10 @@ class Desk(metaclass=PoolMeta):
                 lot=lot,
                 reason_code=line.get('reason_code') or None,
                 adjustment_account=line.get('account') or None,
+                transaction_note=line.get('note') or None,
                 )
+            if line.get('last_counted'):
+                counted.append((product.template.id, location.id, date))
             cost = None
             if kind == 'in' and any(line.get(c) not in (None, '')
                     for c in ['material', 'labor', 'burden', 'service']):
@@ -850,7 +798,22 @@ class Desk(metaclass=PoolMeta):
         Move.save(moves)
         with Transaction().set_context(_skip_warnings=True):
             Move.do(moves)
+        cls._js_set_last_counted(counted)
         return [{'id': m.id, 'entry': m.id} for m in moves]
+
+    @classmethod
+    def _js_set_last_counted(cls, counted):
+        "Jobshop's Set Last Counted Date: the part location's Last Counted On"
+        PartLocation = Pool().get('nline.js.part_location')
+        if not counted:
+            return
+        PartLocation.ensure([(t, l) for t, l, _ in counted])
+        for template, location, date in counted:
+            part_locations = PartLocation.search([
+                    ('template', '=', template),
+                    ('location', '=', location),
+                    ])
+            PartLocation.write(part_locations, {'last_counted': date})
 
     @classmethod
     def _js_revalue(cls, product, quantity, cost, included=False):
@@ -924,6 +887,7 @@ class Desk(metaclass=PoolMeta):
                     adjustment='transfer',
                     lot=lot,
                     reason_code=line.get('reason_code') or None,
+                    transaction_note=line.get('note') or None,
                     ))
             needed[(product, from_location, lot)] += quantity
         for (product, location, lot), quantity in needed.items():
@@ -972,6 +936,7 @@ class Desk(metaclass=PoolMeta):
                         if move.adjustment_account else ''),
                     'lot': move.lot.number if move.lot else '',
                     'cost': move.cost_price,
+                    'note': move.transaction_note or '',
                     'state': move.state,
                     })
         return rows

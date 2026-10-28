@@ -340,6 +340,24 @@
         get_url: function () {
             return 'nline/' + this.route;
         },
+        /* Jobshop asks before closing a window with unsaved changes: the
+         * screen registers its checks in window.NLINE_DIRTY */
+        _close_allowed: function () {
+            var dirty = false;
+            try {
+                var win = this.frame[0].contentWindow;
+                dirty = (win.NLINE_DIRTY || []).some(function (check) {
+                    return check();
+                });
+            } catch (e) {
+                dirty = false;
+            }
+            if (!dirty) {
+                return jQuery.when();
+            }
+            return Sao.common.sur.run(
+                'This window has unsaved changes. Close it without saving?');
+        },
         reload: function () {
             this.frame[0].contentWindow.location.reload();
         },

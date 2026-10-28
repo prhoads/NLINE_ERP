@@ -146,7 +146,7 @@ table.data tfoot td { font-weight: 600; border-top: 2px solid var(--line); backg
 .toast.gone { opacity: 0; }
 
 /* Write Checks: a paper check */
-.check {
+div.check {
     position: relative; max-width: 860px;
     background: var(--check);
     background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.35) 0 2px, transparent 2px 9px);
@@ -251,8 +251,8 @@ table.data tfoot td { font-weight: 600; border-top: 2px solid var(--line); backg
  * state colors carry the meaning */
 .node { color: #1d2733; }
 .badge.open, .badge.paid, .badge[class*="st-"] { color: #1d2733; }
-.check { color: #1d2733; }
-.check input { color: #1d2733; }
+div.check { color: #1d2733; }
+div.check input { color: #1d2733; }
 
 /* One screen inside a Tryton tab (index.html?embed=1) */
 html.embed #topbar { display: none; }
@@ -382,3 +382,60 @@ table.data tr.short td { background: rgba(178, 106, 0, .08); }
 .brand .nl-for { font-family: 'Segoe Script', 'Bradley Hand', 'Brush Script MT', 'Lucida Handwriting', cursive; font-weight: 400; font-size: 15px; margin-left: 6px; color: var(--muted); }
 .brand .nl-valve { height: 34px; vertical-align: middle; margin-left: 6px; }
 .brand .nl-logo { height: 16px; vertical-align: middle; margin-left: 6px; }
+
+/* Jobshop's window layout (UI.master fields with at: [l, t, r, b]) */
+.js-layout { position: relative; --u: 1.5px; min-height: 40px; }
+.js-layout > * { position: absolute; box-sizing: border-box; }
+.js-ctl { display: flex; align-items: center; gap: 0; }
+.js-ctl > .js-label { flex: none; font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 6px; }
+.js-ctl > :not(.js-label) { flex: 1; min-width: 0; height: 100%; }
+.js-ctl input, .js-ctl select, .js-ctl .picker { width: 100%; height: 100%; box-sizing: border-box; }
+.js-ctl.js-multi { align-items: stretch; flex-direction: column; }
+.js-ctl.js-multi > .js-label { padding: 0 0 2px; }
+.js-ctl.js-multi textarea { width: 100%; height: 100%; resize: none; box-sizing: border-box; }
+.js-ctl.js-check { gap: 6px; }
+.js-ctl.js-check > input { flex: none; width: auto; height: auto; }
+.js-ctl.js-check > .js-label { flex: 1; padding: 0; }
+.js-frame { border: 1px solid var(--line); border-radius: 4px; margin: 0; padding: 0; }
+.js-frame > legend { font-size: 12px; color: var(--muted); padding: 0 4px; margin-left: 6px; }
+.js-btn { font-size: 12px; padding: 0 6px; }
+.ctx-item .ctx-key { float: right; margin-left: 24px; color: var(--muted); font-size: 11px; }
+.js-radio { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.js-radio.inline { flex-direction: row; flex-wrap: wrap; gap: 4px 14px; }
+.js-radio label { display: flex; align-items: center; gap: 4px; }
+.js-ctl.js-multi .js-radio { height: auto; }
+
+/* Jobshop's lookup window (the "..." / F9): Browse grid, Search, Find, Refresh, OK, Cancel */
+.lookup-win { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 16px 40px rgba(0,0,0,.28); display: flex; flex-direction: column; width: min(980px, 96vw); height: min(640px, 90vh); min-width: 420px; min-height: 300px; resize: both; overflow: hidden; }
+.lookup-title { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 6px 14px; background: var(--accent); color: #fff; font-weight: 600; }
+.lookup-x { background: none; border: 0; color: #fff; font-size: 20px; line-height: 1; padding: 0 6px; cursor: pointer; }
+.lookup-tabs { padding: 6px 10px 0; border-bottom: 1px solid var(--line); }
+.lookup-tab { display: inline-block; padding: 3px 12px; border: 1px solid var(--line); border-bottom: 0; border-radius: 4px 4px 0 0; background: var(--paper); margin-bottom: -1px; font-size: 13px; }
+.lookup-grid-box { flex: 1; overflow: auto; margin: 6px 10px; border: 1px solid var(--line); }
+.lookup-grid { table-layout: fixed; width: max-content; min-width: 100%; font-size: 13px; }
+.lookup-grid th, .lookup-grid td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 6px; border-right: 1px solid var(--line); }
+.lookup-grid thead th { position: sticky; top: 0; z-index: 1; background: var(--table-head); text-align: center; }
+.lookup-grid .row-head { width: 18px; min-width: 18px; padding: 0; background: var(--table-head); }
+.lookup-grid tbody tr { cursor: default; }
+.lookup-grid tbody tr:nth-child(even) td { background: rgba(0,0,0,.025); }
+.lookup-grid tbody tr.active td { background: var(--accent-soft); }
+.lookup-grid tbody tr.active td.row-head { background: var(--accent); }
+.lookup-grid td.center { text-align: center; }
+.lookup-bar { display: flex; align-items: center; gap: 8px; padding: 4px 10px 8px; }
+.lookup-bar input { width: 180px; }
+.lookup-bar .lookup-gap { flex: 1; }
+.lookup-bar button { min-width: 84px; }
+.lookup-status { display: flex; justify-content: space-between; gap: 12px; padding: 3px 10px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+
+/* Editable grids (Jobshop's grids): columns keep a usable width and the
+   grid scrolls sideways instead of squeezing values to a few letters */
+.table-wrap table.data:has(td input, td select) td { white-space: nowrap; }
+.table-wrap td > input:not([type=checkbox]):not([type=radio]), .table-wrap td > select { min-width: 84px; }
+.table-wrap td input[type=date] { min-width: 128px; }
+.table-wrap td .picker { min-width: 130px; }
+.table-wrap td .picker input { min-width: 0; }
+.table-wrap td input.money { min-width: 72px; }
+table.data td.nowrap { white-space: nowrap; }
+/* Radio groups inside a placed layout keep their natural size */
+.js-ctl .js-radio input[type=radio] { width: auto; height: auto; flex: none; margin: 0; }
+.js-ctl .js-radio label { display: flex; align-items: center; gap: 6px; }

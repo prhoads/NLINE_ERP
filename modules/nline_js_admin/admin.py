@@ -2,9 +2,13 @@
 # this repository contains the full copyright notices and license terms.
 """Jobshop Accounting, Executive Information and Administration: Accounts, account sets, accounting calendar, account interface, executive information, user and authority manager, system settings, the Jobshop reports, as in VISUAL Jobshop"""
 from . import (  # noqa: F401 (the report files register their reports)
-    accounting, executive, report_accounting, report_engineering,
-    report_inventory, report_purchasing, report_sales, report_shopfloor,
-    reports, settings, users)
+    accounting, executive, executive_values, report_accounting,
+    report_dialogs, report_engineering, report_extra, report_inventory,
+    report_purchasing, report_sales, report_shopfloor, reports, settings,
+    users)
+
+# Jobshop's report dialogs on the report definitions (after all are made)
+report_dialogs.apply()
 
 # The classes this module registers (see __init__.py)
 MODELS = [
@@ -16,6 +20,7 @@ MODELS = [
     settings.DeskSettings,
     users.DeskUsers,
     executive.DeskExecutive,
+    executive_values.DeskExecutiveValues,
     reports.DeskReports,
     ]
 WIZARDS = []

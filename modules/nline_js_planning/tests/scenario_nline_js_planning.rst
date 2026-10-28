@@ -230,6 +230,37 @@ to both cards::
     ...     'all', config.context), key=lambda r: r['net_qty'])]
     [4.0, 6.0]
 
+Create Request For Quote for Supplier: one line for both cards, linked to
+each work order::
+
+    >>> rows = Desk.js_planning_non_stocked('all', config.context)
+    >>> rfq = Desk.js_planning_rfq({'kind': 'material',
+    ...     'rows': [r['card'] for r in rows], 'supplier': foundry.id},
+    ...     config.context)
+    >>> RFQ = Model.get('nline.rfq')
+    >>> request = RFQ(rfq['rfq'])
+    >>> request.supplier_1 == foundry, len(request.lines)
+    (True, 1)
+    >>> request.lines[0].prices[0].quantity, len(request.lines[0].links)
+    (10.0, 2)
+    >>> sorted(r['linked_rfq_qty'] for r in Desk.js_planning_non_stocked(
+    ...     'all', config.context))
+    [4.0, 6.0]
+
+The stocked parts are left out of the section unless their demand is
+included::
+
+    >>> len(Desk.js_planning_non_stocked('all', True, config.context))
+    4
+
+Link Order Line to Existing Work Order: the work order's quantity still free
+to link::
+
+    >>> [(t['number'], t['available']) for t in
+    ...     Desk.js_planning_link_targets(valve.id, config.context)] == [
+    ...     (wo['number'], 0.0), ('9001/2', 2.0)]
+    True
+
 Stocked Parts
 -------------
 
@@ -239,6 +270,23 @@ The bar: 3 needed by the released order, 2 by the firm one, none on hand::
     >>> (bar_row['part_id'], bar_row['net_demand'], bar_row['projected'],
     ...     bar_row['order_point'], bar_row['color'], bar_row['suggested'])
     ('BAR', 5.0, -5.0, 10.0, 'red', 25.0)
+    >>> (bar_row['inactive'], bar_row['po_exists'], bar_row['order_qty'],
+    ...     bar_row['pref_suppliers'][0])
+    (False, False, 25.0, '')
+
+Only fabricated parts, inactive parts only, the part's lead time as
+horizon::
+
+    >>> Desk.js_planning_stocked({'fabricated': 'fabricated'},
+    ...     config.context)
+    []
+    >>> Desk.js_planning_stocked({'activity': 'inactive_only'},
+    ...     config.context)
+    []
+    >>> row, = Desk.js_planning_stocked({'use_leadtime': True,
+    ...     'plus_days': 60}, config.context)
+    >>> row['horizon_date'] == today + dt.timedelta(days=60)
+    True
     >>> po = Desk.js_planning_purchase({'kind': 'stocked',
     ...     'rows': [bar.id], 'supplier': foundry.id,
     ...     'quantities': {str(bar.id): 25}}, config.context)
@@ -246,28 +294,41 @@ The bar: 3 needed by the released order, 2 by the firm one, none on hand::
     25.0
     >>> Desk.js_planning_stocked({}, config.context)
     []
+    >>> Desk.js_planning_stocked({'short_only': False},
+    ...     config.context)[0]['po_exists']
+    True
     >>> [r['projected'] for r in Desk.js_planning_stocked(
     ...     {'short_only': False}, config.context)]
     [20.0]
 
 Supply & Demand of the body::
 
-    >>> sd = Desk.js_supply_demand(body.id, config.context)
+    >>> sd = Desk.js_supply_demand(body.id, None, config.context)
     >>> [w['demand'] for w in sd['work_orders']]
     [6.0, 10.0]
-    >>> [(p['supply_qty'], p['links']) for p in sd['purchases']]
+    >>> [(p['supply_qty'], p['linked_qty']) for p in sd['purchases']]
     [(10.0, 10.0)]
+    >>> sd['demand'], sd['supply'], sorted(r['projected'] for r in
+    ...     sd['work_orders'] + sd['purchases'])
+    (10.0, 10.0, [-10.0, -6.0, 0.0])
 
 Scheduling
 ----------
 
 Without weekly calendar (Shopfloor) the shop works Monday to Friday, one 8
-hour shift at 7:00. Schedule as of next Monday 7:00, finite (the lathe is a
-finite resource)::
+hour shift at 7:00::
 
     >>> Week = Model.get('nline.js.calendar.week')
     >>> len(Week.find([]))
     0
+
+Jobshop schedules a work order backward from its want date; one that would
+start before the schedule's as of date is scheduled forward. The firm order
+is wanted on Monday: it can not be made by then, both go forward::
+
+    >>> firm_order = Production(firm['id'])
+    >>> firm_order.planned_date = monday
+    >>> firm_order.save()
     >>> as_of = dt.datetime.combine(monday, dt.time(7, 0))
     >>> result = Desk.js_schedule_all({'as_of': as_of, 'infinite': False},
     ...     config.context)
@@ -293,8 +354,10 @@ waits for it; the heat treats take a day::
     >>> [(o['seq_no'], o['determinant'], o['outside']) for o in
     ...     details['operations']]
     [(10, True, False), (20, True, True), (30, True, False)]
-    >>> details['late']
-    False
+    >>> details['late'], details['missed_days']
+    (True, 1)
+    >>> {o['forward'] for o in details['operations']}
+    {True}
 
 The could start date of the firm order's finish is earlier than its
 scheduled start (the lathe is busy)::
@@ -327,6 +390,58 @@ Freeze an operation: it stays when the schedule runs again::
     >>> details['operations'][0]['frozen']
     True
 
+Wanted two weeks later, the firm order is scheduled backward: its last
+operation finishes at the end of the want date's shift, the heat treat the
+day before, the turning before that::
+
+    >>> Desk.js_schedule_freeze([first['id']], False, config.context)
+    True
+    >>> firm_order = Production(firm['id'])
+    >>> firm_order.planned_date = monday + dt.timedelta(days=14)
+    >>> firm_order.save()
+    >>> details = Desk.js_schedule_work_order(firm['id'], config.context)
+    >>> [(o['seq_no'], o['start'][-5:], o['finish'][-5:], o['forward'])
+    ...     for o in details['operations']]
+    [(10, '13:00', '15:00', False), (20, '13:00', '13:00', False), (30, '13:00', '15:00', False)]
+    >>> details['finish'] == '%sT15:00' % (monday + dt.timedelta(days=14))
+    True
+    >>> details['missed_days'], [o['determinant']
+    ...     for o in details['operations']]
+    (0, [True, True, True])
+
+A what-if schedule: Schedule All under another Schedule ID leaves STANDARD
+as it is; the Schedule Comparison tab shows both::
+
+    >>> what_if = Desk.js_schedule_all({'schedule': 'WHATIF1',
+    ...     'description': 'Finite', 'as_of': as_of, 'infinite': False},
+    ...     config.context)
+    >>> what_if['orders']
+    2
+    >>> [s['code'] for s in Desk.js_schedule_list(config.context)]
+    ['STANDARD', 'WHATIF1']
+    >>> comparison = Desk.js_schedule_comparison('WHATIF1', None,
+    ...     config.context)
+    >>> comparison['schedules']['what_if_1'], len(comparison['rows'])
+    ('WHATIF1', 2)
+    >>> comparison['percent_late']['standard']
+    50.0
+    >>> Desk.js_schedule_delete('WHATIF1', config.context)
+    True
+    >>> [s['code'] for s in Desk.js_schedule_list(config.context)]
+    ['STANDARD']
+
+Delete Work Order Schedule::
+
+    >>> Desk.js_schedule_delete_work_order(firm['id'], None, config.context)
+    True
+    >>> Desk.js_schedule_work_order_details(firm['id'],
+    ...     config.context)['operations']
+    []
+    >>> firm_order = Production(firm['id'])
+    >>> firm_order.planned_date = monday
+    >>> firm_order.save()
+    >>> _ = Desk.js_schedule_work_order(firm['id'], config.context)
+
 The chart by resource and by work order::
 
     >>> chart = Desk.js_schedule_chart('resource', lathe.id, monday,
@@ -349,6 +464,10 @@ Export to MS Project::
     >>> export = Desk.js_schedule_export('csv', config.context)
     >>> len(export['content'].strip().splitlines())
     9
+    >>> export = Desk.js_schedule_export('tab', config.context)
+    >>> lines = export['content'].strip().splitlines()
+    >>> len(lines), lines[0].split(chr(9))[:3]
+    (7, ['Schedule ID', 'Resource ID', 'Part ID'])
 
 Settings: the load horizon::
 
@@ -369,7 +488,8 @@ Jobshop's: the STANDARD schedule's settings::
     ...     'SHOPFLOOR_SCHEDULE': [{'ID': 'STANDARD',
     ...         'DESCRIPTION': 'Standard Schedule', 'INFINITE_CAPACITY': 0,
     ...         'HORIZON': 730, 'HARD_RELEASE_DATES': 0, 'SORT_BY': 1,
-    ...         'SCHED_STARTED_WO': 2, 'ACTIVE': -1}],
+    ...         'SCHED_STARTED_WO': 2, 'MODE': 2, 'RETRY_BACKWARD': -1,
+    ...         'ACTIVE': -1}],
     ...     'SHOPFLOOR_CALENDAR_WEEK': [{'N': 0}],
     ...     }
     >>> class Source:
@@ -387,3 +507,5 @@ Jobshop's: the STANDARD schedule's settings::
     >>> standard, = Schedule.find([])
     >>> bool(standard.infinite), standard.sort_by, standard.started
     (False, 'priority', 'first_freeze')
+    >>> standard.mode, bool(standard.retry_backward)
+    ('released', True)

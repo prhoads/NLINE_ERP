@@ -30,6 +30,7 @@ CONTACT_TYPES = {
     'supplier_phone': 'phone',
     'supplier_fax': 'fax',
     'supplier_email': 'email',
+    'supplier_mobile': 'mobile',
     'supplier_web_url': 'website',
     }
 ADDRESS_FIELDS = ['supplier_address_1', 'supplier_address_2',
@@ -107,8 +108,16 @@ class Party(metaclass=PoolMeta):
         'get_supplier_contact', setter='set_supplier_contact')
     supplier_email = fields.Function(fields.Char("Contact E-Mail"),
         'get_supplier_contact', setter='set_supplier_contact')
+    supplier_mobile = fields.Function(fields.Char("Mobile"),
+        'get_supplier_contact', setter='set_supplier_contact')
     supplier_web_url = fields.Function(fields.Char("Web URL"),
         'get_supplier_contact', setter='set_supplier_contact')
+
+    # The Other tab: Jobshop's user defined fields N-Line fills (labels of
+    # PURCHASING_OBJECT_GLOBAL: N-LINE FIELD, NOTES:, AUDIT DATE:)
+    supplier_user_0 = fields.Char("N-Line Field")
+    supplier_user_1 = fields.Char("Notes (user field)")
+    supplier_user_2 = fields.Char("Audit Date")
 
     @classmethod
     def __register__(cls, module_name):
@@ -197,10 +206,11 @@ class Party(metaclass=PoolMeta):
             # Fresh: an earlier setter of the same save may have made it
             address = cls(party.id)._supplier_address()
             if not address:
-                address = Address(party=party)
+                address = Address(party=party, street=None, country=None,
+                    subdivision=None)
             if name in {'supplier_address_1', 'supplier_address_2',
                     'supplier_address_etc'}:
-                lines = (address.street or '').splitlines()
+                lines = (getattr(address, 'street', None) or '').splitlines()
                 lines += [''] * (3 - len(lines))
                 index = {'supplier_address_1': 0, 'supplier_address_2': 1,
                     'supplier_address_etc': 2}[name]

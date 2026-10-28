@@ -17,7 +17,7 @@ from trytond.pool import Pool, PoolMeta
 from trytond.rpc import RPC
 from trytond.transaction import Transaction
 
-from .purchase import SHIP_TO_FIELDS
+from .purchase import PURCHASE_FROM_FIELDS, SHIP_TO_FIELDS
 from .rfq import SLOTS
 
 PRICE_QUANTUM = Decimal(1) / 10 ** price_digits[1]
@@ -30,7 +30,10 @@ WRITES = ['js_supplier_price_save', 'js_supplier_price_delete',
     'js_po_save', 'js_po_status', 'js_po_delete', 'js_po_printed',
     'js_receiver_receive', 'js_receiver_save', 'js_receiver_return',
     'js_receiver_cancel', 'js_tax_group_save', 'js_tax_group_delete',
-    'js_rfq_save', 'js_rfq_delete', 'js_rfq_create_po', 'js_rfq_printed']
+    'js_rfq_save', 'js_rfq_delete', 'js_rfq_create_po', 'js_rfq_printed',
+    'js_rfq_update_pricing']
+# The user defined fields of a purchase order (its Other tab)
+PO_USER_FIELDS = ['user_0', 'user_1', 'user_2']
 
 
 def _date(value):
@@ -149,7 +152,21 @@ class Desk(metaclass=PoolMeta):
             'phone': address.site_contact_phone or contact.get('phone', ''),
             'fax': address.site_contact_fax or contact.get('fax', ''),
             'email': address.site_contact_email or contact.get('email', ''),
+            'mobile': contact.get('mobile', ''),
             }
+
+    @classmethod
+    def _po_purchase_from(cls, purchase):
+        """Jobshop's Purchase From of an order: its own copy when it has
+        one, else the supplier's address (purchase_from_default)"""
+        default = cls._js_address(purchase.invoice_address, purchase.party)
+        own = {name[len('purchase_from_'):]: getattr(purchase, name) or ''
+            for name in PURCHASE_FROM_FIELDS}
+        if not any(own.values()):
+            return default, default
+        own['id'] = default.get('id')
+        own['rec_name'] = default.get('rec_name')
+        return own, default
 
     @classmethod
     def js_supplier_purchases(cls, party, statuses=None):
@@ -415,11 +432,15 @@ class Desk(metaclass=PoolMeta):
         data = cls.purchase_order_get(purchase)
         purchase = Purchase(purchase)
         party = purchase.party
+        purchase_from, purchase_from_default = cls._po_purchase_from(purchase)
         data.update({
                 'jobshop_status': purchase.jobshop_status,
                 'hold': bool(purchase.hold),
                 'party_code': party.code or '',
                 'party_name': party.name,
+                # (the desk's purchase_order_get gives the id only: the
+                # Terms ID field shows the record)
+                'payment_term': _m2o(purchase.payment_term),
                 'delivery_date': purchase.delivery_date,
                 'buyer': purchase.buyer or '',
                 'fob_point': _m2o(purchase.fob_point),
@@ -434,8 +455,8 @@ class Desk(metaclass=PoolMeta):
                 'specifications': purchase.specifications or '',
                 'rfq': _m2o(purchase.rfq),
                 'invoice_address': _m2o(purchase.invoice_address),
-                'purchase_from': cls._js_address(
-                    purchase.invoice_address, party),
+                'purchase_from': purchase_from,
+                'purchase_from_default': purchase_from_default,
                 'statuses': cls._po_statuses(purchase),
                 'lines_editable': purchase.state == 'draft',
                 'editable': purchase.state not in {'done', 'cancelled'},
@@ -444,8 +465,14 @@ class Desk(metaclass=PoolMeta):
                 'taxes': cls._po_taxes(purchase),
                 'receivers': cls._po_receivers(purchase),
                 })
-        for name in SHIP_TO_FIELDS:
+        for name in SHIP_TO_FIELDS + PO_USER_FIELDS + PURCHASE_FROM_FIELDS:
             data[name] = getattr(purchase, name) or ''
+        data['ship_to_summary'] = '\n'.join(filter(None, [
+                    data.get('ship_to_name'), data.get('ship_to_street'),
+                    ' '.join(filter(None, [data.get('ship_to_city'),
+                                data.get('ship_to_state'),
+                                data.get('ship_to_postal_code')])),
+                    data.get('ship_to_country')]))
         lines = {l.id: l for l in purchase.lines}
         try:
             # The material cards Material Planning links (nline_js_planning)
@@ -467,6 +494,19 @@ class Desk(metaclass=PoolMeta):
                     'supplier_part_code': line.supplier_part_code or '',
                     'mfg_name': line.mfg_name or '',
                     'mfg_part_id': line.mfg_part_id or '',
+                    'drawing': line.drawing or '',
+                    'drawing_revision': line.drawing_revision or '',
+                    'user_0': line.user_0 or '',
+                    'user_1': line.user_1 or '',
+                    'amount': line.amount,
+                    'received_amount': sum(
+                        (Decimal(str(m.quantity)) * (m.unit_price or 0)
+                            for m in line.moves if m.state == 'done'),
+                        Decimal(0)),
+                    'rfq_number': (line.rfq_line.rfq.number or ''
+                        if line.rfq_line else ''),
+                    'rfq_line_no': (line.rfq_line.sequence
+                        if line.rfq_line else None),
                     'product_code': _m2o(line.product_code),
                     'commodity_code': _m2o(line.commodity_code),
                     'receive_date': line.delivery_date_store,
@@ -516,6 +556,9 @@ class Desk(metaclass=PoolMeta):
             'expense_account': _id(data.get('expense_account')),
             'specifications': data.get('specifications') or None,
             }
+        for name in ['drawing', 'drawing_revision', 'user_0', 'user_1']:
+            if name in data:
+                values[name] = data.get(name) or None
         if 'rfq_line' in data:
             values['rfq_line'] = _id(data.get('rfq_line'))
         return values
@@ -619,9 +662,11 @@ class Desk(metaclass=PoolMeta):
             'promise_date': _date(values.get('promise_date')),
             'specifications': values.get('specifications') or None,
             }
-        for name in SHIP_TO_FIELDS:
+        for name in SHIP_TO_FIELDS + PO_USER_FIELDS + PURCHASE_FROM_FIELDS:
             if name in values:
                 header[name] = values.get(name) or None
+        if header.get('ship_to_address_no') is not None:
+            header['ship_to_address_no'] = int(header['ship_to_address_no'])
         if purchase.state == 'draft':
             header['delivery_date'] = _date(values.get('delivery_date'))
             if 'invoice_address' in values:
@@ -784,8 +829,17 @@ class Desk(metaclass=PoolMeta):
                 moves = cls._open_moves(purchase)
                 if not moves:
                     continue
+                # Jobshop: the earlier of the order's and the lines'
+                # desired receive dates (the moves carry them once
+                # released; imported orders may have them on the lines or
+                # the order only)
                 dates = [m.planned_date for m in moves if m.planned_date]
-                desired = min(dates) if dates else purchase.delivery_date
+                if not dates:
+                    dates = [m.origin.delivery_date_store for m in moves
+                        if getattr(m.origin, 'delivery_date_store', None)]
+                if not dates and purchase.delivery_date:
+                    dates = [purchase.delivery_date]
+                desired = min(dates) if dates else None
                 if not desired:
                     message = ''
                 elif desired < today:
@@ -802,6 +856,9 @@ class Desk(metaclass=PoolMeta):
                         'supplier_code': purchase.party.code or '',
                         'supplier_name': purchase.party.name,
                         'message': message,
+                        'order_date': purchase.purchase_date,
+                        'status': purchase.jobshop_status,
+                        'last_received_date': purchase.last_received_date,
                         'late': bool(desired and desired < today),
                         'lines': len(moves),
                         })
@@ -922,8 +979,41 @@ class Desk(metaclass=PoolMeta):
                     'location': data['storage'],
                     'specifications': line.specifications or '',
                     })
+            lines[-1].update(cls._receiver_line_extra(line, move))
         data['lines'] = lines
         return data
+
+    @classmethod
+    def _receiver_line_extra(cls, line, move):
+        "What a receiver line shows of its purchase line"
+        return {
+            'desired_date': move.planned_date,
+            'mfg_name': (line.mfg_name or '') if line else '',
+            'mfg_part_id': (line.mfg_part_id or '') if line else '',
+            'drawing': (line.drawing or '') if line else '',
+            'drawing_revision': (line.drawing_revision or '') if line else '',
+            'user_0': (line.user_0 or '') if line else '',
+            'user_1': (line.user_1 or '') if line else '',
+            'supplier_part_code': ((line.supplier_part_code or '')
+                if line else ''),
+            'product_code': (line.product_code.rec_name
+                if line and line.product_code else ''),
+            'commodity_code': (line.commodity_code.rec_name
+                if line and line.commodity_code else ''),
+            'tax_group': (line.tax_group.rec_name
+                if line and line.tax_group else ''),
+            'expense_account': (line.expense_account.rec_name
+                if line and line.expense_account else ''),
+            'links': [{
+                    'production': k.production.rec_name
+                    if k.production else (k.reference or ''),
+                    'operation': k.operation,
+                    'piece': k.piece,
+                    'quantity': k.quantity,
+                    'received_quantity': k.received_quantity,
+                    'state': k.production.state if k.production else '',
+                    } for k in line.links] if line else [],
+            }
 
     @classmethod
     def js_receiver_get(cls, kind, shipment):
@@ -992,6 +1082,7 @@ class Desk(metaclass=PoolMeta):
                     'specifications': (line.specifications or '')
                     if line else '',
                     })
+            lines[-1].update(cls._receiver_line_extra(line, move))
         data.update({
                 'id': shipment.id,
                 'kind': kind,
@@ -1034,12 +1125,15 @@ class Desk(metaclass=PoolMeta):
         open_moves = {m.id: m for m in cls._open_moves(purchase)}
         date = _date(values.get('received_date')) or \
             pool.get('ir.date').today()
-        moves, targets = [], {}
+        moves, targets, short = [], {}, set()
         for data in values.get('lines', []):
             move = open_moves.get(int(data['move']))
             quantity = _float(data.get('receive_quantity'))
             if not move or quantity <= 0:
                 continue
+            if data.get('close_short') and quantity < move.quantity:
+                # Jobshop's Close Short: the rest is not expected any more
+                short.add(move.origin)
             quantity = min(quantity, move.quantity)
             move.quantity = quantity
             move.effective_date = date
@@ -1094,6 +1188,13 @@ class Desk(metaclass=PoolMeta):
                 Shipment.done([shipment])
         # The rest of a partial line back on order
         Purchase.process([purchase])
+        if short:
+            rest = [m for l in short for m in l.__class__(l.id).moves
+                if m.state == 'draft' and not m.shipment]
+            if rest:
+                cls._ignore_moves(rest)
+            pool.get('purchase.line').write(
+                [l.__class__(l.id) for l in short], {'line_closed': True})
         return cls.js_receiver_get('receipt', shipment.id)
 
     @classmethod
@@ -1318,6 +1419,7 @@ class Desk(metaclass=PoolMeta):
             'id': tax.id,
             'name': tax.name,
             'description': tax.description,
+            'inactive': not tax.active,
             'taxes': [{
                     'id': t.id,
                     'name': t.name,
@@ -1345,6 +1447,9 @@ class Desk(metaclass=PoolMeta):
             Tax.write([parent], {'name': values['name'],
                     'description': values.get('description')
                     or values['name']})
+            if 'inactive' in values:
+                # Jobshop's Inactive: the tax group is not offered any more
+                Tax.write([parent], {'active': not values['inactive']})
         else:
             cls._check_create('account.tax')
             parent, = Tax.create([{
@@ -1497,6 +1602,13 @@ class Desk(metaclass=PoolMeta):
                 'specifications': line.specifications or '',
                 'drawing': line.drawing or '',
                 'drawing_revision': line.drawing_revision or '',
+                'user_0': line.user_0 or '',
+                'user_1': line.user_1 or '',
+                'lead_time': (getattr(line.product, 'lead_time_days', None)
+                    if line.product else None),
+                'minimum_order_qty': (getattr(
+                        line.product, 'minimum_order_qty', None)
+                    if line.product else None),
                 'linked': line.linked,
                 'po_line_exists': line.po_line_exists,
                 'purchase_lines': [{'id': l.id,
@@ -1556,7 +1668,10 @@ class Desk(metaclass=PoolMeta):
             'specifications': values.get('specifications') or None,
             }
         for name in SHIP_TO_FIELDS:
-            head[name] = values.get(name) or None
+            if name in values:
+                head[name] = values.get(name) or None
+        if head.get('ship_to_address_no') is not None:
+            head['ship_to_address_no'] = int(head['ship_to_address_no'])
         for slot in SLOTS:
             head['supplier_%s' % slot] = _id(values.get('supplier_%s' % slot))
             head['quote_received_%s' % slot] = bool(
@@ -1601,6 +1716,8 @@ class Desk(metaclass=PoolMeta):
                 'specifications': row.get('specifications') or None,
                 'drawing': row.get('drawing') or None,
                 'drawing_revision': row.get('drawing_revision') or None,
+                'user_0': row.get('user_0') or None,
+                'user_1': row.get('user_1') or None,
                 }
             for slot in SLOTS:
                 line_values['supplier_code_%s' % slot] = row.get(
@@ -1666,6 +1783,76 @@ class Desk(metaclass=PoolMeta):
         return True
 
     @classmethod
+    def js_rfq_update_pricing(cls, rfq, slot, price_ids):
+        """Tools > Update Supplier Pricing from Selected Rows (a Supplier tab
+        of an RFQ): the supplier's part / service prices become the quoted
+        prices of the rows chosen, as a break table per line (the smallest
+        quantity's price is also the base price)"""
+        pool = Pool()
+        RFQ = pool.get('nline.rfq')
+        Price = pool.get('nline.rfq.line.price')
+        ProductSupplier = pool.get('purchase.product_supplier')
+        Date = pool.get('ir.date')
+        rfq = RFQ(rfq)
+        slot = int(slot)
+        party = getattr(rfq, 'supplier_%s' % slot)
+        if not party:
+            raise ValidationError(gettext(
+                    'nline_js_purchasing.msg_rfq_no_supplier',
+                    rfq=rfq.rec_name, slot=slot))
+        by_line = {}
+        for price in Price.browse([int(i) for i in price_ids or []]):
+            if price.line.rfq != rfq or not price.line.product:
+                continue
+            if getattr(price, 'unit_price_%s' % slot) is None:
+                continue
+            by_line.setdefault(price.line, []).append(price)
+        updated = []
+        for line, prices in by_line.items():
+            prices.sort(key=lambda p: p.quantity or 0)
+            found = ProductSupplier.search([
+                    ('party', '=', party.id),
+                    ['OR', ('product', '=', line.product.id),
+                        [('product', '=', None),
+                            ('template', '=', line.product.template.id)]],
+                    ], limit=1)
+            rows = [{'quantity': 0,
+                    'unit_price': getattr(prices[0], 'unit_price_%s' % slot)}]
+            rows += [{'quantity': p.quantity,
+                    'unit_price': getattr(p, 'unit_price_%s' % slot)}
+                for p in prices if p.quantity]
+            lead = getattr(prices[0], 'lead_time_%s' % slot)
+            values = {
+                'id': found[0].id if found else None,
+                'party': party.id,
+                'product': line.product.id,
+                'code': (getattr(line, 'supplier_code_%s' % slot)
+                    or (found[0].code if found else None)),
+                'mfg_name': line.mfg_name or (
+                    found[0].mfg_name if found else None),
+                'mfg_part_id': line.mfg_part_id or (
+                    found[0].mfg_part_id if found else None),
+                'service_part': (line.service_part.id if line.service_part
+                    else (found[0].service_part.id
+                        if found and found[0].service_part else None)),
+                'price_type': 'break',
+                'as_of_date': (getattr(rfq, 'as_of_date_%s' % slot)
+                    or Date.today()),
+                'expiration_date': getattr(rfq, 'expiration_date_%s' % slot),
+                'quote_date': Date.today(),
+                'lead_time': lead if lead is not None else (
+                    found[0].lead_time.days
+                    if found and found[0].lead_time else None),
+                'minimum_quantity': (found[0].minimum_quantity
+                    if found else None),
+                'multiple_quantity': (found[0].multiple_quantity
+                    if found else None),
+                'prices': rows,
+                }
+            updated.append(cls.js_supplier_price_save(values))
+        return updated
+
+    @classmethod
     def js_rfq_create_po(cls, values):
         """Make the purchase order of a supplier's quote (Preview/Create PO)
         values: rfq, slot (1, 2 or 3), lines [{line, price}] (the quoted
@@ -1720,6 +1907,10 @@ class Desk(metaclass=PoolMeta):
                         line, 'supplier_code_%s' % slot),
                     'mfg_name': line.mfg_name,
                     'mfg_part_id': line.mfg_part_id,
+                    'drawing': line.drawing,
+                    'drawing_revision': line.drawing_revision,
+                    'user_0': line.user_0,
+                    'user_1': line.user_1,
                     'product_code': (line.product_code.id
                         if line.product_code else None),
                     'commodity_code': (line.commodity_code.id

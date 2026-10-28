@@ -112,6 +112,10 @@ this repository contains the full copyright notices and license terms. -->
             <field name="name">nline-common-tag</field>
             <field name="path">icons/nline-common-tag.svg</field>
         </record>
+        <record model="ir.ui.icon" id="icon_nline_common_tune">
+            <field name="name">nline-common-tune</field>
+            <field name="path">icons/nline-common-tune.svg</field>
+        </record>
         <record model="ir.ui.icon" id="icon_nline_company_account">
             <field name="name">nline-company-account</field>
             <field name="path">icons/nline-company-account.svg</field>
@@ -339,6 +343,10 @@ this repository contains the full copyright notices and license terms. -->
         <record model="ir.ui.icon" id="icon_nline_sales_tag">
             <field name="name">nline-sales-tag</field>
             <field name="path">icons/nline-sales-tag.svg</field>
+        </record>
+        <record model="ir.ui.icon" id="icon_nline_shopfloor_date">
+            <field name="name">nline-shopfloor-date</field>
+            <field name="path">icons/nline-shopfloor-date.svg</field>
         </record>
         <record model="ir.ui.icon" id="icon_nline_shopfloor_export">
             <field name="name">nline-shopfloor-export</field>

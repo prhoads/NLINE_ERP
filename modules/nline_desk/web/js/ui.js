@@ -276,9 +276,16 @@
         return name;
     }
 
+    /* Tables whose name is not their ID: the field shows the ID read
+     * beside it (a customer's or supplier's ID, not its name) */
+    var ID_FIELDS = {'party.party': 'code'};
+
     function picker(model, options) {
         options = options || {};
         var selected = null;
+        var idField = ID_FIELDS[model];
+        var readFields = ['rec_name'].concat(idField ? [idField] : [],
+            options.fields || []);
         var input = el('input', {type: 'text', autocomplete: 'off',
             placeholder: options.placeholder || '', 'aria-label':
                 options.label || options.placeholder || model});
@@ -295,12 +302,18 @@
             if (!global.UI.browse) {
                 return;
             }
+            /* Jobshop's lookup window: the table's Browse columns, what
+             * was typed so far, the current record selected */
             global.UI.browse(model, {title: options.label || options.placeholder,
-                domain: options.domain, order: options.order}).then(
+                domain: options.domain, order: options.order,
+                columns: options.lookupColumns, lookupTitle:
+                    options.lookupTitle, text: selected ? '' :
+                    input.value.trim(), current: selected && selected.id})
+                .then(
                 function (record) {
                     /* With the fields the screen needs (e.g. the terms) */
                     global.Rpc.searchRead(model, [['id', '=', record.id]],
-                        ['rec_name'].concat(options.fields || [])).then(
+                        readFields).then(
                         function (rows) {
                             choose(rows[0] || record);
                             input.focus();
@@ -328,20 +341,21 @@
                         event.preventDefault();
                         choose(record);
                     }
-                }, record.rec_name, record.extra ?
+                }, idField && record[idField] ? [el('b', record[idField]),
+                    ' ' + record.rec_name] : record.rec_name, record.extra ?
                     el('span.muted', ' ' + record.extra) : null));
             });
             list.style.display = items.length ? 'block' : 'none';
         }
 
-        function show(name) {
-            input.value = shortName(model, name);
+        function show(name, id) {
+            input.value = id || shortName(model, name);
             input.title = input.value !== (name || '') ? name : '';
         }
 
         function choose(record) {
             selected = record;
-            show(record.rec_name);
+            show(record.rec_name, idField && record[idField]);
             items = [];
             render();
             if (options.onselect) {
@@ -356,8 +370,8 @@
             if (text) {
                 domain.push(['rec_name', 'ilike', '%' + text + '%']);
             }
-            return global.Rpc.searchRead(model, domain, ['rec_name'].concat(
-                options.fields || []), {limit: 12, order: options.order})
+            return global.Rpc.searchRead(model, domain, readFields, {
+                limit: 12, order: options.order})
                 .then(function (records) {
                     items = records.map(function (record) {
                         if (options.extra) {
@@ -375,6 +389,16 @@
             selected = null;
             pending = true;
             global.clearTimeout(timer);
+            /* Preferences: Auto Browse's minimum characters (Jobshop);
+             * Enter still takes the first match */
+            var common = global.JobshopCommon;
+            var prefs = common && common.preferences ?
+                common.preferences() : {};
+            if (input.value.trim() && input.value.trim().length <
+                    (prefs.autoBrowseMinChars || 0)) {
+                list.style.display = 'none';
+                return;
+            }
             timer = global.setTimeout(search, 180);
         });
         input.addEventListener('focus', function () {
@@ -431,8 +455,19 @@
                 return selected;
             },
             set: function (id, name) {
-                selected = id ? {id: id, rec_name: name} : null;
+                var record = id ? {id: id, rec_name: name} : null;
+                selected = record;
                 show(name);
+                if (record && idField) {
+                    global.Rpc.model(model, 'read', [[id], [idField]]).then(
+                        function (rows) {
+                            if (selected === record && rows[0] &&
+                                    rows[0][idField]) {
+                                record[idField] = rows[0][idField];
+                                show(name, rows[0][idField]);
+                            }
+                        }, function () {});
+                }
             }
         };
     }

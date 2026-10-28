@@ -15,6 +15,12 @@ STOCK_TOP_ICONS = {
     ('account', 'menu_account'): 'nline-accounting-account',
     ('ir', 'menu_administration'): 'nline-admin-tune',
     }
+# Standard top menus whose name doubles a Jobshop group or a QuickBooks
+# folder of the same name in the menu
+STOCK_TOP_NAMES = {
+    ('bank', 'menu_banking'): 'Banks',
+    ('ir', 'menu_administration'): 'System Administration',
+    }
 
 
 class SupersededMenu(ModelSQL, ModelView):
@@ -60,6 +66,11 @@ class SupersededMenu(ModelSQL, ModelView):
             ids = data.select(data.db_id, where=(data.module == module)
                 & (data.fs_id == fs_id) & (data.model == 'ir.ui.menu'))
             cursor.execute(*menu.update([menu.icon], [icon],
+                    where=menu.id.in_(ids)))
+        for (module, fs_id), name in STOCK_TOP_NAMES.items():
+            ids = data.select(data.db_id, where=(data.module == module)
+                & (data.fs_id == fs_id) & (data.model == 'ir.ui.menu'))
+            cursor.execute(*menu.update([menu.name], [name],
                     where=menu.id.in_(ids)))
 
     @classmethod

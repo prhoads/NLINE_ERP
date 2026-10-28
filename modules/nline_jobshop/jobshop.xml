@@ -193,6 +193,24 @@ this repository contains the full copyright notices and license terms. -->
             <field name="action" ref="url_js_labor_collection"/>
             <field name="group" ref="production.group_production"/>
         </record>
+        <record model="ir.action.url" id="url_js_issues_bc">
+            <field name="name">Material Issue Barcoding</field>
+            <field name="nline_writes" eval="True"/>
+            <field name="url">desk/index.html#/issues-bc</field>
+        </record>
+        <record model="ir.action-res.group" id="url_js_issues_bc_group">
+            <field name="action" ref="url_js_issues_bc"/>
+            <field name="group" ref="production.group_production"/>
+        </record>
+        <record model="ir.action.url" id="url_js_time_attendance">
+            <field name="name">Time and Attendance</field>
+            <field name="nline_writes" eval="True"/>
+            <field name="url">desk/index.html#/time-attendance</field>
+        </record>
+        <record model="ir.action-res.group" id="url_js_time_attendance_group">
+            <field name="action" ref="url_js_time_attendance"/>
+            <field name="group" ref="company.group_employee_admin"/>
+        </record>
         <record model="ir.action.url" id="url_js_reports_shopfloor">
             <field name="name">Shopfloor Reports</field>
             <field name="nline_writes" eval="False"/>
@@ -283,6 +301,11 @@ this repository contains the full copyright notices and license terms. -->
             <field name="name">User Control Panel</field>
             <field name="nline_writes" eval="False"/>
             <field name="url">desk/index.html#/control-panel</field>
+        </record>
+        <record model="ir.action.url" id="url_js_preferences">
+            <field name="name">Preferences</field>
+            <field name="nline_writes" eval="False"/>
+            <field name="url">desk/index.html#/preferences</field>
         </record>
         <record model="ir.action.url" id="url_js_reports_common">
             <field name="name">Common Reports</field>
@@ -542,50 +565,62 @@ this repository contains the full copyright notices and license terms. -->
             <field name="menu" ref="menu_js_shopfloor_issues"/>
             <field name="group" ref="production.group_production"/>
         </record>
+        <menuitem parent="menu_js_shopfloor" action="url_js_issues_bc"
+            icon="nline-shopfloor-touch" sequence="30" id="menu_js_shopfloor_issues_bc"/>
+        <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_issues_bc_group_production">
+            <field name="menu" ref="menu_js_shopfloor_issues_bc"/>
+            <field name="group" ref="production.group_production"/>
+        </record>
         <menuitem parent="menu_js_shopfloor" action="nline_desk.url_desk_wo_receipts" name="Work Order Receipts/Returns"
-            icon="nline-shopfloor-import" sequence="30" id="menu_js_shopfloor_wo_receipts"/>
+            icon="nline-shopfloor-import" sequence="40" id="menu_js_shopfloor_wo_receipts"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_wo_receipts_group_production">
             <field name="menu" ref="menu_js_shopfloor_wo_receipts"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_shopfloor" action="nline_desk.url_desk_resources"
-            icon="nline-shopfloor-production" sequence="40" id="menu_js_shopfloor_resources"/>
+            icon="nline-shopfloor-production" sequence="50" id="menu_js_shopfloor_resources"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_resources_group_production">
             <field name="menu" ref="menu_js_shopfloor_resources"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_shopfloor" action="url_js_shop_groups"
-            icon="nline-shopfloor-grid" sequence="50" id="menu_js_shopfloor_shop_groups"/>
+            icon="nline-shopfloor-grid" sequence="60" id="menu_js_shopfloor_shop_groups"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_shop_groups_group_production">
             <field name="menu" ref="menu_js_shopfloor_shop_groups"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_shopfloor" action="url_js_shop_views"
-            icon="nline-shopfloor-list" sequence="60" id="menu_js_shopfloor_shop_views"/>
+            icon="nline-shopfloor-list" sequence="70" id="menu_js_shopfloor_shop_views"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_shop_views_group_production">
             <field name="menu" ref="menu_js_shopfloor_shop_views"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_shopfloor" action="nline_desk.url_desk_labor"
-            icon="nline-shopfloor-timesheet" sequence="70" id="menu_js_shopfloor_labor"/>
+            icon="nline-shopfloor-timesheet" sequence="80" id="menu_js_shopfloor_labor"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_labor_group_production">
             <field name="menu" ref="menu_js_shopfloor_labor"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_shopfloor" action="url_js_labor_collection"
-            icon="nline-shopfloor-touch" sequence="80" id="menu_js_shopfloor_labor_collection"/>
+            icon="nline-shopfloor-touch" sequence="90" id="menu_js_shopfloor_labor_collection"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_labor_collection_group_production">
             <field name="menu" ref="menu_js_shopfloor_labor_collection"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_shopfloor" action="nline_desk.url_desk_employees"
-            icon="nline-shopfloor-person" sequence="90" id="menu_js_shopfloor_employees"/>
+            icon="nline-shopfloor-person" sequence="100" id="menu_js_shopfloor_employees"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_employees_group_employee_admin">
             <field name="menu" ref="menu_js_shopfloor_employees"/>
             <field name="group" ref="company.group_employee_admin"/>
         </record>
+        <menuitem parent="menu_js_shopfloor" action="url_js_time_attendance"
+            icon="nline-shopfloor-date" sequence="110" id="menu_js_shopfloor_time_attendance"/>
+        <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_time_attendance_group_employee_admin">
+            <field name="menu" ref="menu_js_shopfloor_time_attendance"/>
+            <field name="group" ref="company.group_employee_admin"/>
+        </record>
         <menuitem parent="menu_js_shopfloor" action="url_js_reports_shopfloor" name="Reports"
-            icon="nline-shopfloor-report" sequence="100" id="menu_js_shopfloor_reports"/>
+            icon="nline-shopfloor-report" sequence="120" id="menu_js_shopfloor_reports"/>
 
         <menuitem name="Accounting" sequence="9" id="menu_js_accounting" icon="nline-accounting-account"/>
         <menuitem parent="menu_js_accounting" action="nline_desk.url_desk_accounts" name="Accounts"
@@ -654,8 +689,10 @@ this repository contains the full copyright notices and license terms. -->
             icon="nline-common-currency" sequence="100" id="menu_js_common_currency_codes"/>
         <menuitem parent="menu_js_common" action="url_js_control_panel"
             icon="nline-common-person" sequence="110" id="menu_js_common_control_panel"/>
+        <menuitem parent="menu_js_common" action="url_js_preferences"
+            icon="nline-common-tune" sequence="120" id="menu_js_common_preferences"/>
         <menuitem parent="menu_js_common" action="url_js_reports_common" name="Reports"
-            icon="nline-common-report" sequence="120" id="menu_js_common_reports"/>
+            icon="nline-common-report" sequence="130" id="menu_js_common_reports"/>
 
         <menuitem name="Executive Information" sequence="11" id="menu_js_executive" icon="nline-executive-gauge"/>
         <menuitem parent="menu_js_executive" action="url_js_exec_sales"

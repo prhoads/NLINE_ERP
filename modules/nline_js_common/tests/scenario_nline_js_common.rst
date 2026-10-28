@@ -206,6 +206,8 @@ watches them, once::
     ('PO Overdue', True)
     >>> message['document'][:2] == ['purchase.purchase', purchase.id]
     True
+    >>> message['action'], message['action_string'], message['recipient']
+    ('manual', 'Manual', None)
     >>> Desk.common_archive_alerts([message['id']], True, config.context)
     1
     >>> Desk.common_alerts(False, 10, config.context)
@@ -244,6 +246,13 @@ The User Control Panel: the user's preferences, never the password::
     >>> prefs['email'], prefs['name']
     ('clerk@example.com', 'Clerk')
     >>> config.user = 1
+
+A user deletes their own message (the Messages tab's Delete)::
+
+    >>> Message = Model.get('nline.alert_message')
+    >>> Message.delete(Message.find([('id', '=', message['id'])]))
+    >>> Desk.common_alerts(True, 10, config.context)
+    []
 
 The Jobshop data import (migration/jobshop/common.py) on rows like
 Jobshop's::
@@ -321,7 +330,7 @@ Jobshop's::
     nline.reason_code: 0 made, 1 updated
     terms: 2 made, 0 updated
     states/provinces: 1 known to the ERP, 1 not: Houston
-    postal codes: 1 made, 1 without a known country
+    postal codes: 1 made, 0 states filled in, 1 without a known country
     currency codes: 0 made
     alerts: 0 made, 1 messages
 
@@ -348,6 +357,6 @@ Run again, nothing is duplicated::
     nline.reason_code: 0 made, 0 updated
     terms: 0 made, 0 updated
     states/provinces: 1 known to the ERP, 1 not: Houston
-    postal codes: 0 made, 1 without a known country
+    postal codes: 0 made, 0 states filled in, 1 without a known country
     currency codes: 0 made
     alerts: 0 made, 0 messages

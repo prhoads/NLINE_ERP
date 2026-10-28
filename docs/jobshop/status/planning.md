@@ -4,7 +4,7 @@ Module `modules/nline_js_planning`, screens `nline_desk/web/js/jobshop/planning.
 (routes `#/planning` = Material Planning, `#/scheduling` = Scheduling: they take
 over `Screens.materialPlanning` / `Screens.scheduling` of `js/planning.js`),
 data `migration/jobshop/planning.py` (step `js_planning`).
-Tests: `test.ps1 nline_js_planning` (25 tests; scenario
+Tests: `test.ps1 nline_js_planning` (25 tests, OK 28 Oct; scenario
 `tests/scenario_nline_js_planning.rst`: the four Material Planning sections,
 linking / unlinking, Create New Work Order, sales order status, purchase orders
 for materials (linked), services and stocked parts, Supply & Demand, Schedule
@@ -44,7 +44,7 @@ Jobshop-like rows run twice). JS: `jscheck.py` OK.
 - [x] Scheduling
   - [x] What is Scheduling? (`What_is_Scheduling_.txt`)
   - [x] Schedule Components (`Schedule_Components.txt`) — load vs capacity (units per shift), work order inputs (setup + run hours of the operation, less the hours already reported; outside service = its supplier's lead time in days, or the PO line's delivery date), resource inputs (calendar, shift capacities, Schedule Method finite / infinite of the Shop Resource), outputs (start / finish per unit, could start / finish, determinant path)
-  - [~] The Jobshop Scheduler (`The_Jobshop_Scheduler.txt`) — forward scheduler (see Decisions); finite or infinite; no backward scheduling, no discontinuous operations, no additional resources, no min/max units per operation, no minimum move quantity overlap
+  - [~] The Jobshop Scheduler (`The_Jobshop_Scheduler.txt`) — backward from the want date, forward when Forward Schedule or when backward would start before the as-of date (or the release date when hard), Retry Backward (see Decisions); finite or infinite; no discontinuous operations, no additional resources, no min/max units per operation, no minimum move quantity overlap (Piece Scheduling is stored only)
   - [x] Scheduling Window Field Level Descriptions (`VPlanningScheduling.txt`) — Resource Details (View Type, Shop Resource ID / Shop View ID or All, Frozen editable, Resource ID, Work/Lot/Split/Sub ID, Seq No, Unit No, Start, Finish, Qty, Cmp Qty, Status, Could Start (red when earlier), Could Finish, Want Date, Determinant, Forward, Late), Work Order Details (Work ID, Want / Release / Finish / Start dates, Rank, Forward, Frozen + the grid), Schedule tab
   - [x] Exporting Your Schedule to MS Project (`Exporting_Your_Schedule_to_MS_Project.txt`) — Tools > Export Schedule to MS Project (XML): a Project XML (MSPDI) file, a summary task per work order, a task per operation (Start No Earlier Than its start, predecessor the previous operation), the resources and their assignments; Tools > Export Schedule as CSV (Project's import map)
   - [x] Scheduler Maintenance
@@ -79,18 +79,52 @@ Jobshop-like rows run twice). JS: `jscheck.py` OK.
   link model: nline_js_purchasing's `nline.purchase.link` (links made by
   Material Planning have production + seq no + piece no of the card).
 
+## Second pass (28 Oct 2026, from Jobshop's own layouts)
+
+Analysis and gap tables: `docs/jobshop/analysis/planning.md` (37 gaps, 30
+done). Changed:
+
+- Material Planning: tabs in Jobshop's order and names (Stocked/Fabricated
+  Only Parts, Non-Stocked Parts, Outside Services, Open Sales Order Lines);
+  the stocked filter area placed as the layout (frame `UI.placedForm`), all
+  grid columns of the layouts, editable Unit Material Cost / Order Quantity
+  with the Total Estimated Cost, the selected part's Supply & Demand under
+  the grid; Jobshop's popups with submenus and Browse filters; Create
+  Request For Quote for Supplier (`js_planning_rfq`); Include Material
+  Demand for Stocked Parts; LinkableWOs grid; NewWOLink placed with Global
+  Rank; Supply & Demand as dlgStockedPartNetting (horizon, part change,
+  projected available, drawing).
+- Scheduling: backward scheduling; what-if schedules and the Schedule
+  Comparison tab; Schedule All with every option of the Scheduler layout;
+  Jobshop's Scheduling / Tools / Options menus; Resource / Work Order
+  Details as laid out; tab-delimited Export Schedule; Delete Work Order
+  Schedule; Weekly Calendars / Calendar Exceptions with Jobshop's columns.
+- Fields: `nline.js.schedule.mode`, `piece_scheduling`, `retry_backward`,
+  `keep_forward_dp`; `nline.js.schedule.operation.forward`.
+
 ## Decisions
 
 - Work order status = nline_js_engineering's `order_status` (Firm / Hold =
   `planning_status` on a draft). Material demand and supply count every open
   work order (request ... running), as the earlier desk planning; the
   scheduler schedules Firm and Released only (Jobshop).
-- The scheduler schedules forward: from now (as of) as soon as possible, or
-  from the release date when the work order is Forward Schedule or the
-  schedule treats release dates as hard. Jobshop's default backward schedule
-  from the want date is not emulated (Late shows what a backward schedule
-  would fix). Legs are scheduled first; a leg feeds the parent's operation at
-  its card's seq no.
+- The scheduler schedules as Jobshop: backward from the end of the want
+  date (the last operation first, each on the unit with the latest start);
+  when the backward schedule would start before the as-of date (or the
+  release date when hard), or the work order is Forward Schedule, forward
+  (as soon as possible, or from the release date) — Forward is then checked
+  on its operations; Retry Backward reschedules backward from the forward
+  end date (Keep Determinant Path keeps the forward path's flags). A work
+  order without want date goes forward. Legs: forward, before the parent's
+  operation they feed; backward, ending at that operation's start.
+- What-if schedules: Schedule All under a new Schedule ID copies
+  STANDARD's settings; Material Planning and the Work Order dates read
+  STANDARD only (Jobshop). The Schedule Comparison's What If 1 / 2 are
+  chosen among the other schedules.
+- Tab order of Material Planning follows the layout file (the user guide of
+  2007 lists Open Sales Orders first; 6.1.2's window has Stocked/Fabricated
+  Only Parts first).
+- Supply & Demand: Planning's dialog is the one to keep (see the analysis).
 - A finite schedule loads only the finite resources (Shop Resource Schedule
   Method finite; Jobshop's default and the import's is infinite); each
   operation stays on one unit (Jobshop) and takes the unit with the earliest
@@ -136,3 +170,16 @@ Jobshop-like rows run twice). JS: `jscheck.py` OK.
 - Not emulated: Shop View scheduling filter works only with nline_js_shopfloor
   shop views (it is a dependency); employee calendars and calendar breaks are
   not used by the scheduler; Number of Shifts in the schedule header.
+
+## Screenshot review fixes (2026-10-28)
+
+- Schedule tab: when no operation is scheduled (the test copy: the schedule
+  was never run) a banner above the chart says so, how to run Schedule All
+  (with the schedule right), and that the outlined boxes are each
+  resource's working hours and shift-less days (weekends) stay blank.
+  Resource rows show the resource's own name (the "N-Line Shop /" parent
+  and the unit count in the tooltip, "×n" when more than one unit); the
+  name column is 190 px. The clipped "n unit(s)" second line is gone.
+- Supply & Demand header (StockedPartHorizonDate): Part ID, Stock UM and
+  Drawing ID/Rev start a few units right of the control before them (their
+  Jobshop boxes touch).

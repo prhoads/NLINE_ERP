@@ -14,10 +14,10 @@ from trytond.transaction import Transaction
 # Jobshop's terms_type (Domains.schema)
 AGE_TYPES = [
     (None, ''),
-    ('age', "Age in Days"),
-    ('cod', "Collect on Delivery"),
-    ('day_next_month', "Day of Next Month"),
-    ('eom', "End of Month"),
+    ('age', "Age in days"),
+    ('day_next_month', "Day of next month"),
+    ('cod', "Collect on delivery"),
+    ('eom', "End of this month"),
     ]
 
 

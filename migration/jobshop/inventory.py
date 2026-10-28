@@ -34,6 +34,16 @@ UNITS = {'EA': 'u', 'IN': 'in', 'FT': 'ft', 'LB': 'lb', 'LBS': 'lb',
     'HR': 'h', 'SQ IN': 'in²', 'GAL': 'gal'}
 LOT_ALL = ['supplier', 'customer', 'lost_found', 'storage', 'production']
 CHUNK = 500
+# The part's user fields kept (N-Line fills USER_0, USER_1, USER_10, USER_11)
+USER_FIELDS = list(range(12))
+# Update on Receipt: Jobshop's value -> the ERP's
+UPDATE_COSTS = {'SYSTEM': 'system', 'ALWAYS': 'always', 'ASK': 'ask',
+    'NEVER': 'never'}
+INSTRUCTIONS = ['QUOTE', 'SALES', 'SHIPPING', 'MATERIAL', 'RFQ',
+    'PURCHASING', 'RECEIVING']
+# Jobshop's part rules are not checked on the imported data (N-Line has
+# parts Jobshop itself would refuse today, e.g. lot tracked and auto issue)
+NO_RULES = {'nline_js_no_part_rules': True}
 
 
 def chunks(values, size=CHUNK):
@@ -77,7 +87,7 @@ def labels(m):
     if not rows:
         return
     row = rows[0]
-    names = [one_line(row.get('USER_%s' % i)) for i in range(10)]
+    names = [one_line(row.get('USER_%s' % i)) for i in USER_FIELDS]
     Configuration = m.get('nline.desk.configuration')
     config = Configuration(1)
     value = '\n'.join(names).rstrip('\n') or None
@@ -249,13 +259,24 @@ def parts(m, units, locations):
             'unit_service_cost': dec4(row.get('UNIT_SER_COST')),
             'fixed_cost': dec4(row.get('FIXED_COST')),
             'active': not row.get('INACTIVE'),
+            'date_tracked': bool(row.get('DATE_TRACKED')),
+            'commissionable': bool(row.get('COMMISSIONABLE')),
+            'preserve_unit_costs': bool(row.get('PRIVATE_UNIT_COSTS')),
+            'preserve_unit_price': bool(row.get('PRIVATE_UNIT_PRICE')),
+            'update_costs_from_po': UPDATE_COSTS.get(
+                (text(row.get('UPDATE_COSTS_FROM_PO')) or '').upper(),
+                'system'),
             }
-        for n in range(10):
+        for name in INSTRUCTIONS:
+            values['%s_instructions' % name.lower()] = text(
+                row.get('%s_INSTRUCTIONS' % name))
+        for n in USER_FIELDS:
             values['user_%s' % n] = one_line(row.get('USER_%s' % n)) or None
         if row.get('LOT_TRACKED'):
             values['lot_required'] = LOT_ALL
+        context = dict(m.context, **NO_RULES)
         try:
-            Template.write([template_id], values, m.context)
+            Template.write([template_id], values, context)
         except Exception as error:
             # A unit of another category, a value Tryton refuses: the rest
             log("jobshop inventory: part %s: %s" % (row['ID'],
@@ -263,7 +284,7 @@ def parts(m, units, locations):
             for name in ['usage_uom', 'weight_uom', 'dimensions_uom',
                     'lot_required', 'active']:
                 values.pop(name, None)
-            Template.write([template_id], values, m.context)
+            Template.write([template_id], values, context)
         suppliers(m, template_id, row)
         notes = text(row.get('NOTES'))
         if notes:
@@ -341,7 +362,7 @@ def part_locations(m, locations):
     existing = {(p.template.id, p.location.id): p
         for p in PartLocation.find([])}
     rows = m.js.rows("select PART_ID, LOCATION_ID, QTY_ON_HAND, HOLD, "
-        "LAST_COUNTED from INVENTORY_PART_LOCATION "
+        "INACTIVE, LAST_COUNTED from INVENTORY_PART_LOCATION "
         "where QTY_ON_HAND <> 0 or HOLD <> 0")
     made = 0
     for row in rows:
@@ -349,17 +370,23 @@ def part_locations(m, locations):
         location = locations.get(text(row['LOCATION_ID']))
         if not template or not location:
             continue
-        hold = bool(row.get('HOLD'))
+        values = {
+            'hold': bool(row.get('HOLD')),
+            'inactive': bool(row.get('INACTIVE')),
+            }
+        if row.get('LAST_COUNTED'):
+            last = row['LAST_COUNTED']
+            values['last_counted'] = last.date() if hasattr(
+                last, 'date') else last
         part_location = existing.get((template, location))
         if not part_location:
-            part_location = PartLocation(template=template,
-                location=location, hold=hold)
-            part_location.save()
-            existing[(template, location)] = part_location
+            created, = PartLocation.create([dict(values, template=template,
+                        location=location)], dict(m.context, **NO_RULES))
+            existing[(template, location)] = PartLocation(created)
             made += 1
-        elif part_location.hold != hold:
-            part_location.hold = hold
-            part_location.save()
+        elif any(getattr(part_location, k) != v for k, v in values.items()):
+            PartLocation.write([part_location.id], values,
+                dict(m.context, **NO_RULES))
     m.count('part locations', made)
     log("jobshop inventory: %s part locations" % len(rows))
 

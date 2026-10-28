@@ -27,7 +27,7 @@ from trytond.rpc import RPC
 from trytond.transaction import Transaction
 
 from .engineering import (
-    MATERIAL_FIELDS, OPERATION_FIELDS, run_hours_per_piece)
+    HEADER_COPY, MATERIAL_FIELDS, OPERATION_FIELDS, run_hours_per_piece)
 
 ZERO = Decimal(0)
 CENT = Decimal('0.01')
@@ -39,10 +39,11 @@ WRITES = [
     'eng_variables_save', 'eng_coproducts_save', 'eng_schedule',
     'eng_start_labor', 'eng_purchase', 'eng_printed', 'eng_quote_win',
     'eng_quote_lose', 'eng_quote_copy', 'eng_quote_printed',
-    'eng_quote_save',
+    'eng_quote_save', 'eng_resequence',
     ]
 READS = [
-    'eng_tree', 'eng_operation', 'eng_material', 'eng_costs',
+    'eng_tree', 'eng_operation', 'eng_material', 'eng_costs', 'eng_header',
+    'eng_po_links',
     'eng_availability', 'eng_supply_demand', 'eng_transactions',
     'eng_sales_links', 'eng_variables', 'eng_coproducts', 'eng_employees',
     'eng_quote_cost', 'eng_quote_get', 'eng_party_address',
@@ -218,6 +219,7 @@ class Desk(metaclass=PoolMeta):
                     'has_specs': bool(line.specifications),
                     'supplier': (line.supplier.rec_name
                         if line.supplier else None),
+                    'reference': line.reference,
                     })
         return node
 
@@ -947,6 +949,21 @@ class Desk(metaclass=PoolMeta):
             center = cls._work_center(production,
                 pool.get('production.routing')(values['routing']))
             values['work_center'] = center.id if center else None
+        if bom and not (production.inputs or production.outputs):
+            # A new work order: the master's header (Jobshop copies the
+            # master into the work order), where the window left it empty
+            for name in HEADER_COPY:
+                value = getattr(bom, name, None)
+                if value not in (None, '', False) and getattr(
+                        production, name, None) in (None, '', False):
+                    values[name] = getattr(value, 'id', value)
+            if bom.global_rank and production.global_rank in (None, 50):
+                values['global_rank'] = bom.global_rank
+            if bom.description and not values.get('description') and (
+                    not production.description or (production.product and
+                        production.description
+                        == production.product.template.name)):
+                values['description'] = bom.description
         if values:
             Production.write([production], values)
             production = Production(production.id)
@@ -1058,26 +1075,37 @@ class Desk(metaclass=PoolMeta):
                     count -= 1
             return date
         today = Date.today()
-        if forward or not production.planned_date:
-            start = production.planned_start_date or today
-            values = {'planned_start_date': start,
-                'planned_date': shift(start, days, 1)}
+        release = production.planned_start_date
+        want = production.planned_date
+        if forward or not want:
+            # From the release date (never in the past)
+            start = max(release or today, today)
+            finish = shift(start, days, 1)
         else:
-            start = shift(production.planned_date, days, -1)
+            start = shift(want, days, -1)
+            finish = want
             if start < today:
                 # Jobshop schedules forward a start in the past
                 start = today
-                values = {'planned_start_date': start,
-                    'planned_date': max(production.planned_date,
-                        shift(start, days, 1))}
-            else:
-                values = {'planned_start_date': start}
-        Production.write([production], values)
+                finish = max(want, shift(start, days, 1))
+        if production.hard_release_date and release and start < release:
+            # Treat Release Date as Hard: not before the release date
+            start = release
+            finish = max(finish, shift(start, days, 1))
+        # Jobshop's Schedule Start / Finish Date: the release and want dates
+        # are the user's and stay as they are
+        Production.write([production], {
+                'schedule_start_date': dt.datetime.combine(
+                    start, dt.time(8)),
+                'schedule_finish_date': dt.datetime.combine(
+                    finish, dt.time(16)),
+                })
         return {
             'hours': round(hours, 2),
             'days': days,
-            'start': values['planned_start_date'],
-            'want': values.get('planned_date', production.planned_date),
+            'start': start,
+            'finish': finish,
+            'want': want,
             }
 
     # ---- Labor -------------------------------------------------------------
@@ -1142,6 +1170,8 @@ class Desk(metaclass=PoolMeta):
             line.save()
             work.purchase_line = line
             work.save()
+            cls._eng_link(line, work.production, work.sequence, None,
+                work=work, quantity=line.quantity)
             return purchase.id
         Card = pool.get('production.material_card')
         card = Card(record)
@@ -1165,7 +1195,164 @@ class Desk(metaclass=PoolMeta):
         line.description = '%s - %s' % (product.rec_name,
             production.rec_name)
         line.save()
+        cls._eng_link(line, production, card.operation, card.piece,
+            quantity=card.quantity)
         return purchase.id
+
+    @classmethod
+    def _eng_link(cls, line, production, operation, piece, work=None,
+            quantity=None):
+        """Jobshop's ORDER_LINK of the purchase line to the work order (the
+        purchasing area's nline.purchase.link, when it is installed)"""
+        pool = Pool()
+        try:
+            Link = pool.get('nline.purchase.link')
+        except KeyError:
+            return
+        values = {'purchase_line': line.id, 'production': production.id,
+            'operation': operation, 'piece': piece, 'quantity': quantity}
+        if work:
+            values['work'] = work.id
+        with Transaction().set_context(_check_access=False):
+            Link.create([values])
+
+    @classmethod
+    def eng_po_links(cls, production, kind=None, record=None):
+        """Purchase Order Links (View menu) of the work order and its legs,
+        or of one material card / outside operation (kind 'card' / 'work'):
+        the purchase lines that supply them"""
+        pool = Pool()
+        Production = pool.get('production')
+        cls._check_read('production', 'purchase.purchase')
+        root = Production(production)
+        productions = Production.search([
+                ('parent', 'child_of', [root.id], 'parent')])
+        by_id = {p.id: p for p in productions}
+        rows, seen = [], set()
+
+        def add(line, production, operation, piece, quantity):
+            purchase = line.purchase
+            received = sum(m.quantity for m in line.moves
+                if m.state == 'done')
+            rows.append({
+                    'purchase_id': purchase.id,
+                    'purchase': purchase.number or purchase.rec_name,
+                    'line': line.rec_name,
+                    'line_no': (purchase.lines.index(line) + 1
+                        if line in purchase.lines else None),
+                    'supplier': purchase.party.rec_name,
+                    'product': line.product.rec_name if line.product
+                    else line.description,
+                    'work_order': production.rec_name if production else '',
+                    'operation': operation,
+                    'piece': piece,
+                    'order_qty': line.quantity,
+                    'linked_qty': quantity,
+                    'received_qty': received,
+                    'unit': line.unit.symbol if line.unit else '',
+                    'state': purchase.state,
+                    })
+        try:
+            Link = pool.get('nline.purchase.link')
+        except KeyError:
+            Link = None
+        if Link:
+            for link in Link.search([
+                        ('production', 'in', list(by_id)),
+                        ], order=[('id', 'ASC')]):
+                if kind == 'work' and (not link.work
+                        or link.work.id != record):
+                    continue
+                if kind == 'card':
+                    card = pool.get('production.material_card')(record)
+                    if link.work or link.production != card.production or (
+                            link.purchase_line.product
+                            and link.purchase_line.product != card.product):
+                        continue
+                    if (link.operation, link.piece) != (
+                            card.operation, card.piece) and any(
+                            c.product == card.product and (c.operation,
+                                c.piece) == (link.operation, link.piece)
+                            for c in card.production.material_cards):
+                        continue
+                seen.add(link.purchase_line.id)
+                add(link.purchase_line, link.production, link.operation,
+                    link.piece, link.quantity)
+        # The outside operations' own purchase lines (nline_outside_service)
+        for p in productions:
+            for work in p.works:
+                line = getattr(work, 'purchase_line', None)
+                if not line or line.id in seen or (
+                        kind == 'card') or (kind == 'work'
+                        and work.id != record):
+                    continue
+                seen.add(line.id)
+                add(line, p, work.sequence, None, line.quantity)
+        return rows
+
+    @classmethod
+    def eng_resequence(cls, kind, record, operation, step=10):
+        """Resequence Materials for Operation: the piece numbers of the
+        operation's materials 10, 20, 30... in their order"""
+        pool = Pool()
+        if kind == 'bom':
+            BOM = pool.get('production.bom')
+            bom = BOM(record)
+            cls._editable_bom(bom)
+            cls._check_write('production.bom.input')
+            lines = [l for l in bom.inputs if l.operation == operation]
+        else:
+            Production = pool.get('production')
+            production = Production(record)
+            cls._editable_production(production)
+            cls._check_write('production.material_card')
+            lines = [c for c in production.material_cards
+                if c.operation == operation]
+        lines.sort(key=lambda l: (l.piece is None, l.piece or 0, l.id))
+        for index, line in enumerate(lines, 1):
+            if line.piece != index * step:
+                line.piece = index * step
+                line.save()
+        return cls.eng_tree(kind, record)
+
+    @classmethod
+    def eng_header(cls, kind, record):
+        """What the Jobshop header shows beside the fields: Created by,
+        Last Modified by, the descriptions of the codes and the U/M, Linked
+        and the master's revision of a work order"""
+        pool = Pool()
+        name = {
+            'production': 'production',
+            'bom': 'production.bom',
+            'template': 'nline.engineering.operation_template',
+            'quote': 'nline.quote',
+            }[kind]
+        Model = pool.get(name)
+        cls._check_read(name)
+        with Transaction().set_context(active_test=False):
+            item = Model(record)
+
+        def stamp(user, date):
+            if not date:
+                return ''
+            return '%s %s' % (user.login if user else '',
+                date.strftime('%m/%d/%Y %I:%M:%S %p'))
+        result = {
+            'created': stamp(item.create_uid, item.create_date),
+            'modified': stamp(item.write_uid, item.write_date)
+            if item.write_date else '',
+            }
+        for field in ['product_code', 'commodity_code']:
+            code = getattr(item, field, None)
+            result[field] = code.description if code else ''
+        if kind == 'production':
+            result['unit'] = item.unit.symbol if item.unit else ''
+            result['linked'] = item.linked
+            result['revision'] = (item.bom.revision or '') if item.bom else ''
+        elif kind == 'bom':
+            part = item.part
+            result['unit'] = part.default_uom.symbol if part else ''
+        return result
 
     # ---- Show Costs ---------------------------------------------------------
 
@@ -1546,12 +1733,18 @@ class Desk(metaclass=PoolMeta):
         origin = root.origin
         if getattr(origin, '__name__', None) == 'sale.line':
             sale = origin.sale
+            lines = [l for l in sale.lines if l.type == 'line']
             rows.append({
                     'sale_id': sale.id,
                     'sale': sale.number or sale.rec_name,
+                    'line_no': (lines.index(origin) + 1
+                        if origin in lines else None),
                     'customer': sale.party.rec_name,
                     'line': origin.rec_name,
                     'quantity': origin.quantity,
+                    'link_quantity': root.quantity,
+                    'shipped': sum(m.quantity for m in origin.moves
+                        if m.state == 'done'),
                     'unit': origin.unit.symbol if origin.unit else '',
                     'ship_date': getattr(origin, 'shipping_date', None),
                     'state': sale.state,
@@ -1833,7 +2026,8 @@ class Desk(metaclass=PoolMeta):
         quote = Quote(party=Party(party))
         quote.fill_party()
         names = ['name', 'street', 'city', 'state', 'postal_code', 'country',
-            'contact_name', 'contact_phone', 'contact_email']
+            'contact_name', 'contact_phone', 'contact_email',
+            'contact_mobile']
         result = {n: getattr(quote, n, None) for n in names}
         result.update({'ship_' + n: getattr(quote, 'ship_' + n, None)
                 for n in names[:6]})
@@ -1995,6 +2189,13 @@ class Desk(metaclass=PoolMeta):
             Sale.confirm([sale])
         Quote.write([quote], {'status': 'won', 'won_loss_date': today,
                 'sale': sale.id})
+        if quote.copy_notes:
+            # Jobshop's Copy Notes to Sales Order
+            Note = pool.get('ir.note')
+            notes = Note.search([('resource', '=', str(quote))])
+            if notes:
+                Note.create([{'resource': str(sale), 'message': n.message}
+                        for n in notes])
         return sale.id
 
     @classmethod

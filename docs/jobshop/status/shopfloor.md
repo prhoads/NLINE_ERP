@@ -25,9 +25,11 @@ are the engineering area's; the Shopfloor reports are nline_js_admin's.
 | Shop Resources | `resources`, `resources/<id>` | `jsResources` | `Screens.resources` |
 | Shop Groups | `shop-groups`, `shop-groups/<id>` | `jsShopGroups` | new |
 | Shop Views | `shop-views`, `shop-views/<id>` | `jsShopViews` | new |
-| Labor Entry (+ Labor Reversal tab) | `labor` | `jsLaborEntry` | `Screens.laborEntry` |
+| Labor Entry (+ Labor Edit/Reverse tab) | `labor` | `jsLaborEntry` | `Screens.laborEntry` |
 | Labor Data Collection | `labor-collection` | `jsLaborCollection` | new |
-| Employees | `employees`, `employees/<id>` | `jsEmployees` | `Screens.employees` |
+| Material Issue Barcoding | `issues-bc` | `jsMaterialIssuesBC` | new |
+| Employees (list; `employees/<id>` the Employees window, `employees/0` new) | `employees`, `employees/<id>` | `jsEmployees` | `Screens.employees` |
+| Time and Attendance | `time-attendance` | `jsTimeAttendance` | new |
 
 ## Checklist
 
@@ -156,3 +158,88 @@ Writes: `sf_material_save`, `sf_receipt_save`, `sf_resource_setup`, `sf_reset_op
 - Planning (scheduling): resource capacity / schedule method / exclusivity / members / shop views / calendars are here (`production.work.center` fields, `nline.js.calendar.*`, `nline.js.shop_view`).
 - Reports (admin): Employee Label / Traveler bar codes: badge `*<clock no>*`, operation `*<work order>/<seq>*` (or `/<sub>/<seq>`), commands `*%START*`...; Labor List / Labor Transaction / Labor Analysis / Employee Efficiency read `nline.js.labor_ticket`; Calendar Week / Exception lists read `nline.js.calendar.*`; Employee List reads the employee fields above.
 - Suggested shared change: frame.js `fieldControl` has no `time` type (calendar start of day) and no `datetime` type (the shop screens use their own `datetime-local` inputs).
+
+## Pass of 2026-10-28: Jobshop's own layouts (analysis `docs/jobshop/analysis/shopfloor.md`)
+
+Gap tables per window in the analysis (79 found, 60 closed, 19 left). What
+changed:
+
+- Layout: Shop Resources, Shop Groups, Shop Views, Employees placed as
+  Jobshop's layouts (`idAt`, `at`/`split`, `frames`, `idField`,
+  `idLength`; Shop Resources `browseShowAll`); the groups' / views' grid on
+  the first tab; Labor Entry placed with `UI.placedForm`.
+- Shop Resources: Inactive (`inactive` function field on `active`), Record
+  Created by / Last Modified by, Jobshop's labels and Costs frames, Browse
+  with Type / Inactive; Auto Report off the screen; the calendar tabs
+  dropped (Jobshop edits calendars from Scheduling: planning area's
+  dialogs). Where Used: Jobshop's 23 columns and Include Document Type;
+  Reset Operation Costs: Information to Reset (Description, Costs), Locked
+  masters, Operation Templates, All, Template ID.
+- Shop Groups: Group Exclusivity off the window (the resources').
+- Material Issues: Jobshop's header and Issue button, Qty Available, Eng
+  Master Revision, Issue Details on double-click, popup labels.
+  Material Issue Barcoding: new window.
+- Work Order Receipts: Created On or After, Refresh Grid, Receive/Return,
+  Desired Want Date, Linked Qty Received, Qty Avail. For Return, Sched Finish
+  Date, Eng Master Revision, filters / sort popup, over-receive confirm.
+- Labor Entry: Pay Rate (`labor_ticket.pay_rate`, costing), Resource ID,
+  names beside codes, New Entry, Edit; tab Labor Edit/Reverse with Edit
+  (reverse + re-enter: decision, a saved ticket's cost stays in the work
+  order).
+- Labor Data Collection: Jobshop's 23 columns, Clock In Date / To,
+  Calculate Hours Worked for Running Tickets, Close, Seq Spec... in Labor
+  Entry Details. The wizard modes (incl. N-Line's ArmNaut wizard) not built:
+  labor unused at N-Line since 2023.
+- Employees: Jobshop 6.1.2's read-only list (Add / Edit Employee...) and the
+  Employees window: name, address, phones on the person (function fields
+  with setters), a new employee makes its party, Calendars (employee
+  week / exceptions), Attendance History, Notes, Picture, Browse. The
+  editable table of the older help is gone (decision: 6.1.2's layout wins;
+  `sf_employees_save` kept).
+- Time and Attendance: new window (Show Tickets, labor hours, Approve,
+  Edit Ticket, View Notes, Who is In/Out, Employee Clock In/Out).
+
+Fields added: `production.work.center.inactive` (function);
+`company.employee.employee_name, addr_1, addr_2, city, state, postal_code,
+country, addr_etc, phone, mobile, email` (function, on the party),
+`calendar_weeks, calendar_changes` (One2Many); `nline.js.employee_time.
+approved_date, exported, exported_date` (columns), `transaction_date`
+(function); `nline.js.labor_ticket.pay_rate` (column).
+RPCs added: `sf_attendance`, `sf_who_is_in`, `sf_attendance_save`,
+`sf_attendance_approve`; extended: `sf_material_lines` (qty_available,
+revision, required_date, reference, calc_qty), `sf_receipt_lines`
+(created_after; want/finish dates, linked_received, return_available,
+revision), `sf_resource_where_used` (Jobshop's columns),
+`sf_reset_operation_costs` (costs, description, templates, template, all),
+ticket rows (pay_rate, est_hours, total_hours, instructions).
+
+Integrator: update module `nline_js_shopfloor`; menus for `#/issues-bc`
+and `#/time-attendance` (nline_jobshop).
+
+## Fix pass of 2026-10-28 (SCREEN_REVIEW.md)
+
+- Employees: Calendars tab rebuilt (the Day of Week grid was empty): the
+  seven days always shown, 1st Shift Start, Shift 1-3 Dur, Add Calendar
+  (copies the shop's calendar, else 8 h Monday-Friday) / Delete Calendar,
+  beside the exceptions grid (1st Shift Start, Reason Code "...",
+  Description, Add / Delete Exception); saved by the window's Save. Picture
+  box on the Employee tab (no Picture tab). Shift No a drop-down; Created
+  by / Last Modified by read-only "user date" without "..."; Jobshop's
+  labels (blank Address 2, State/Postal, Percent); Department, Supervisor,
+  Person off the window. The empty "Employee Calendar Exceptions" capture
+  was the hidden tab: gone.
+- Shop Groups / Shop Views: the grid was always on the first tab; the
+  hidden Members / Resources tab button no longer has class `tab` (the
+  harness clicked it: the empty captures).
+- Labor Entry: Edit button in its own box (it wrapped under Sub/Seq: the
+  stray line under Resource ID), "Labor Allocation" + "%", the Description
+  caption beside its box. The second "Completed Qty" is Jobshop's own
+  caption (OP_COMPLETED_QTY under Operation Qty): kept, tooltip added.
+- Labor Data Collection: the desk's normal sizes (it was drawn 1.3x for a
+  touch screen); larger buttons only.
+- Grids (Material Issues, WO Receipts, Labor, Labor Data Collection, Time
+  and Attendance, Who Is In/Out): Jobshop's two-line titles ("@"), so the
+  last columns fit. WO Receipts: Part ID shows the ID (name in the tooltip;
+  Description has it).
+- Integrator: nothing new (JS only; no fields, no module update).
+

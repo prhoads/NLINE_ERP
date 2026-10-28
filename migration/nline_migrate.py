@@ -42,6 +42,8 @@ STEPS += ['js_' + a for a in JS_AREAS]
 # The Common tables (terms, FOB points, ship vias...) before the parties use them
 STEPS.remove('js_common')
 STEPS.insert(1, 'js_common')
+# One party per Jobshop customer / supplier (migration/jobshop/parties.py)
+STEPS.insert(STEPS.index('js_inventory'), 'js_parties')
 OPEN = ('RELEASED', 'UNRELEASED', 'FIRM', 'HOLD')
 # The work center of the work orders: every Jobshop resource is under it
 SHOP = "N-Line Shop"
@@ -390,11 +392,19 @@ class Migration:
         party = self.party_by_js.get((kind, jobshop_id))
         if party:
             return party
+        # The party already made for this ID (a step run on its own has
+        # not loaded them: it made a second one, numbered)
+        found = self.get('party.party').find([('code', '=', jobshop_id)])
+        if found:
+            self.party_by_js[kind, jobshop_id] = found[0]
+            return found[0]
+        if not self.parties:
+            self.load_parties()
         table = 'SALES_CUSTOMER' if kind == 'C' else 'PURCHASING_SUPPLIER'
         rows = self.js.rows("select * from %s where ID = ?" % table,
             jobshop_id)
         if not rows:
-            return self.party(jobshop_id)
+            return self.party(jobshop_id, code=jobshop_id)
         return self.jobshop_party(kind, rows[0])
 
     # ---- shop resources ---------------------------------------------------

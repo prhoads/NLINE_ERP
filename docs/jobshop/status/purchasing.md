@@ -284,3 +284,69 @@ Module `modules/nline_js_purchasing`, screens
     production / operation / piece).
   - Issuing linked receipts to the work order (Jobshop) needs the Shopfloor
     area's issue service; Receiving could call it after Receive.
+
+## Second pass: Jobshop's own layouts (28 Oct 2026)
+
+Analysis and gap tables: `docs/jobshop/analysis/purchasing.md` (66 gaps,
+46 closed). What changed:
+
+- Placed layouts (frame.js `at` / `split` / `frames`, `UI.placedForm` in
+  this file's `fieldsPane`): Suppliers / General / Other / Special
+  Instructions tabs, the PO header + Details frame (under the lines), the
+  Order Line window, the RFQ header and Supplier tabs, the Receiver frame +
+  Details, the Receiver Line window, the Tax Group tab. Supplier ID is the
+  tab's first field (`idAt`, `idField`, `idLength`).
+- Descriptions beside codes (`describe()`: the full name of the picker
+  without its ID); Created by / Last Modified by (`stamp()`).
+- Ribbon `Tools ▾` / `View ▾` menus (docWindow `menus`), right-click popups
+  with real submenus and checked statuses: Supplier PO / RFQ tabs, PO
+  Receivers, Receiving Activity, Receiver Lines, RFQ supplier lines.
+- New windows: Purchase Order Lines, Work Order Links, RFQ Lines, Receiver
+  Lines, Receiver Line (Edit Details), Supplier Prices of a service.
+- PO line grid in Jobshop's columns (Part ID and Service ID apart, Line
+  Status Open/Closed); Notes tabs on PO, RFQ, receivers; Receiving Browse;
+  horizon date; Close Short; Services is one grid; Tax Group Inactive.
+- Fields: `party.supplier_mobile`, `supplier_user_0..2`;
+  `purchase.purchase.user_0..2`; `purchase.line.drawing`,
+  `drawing_revision`, `user_0`, `user_1`; `nline.rfq.line.user_0/1`.
+  RPC `js_rfq_update_pricing`. Migration imports them (CONTACT_MOBILE,
+  USER_*, DRAWING_ID/REV).
+- Decisions: user field labels from Jobshop's purchasing settings
+  (N-LINE FIELD, NOTES:, AUDIT DATE:); the line user fields hold the part's
+  drawing file and revision, labelled as the part's (Eng Parts List, Part
+  Number Rev). RFQ lines keep one Part/Service picker. Receiver header user
+  fields not emulated (copies of the PO's, last used 2009).
+
+## Third pass: screen review fixes (28 Oct 2026)
+
+Details in `analysis/purchasing.md` "Screen review fixes".
+
+- New fields (module update needed): `purchase.purchase.purchase_from_name,
+  _address_1, _address_2, _city, _state, _postal_code, _country, _etc,
+  _contact, _title, _phone, _fax, _email, _mobile` (Jobshop's Purchase From
+  tab, the order's own copy); `ship_to_mobile`, `ship_to_supplier` (char),
+  `ship_to_address_no` (integer) on purchase.purchase and nline.rfq
+  (ShipToMixin). `js_po_get` sends `purchase_from` (the order's copy, else
+  the supplier's address) and `purchase_from_default`; `_js_address` sends
+  `mobile`; `js_receiving_activity` (unreceived) sends `order_date`,
+  `status`, `last_received_date` and finds Desired Recv on the lines.
+  `js_rfq_save` keeps ship-to fields the screen does not send.
+- Migration: PURCHASE_ORDER NAME / ADDR_1 / … / CONTACT_MOBILE into
+  `purchase_from_*`, SHIPTO_CONTACT_MOBILE, SHIPTO_ADDR_NO; the desired
+  receive date of released orders (order `delivery_date`, line
+  `delivery_date_store`) — before only draft orders had it, so the
+  Receiving Activity's Desired Recv was blank. Re-run `js_purchasing`.
+- Screens: see the table. Until the module update, the JS works with the
+  old server (Purchase From falls back to the supplier's address; the
+  new fields are ignored on save; Desired Recv / the order grid's dates
+  stay blank).
+- Decision: Purchase From is now editable per order (Jobshop), filled
+  from the supplier when it is chosen; the Name's "…" picks another
+  address of the supplier (also sets the order's invoice address while
+  unreleased).
+- Not done: Part Prices header + Quantities grid (L), Copy Notes to
+  Receiver, SIC / currency (unused), receiver and RFQ Other tabs (unused).
+- The purchase order report still prints the supplier's address, not the
+  order's Purchase From copy (reports are shared; suggest the integrator
+  uses `purchase_from_*` when set).
+

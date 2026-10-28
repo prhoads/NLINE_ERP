@@ -153,19 +153,40 @@ A purchase order with a trade discount, a fixed charge and the tax group::
     ...         'party': foundry.id, 'purchase_date': today,
     ...         'number': 'PO-7001', 'buyer': 'AB', 'tax_group': group['id'],
     ...         'specifications': "Certs with each shipment",
-    ...         'ship_to_name': "Customer site",
+    ...         'ship_to_name': "Customer site", 'user_2': "10/27/2026",
+    ...         'ship_to_mobile': "555-0101", 'ship_to_supplier': "GULF",
+    ...         'ship_to_address_no': 2,
+    ...         'purchase_from_name': "Foundry sales office",
+    ...         'purchase_from_city': "Tulsa",
+    ...         'purchase_from_mobile': "555-0199",
     ...         'lines': [{'product': body.id, 'quantity': 10,
     ...             'unit_price': '40.00', 'trade_discount': '10',
     ...             'fixed_charge': '50.00', 'supplier_part_code': 'WHM-675',
-    ...             'promise_date': today,
+    ...             'promise_date': today, 'drawing': '102-00704',
+    ...             'drawing_revision': 'C', 'user_0': 'R:\\D\\704_C.pdf',
+    ...             'user_1': 'C',
     ...             'links': [{'reference': '2111/1.0-1', 'operation': 20,
     ...                 'quantity': 10}]}],
     ...         }, config.context)
     >>> po['number'], po['jobshop_status'], po['ship_to_name']
     ('PO-7001', 'unreleased', 'Customer site')
+    >>> po['user_2']
+    '10/27/2026'
+
+The Purchase From tab is the order's own copy of the address; Ship To
+has Jobshop's Mobile, Ship To Supplier ID and Address No::
+
+    >>> po['purchase_from']['name'], po['purchase_from']['city']
+    ('Foundry sales office', 'Tulsa')
+    >>> po['purchase_from_mobile'], po['purchase_from_default']['name']
+    ('555-0199', 'Houston Foundry')
+    >>> po['ship_to_mobile'], po['ship_to_supplier'], po['ship_to_address_no']
+    ('555-0101', 'GULF', 2)
     >>> line, = po['lines']
     >>> line['unit_price'], line['list_unit_price'], line['amount']
     (Decimal('41.0000'), Decimal('40.00'), Decimal('410.00'))
+    >>> line['drawing'], line['drawing_revision'], line['user_1']
+    ('102-00704', 'C', 'C')
     >>> po['untaxed_amount'], po['tax_amount']
     (Decimal('410.00'), Decimal('29.72'))
     >>> [(k['reference'], k['operation']) for k in line['js_links']]
@@ -197,10 +218,14 @@ fixed charge::
     ...     config.context)
     >>> [a['number'] for a in activity]
     ['PO-7001']
+    >>> activity[0]['status'], activity[0]['order_date'] == today
+    ('released', True)
     >>> receiver = Desk.js_receiver_new(po['id'], config.context)
     >>> rline, = receiver['lines']
     >>> rline['receive_quantity'], rline['unit_price'], rline['discount']
     (10.0, Decimal('40.00'), Decimal('10'))
+    >>> rline['user_0'], rline['drawing']
+    ('R:\\D\\704_C.pdf', '102-00704')
     >>> rline['receive_quantity'] = 6
     >>> rline['fixed_charge'] = '30.00'
     >>> receiver['supplier_invoice'] = 'INV-55'
@@ -285,6 +310,15 @@ A request for quote to two suppliers, with two quantities::
     >>> [p['amount_2'] for p in rline['prices']]
     [Decimal('415.00'), Decimal('1850.00')]
 
+Update Supplier Pricing from Selected Rows: the mill's quote becomes its
+break table::
+
+    >>> updated, = Desk.js_rfq_update_pricing(rfq['id'], 2,
+    ...     [p['id'] for p in rline['prices']], config.context)
+    >>> updated['code'], [(p['quantity'], p['unit_price'])
+    ...     for p in updated['prices']]
+    ('GM-27', [(0.0, Decimal('39.00')), (10.0, Decimal('39.00')), (50.0, Decimal('37.00'))])
+
 Order 50 from supplier 2::
 
     >>> made = Desk.js_rfq_create_po({'rfq': rfq['id'], 'slot': 2,
@@ -306,6 +340,22 @@ A purchase order not released yet can be deleted::
     >>> Desk.js_po_delete(made['id'], config.context)
     True
     >>> Desk.js_rfq_get(rfq['id'], config.context)['purchases']
+    []
+
+Close Short: a partial receipt that closes the line::
+
+    >>> po = Desk.js_po_save({'party': foundry.id, 'purchase_date': today,
+    ...         'lines': [{'product': body.id, 'quantity': 10,
+    ...             'unit_price': '40.00'}]}, config.context)
+    >>> po = Desk.js_po_status(po['id'], 'released', config.context)
+    >>> receiver = Desk.js_receiver_new(po['id'], config.context)
+    >>> receiver['lines'][0]['receive_quantity'] = 3
+    >>> receiver['lines'][0]['close_short'] = True
+    >>> done = Desk.js_receiver_receive(receiver, config.context)
+    >>> po = Desk.js_po_get(po['id'], config.context)
+    >>> po['lines'][0]['received'], po['lines'][0]['line_status']
+    (3.0, 'closed')
+    >>> Desk.js_receiving_activity('unreceived', None, config.context)
     []
 
 Services: the values of a new one::

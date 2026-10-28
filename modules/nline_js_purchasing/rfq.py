@@ -204,6 +204,9 @@ class RequestForQuoteLine(ModelSQL, ModelView):
     specifications = fields.Text("Specifications")
     drawing = fields.Char("Drawing ID")
     drawing_revision = fields.Char("Drawing Rev")
+    # Jobshop's user fields of the line N-Line fills (as on the PO lines)
+    user_0 = fields.Char("Eng Parts List")
+    user_1 = fields.Char("Part Number Rev")
     prices = fields.One2Many('nline.rfq.line.price', 'line', "Quantities")
     links = fields.One2Many('nline.rfq.link', 'line', "Links")
     purchase_lines = fields.One2Many(

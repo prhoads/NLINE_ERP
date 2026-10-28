@@ -34,7 +34,16 @@ LINE_TYPES = [
 SHIP_TO_FIELDS = ['ship_to_name', 'ship_to_street', 'ship_to_city',
     'ship_to_state', 'ship_to_postal_code', 'ship_to_country',
     'ship_to_contact', 'ship_to_title', 'ship_to_phone', 'ship_to_fax',
-    'ship_to_email']
+    'ship_to_email', 'ship_to_mobile', 'ship_to_supplier',
+    'ship_to_address_no']
+# Jobshop's Purchase From tab: the order's own copy of the supplier's
+# address (PURCHASE_ORDER.NAME, ADDR_1...), editable per order
+PURCHASE_FROM_FIELDS = ['purchase_from_name', 'purchase_from_address_1',
+    'purchase_from_address_2', 'purchase_from_city', 'purchase_from_state',
+    'purchase_from_postal_code', 'purchase_from_country',
+    'purchase_from_etc', 'purchase_from_contact', 'purchase_from_title',
+    'purchase_from_phone', 'purchase_from_fax', 'purchase_from_email',
+    'purchase_from_mobile']
 
 
 class ShipToMixin:
@@ -51,6 +60,10 @@ class ShipToMixin:
     ship_to_phone = fields.Char("Ship To Phone")
     ship_to_fax = fields.Char("Ship To Fax")
     ship_to_email = fields.Char("Ship To E-Mail")
+    ship_to_mobile = fields.Char("Ship To Mobile")
+    # (drop shipped to a supplier's address: its Supplier ID and Address No)
+    ship_to_supplier = fields.Char("Ship To Supplier ID")
+    ship_to_address_no = fields.Integer("Ship To Address No")
 
 
 class Purchase(ShipToMixin, metaclass=PoolMeta):
@@ -90,6 +103,26 @@ class Purchase(ShipToMixin, metaclass=PoolMeta):
         fields.Date("Last Recv Date"), 'get_received')
     received_amount = fields.Function(fields.Numeric(
             "Received Amount", digits=(16, 2)), 'get_received')
+    # The Other tab: Jobshop's user defined fields (PURCHASING_OBJECT_GLOBAL
+    # labels N-LINE FIELD, NOTES:, AUDIT DATE:)
+    user_0 = fields.Char("N-Line Field")
+    user_1 = fields.Char("Notes (user field)")
+    user_2 = fields.Char("Audit Date")
+    # The Purchase From tab (the order's copy of the supplier's address)
+    purchase_from_name = fields.Char("Purchase From Name")
+    purchase_from_address_1 = fields.Char("Purchase From Address 1")
+    purchase_from_address_2 = fields.Char("Purchase From Address 2")
+    purchase_from_city = fields.Char("Purchase From City")
+    purchase_from_state = fields.Char("Purchase From State")
+    purchase_from_postal_code = fields.Char("Purchase From Postal Code")
+    purchase_from_country = fields.Char("Purchase From Country")
+    purchase_from_etc = fields.Char("Purchase From Etc.")
+    purchase_from_contact = fields.Char("Purchase From Contact")
+    purchase_from_title = fields.Char("Purchase From Title")
+    purchase_from_phone = fields.Char("Purchase From Phone")
+    purchase_from_fax = fields.Char("Purchase From Fax")
+    purchase_from_email = fields.Char("Purchase From E-Mail")
+    purchase_from_mobile = fields.Char("Purchase From Mobile")
 
     @classmethod
     def default_hold(cls):
@@ -200,6 +233,12 @@ class PurchaseLine(metaclass=PoolMeta):
     supplier_part_code = fields.Char("Supplier Part ID")
     mfg_name = fields.Char("Mfg Name")
     mfg_part_id = fields.Char("Mfg Part ID")
+    drawing = fields.Char("Drawing ID")
+    drawing_revision = fields.Char("Drawing Rev No")
+    # Jobshop's user fields of the line N-Line fills: the part's drawing
+    # file (Eng Parts List) and its revision letter (Part Number Rev)
+    user_0 = fields.Char("Eng Parts List")
+    user_1 = fields.Char("Part Number Rev")
     product_code = fields.Many2One(
         'nline.product_code', "Product Code", ondelete='SET NULL')
     commodity_code = fields.Many2One(

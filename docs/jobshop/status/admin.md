@@ -162,3 +162,55 @@ decimal_separator / exchange_rate`, `account.invoice.payment_term.net_days`.
     `js-reports/sales/sales_order_list`, `js-reports/shopfloor/traveler`.
   - EMULATION.md: tick the Accounting section and the 99 reports as above;
     add Executive Information and Administration items.
+
+## Second pass (28 Oct): Jobshop's own window definitions
+
+Analysis and gap tables: `docs/jobshop/analysis/admin.md`. Changed:
+
+- Account Sets: one tab with Jobshop's six frames, fields placed from the
+  layout (`at` / `split`), the ID as the first field (`idAt`), Jobshop's
+  captions; Browse ID, Description.
+- Accounting Calendar: Automatic Accounting Period Generation frame on the
+  window; one Accounting Periods grid of all years (Fiscal Year, Period, End
+  Date, Posted first).
+- Account Interface: tabs Account Periods (Transactions, periods grid) and
+  Export (Accounting Package, Period End Posting Dates, Options with Export
+  To file names, For Batch ID with its posting date, Substitute Customer /
+  Supplier Name for ID: `jsadmin_interface_export` `name_as_id`).
+- Executive Information: Jobshop's lines (status list, from / to dates,
+  value, "..." to the report) over the dashboard: RPC
+  `jsadmin_exec_values` (`executive_values.py`); titles "Executive Sales
+  Information"...
+- User Manager: Role Properties users grid with Add / Remove; "Role Name".
+- Authority Manager: right-click Access Allowed / Access Denied (ticked).
+  Read Only and data authorities: not offered (no Tryton equivalent;
+  unused at N-Line).
+- System Settings: tabs in Jobshop's order with Labor and Attendance and
+  General; 19 new settings on `nline.desk.configuration` (see analysis);
+  the migration copies them from `LSA_SETTINGS`.
+- Reports: the dialogs follow Jobshop's (`report_dialogs.py`: order,
+  captions, the "For" radio groups, the missing ranges; a selection the
+  rows do not carry is not applied and printed as a gap); frames in the
+  dialog; Journal Batch Detail Expanded, Backlog horizon, Physical Count
+  blind count; 9 reports of N-Line's installed Jobshop added
+  (`report_extra.py`, 107 reports); Payment Terms List = TermsRuleList.rpt.
+- Decisions: "For Active ... Only" is the default (Jobshop's first choice),
+  "Stocked" defaults to Both; Read Only authority not offered (a user never
+  sees what does nothing).
+
+## Screenshot review fixes (2026-10-28)
+
+- Executive windows: the figure lines share one fixed column set (label
+  with its status list inline, from date, "to", to date, value, Use
+  Proforma / "...") so the dates and values line up row to row.
+- Charts: text 13 units in a viewBox near the on-screen width (readable),
+  month labels thinned so they do not collide, horizontal-bar names cut
+  with "…" (full name in the tooltip) instead of clipped on the left; an
+  all-zero chart says "None in this period." instead of a line on a 0-1
+  axis.
+- Tables (`table()`): numeric headers right-aligned like their values
+  (Journal Batches, Accounting Periods), a gap after a numeric column.
+- Authority Manager: the Authority column at the same place in every
+  group's table. Accounting Calendar: "Fiscal Year" label on one line.
+- Reports: Print / Export start disabled until a report has run
+  (integrator's change, kept).

@@ -176,6 +176,7 @@ class AlertMessage(ModelSQL, ModelView):
 
     alert_type_string = alert_type.translated('alert_type')
     alert_change_string = alert_change.translated('alert_change')
+    alert_action_string = alert_action.translated('alert_action')
 
     @staticmethod
     def default_user():

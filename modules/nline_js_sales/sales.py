@@ -9,7 +9,8 @@ MODELS = [
     code.ServiceCharge, code.TaxGroup, code.TaxGroupLine,
     code.DiscountClass, code.SalePrice, code.SalePriceBreak, code.Charge,
     party.Party, party.Address,
-    sale.Sale, sale.SaleLine, sale.InvoiceLine, sale.ShipmentOut,
+    sale.Sale, sale.SaleLine, sale.Invoice, sale.InvoiceLine,
+    sale.ShipmentOut,
     desk.Desk,
     ]
 WIZARDS = []

@@ -58,7 +58,16 @@
         '.js-sales .js-prices { display: grid; ' +
             'grid-template-columns: 2fr 1fr; gap: 12px; }',
         '.js-sales .js-empty { color: var(--muted); }',
-        '.js-sales .js-readonly { color: var(--muted); }'
+        '.js-sales .js-readonly { color: var(--muted); }',
+        /* Line grids: one text line per row, the description clipped
+         * (its full text in the tooltip); the grid scrolls sideways */
+        '.js-sales table.js-nowrap th, .js-sales table.js-nowrap td ' +
+            '{ white-space: nowrap; }',
+        '.js-sales .js-clip { display: inline-block; max-width: 24em; ' +
+            'overflow: hidden; text-overflow: ellipsis; ' +
+            'vertical-align: bottom; }',
+        '.js-sales table.lines td input[readonly] { background: ' +
+            'transparent; border-color: transparent; }'
     ].join('\n');
 
     function injectCss() {
@@ -165,8 +174,18 @@
     }
 
     /* A data table: columns [{label, num}], rows [{cells: [...], ondblclick,
-     * oncontextmenu, className}] */
-    function table(columns, rows, empty) {
+     * oncontextmenu, className}]; nowrap: one text line per row (a line
+     * grid: use clip() for long text) */
+    function clip(text) {
+        text = text === null || text === undefined ? '' : String(text);
+        return el('span.js-clip', {title: text}, text);
+    }
+
+    function check(on) {
+        return on ? '✔' : '';
+    }
+
+    function table(columns, rows, empty, nowrap) {
         var body = el('tbody');
         rows.forEach(function (row) {
             body.appendChild(el('tr' + (row.className ? '.' + row.className :
@@ -184,7 +203,8 @@
             body.appendChild(el('tr', el('td.js-empty', {colspan:
                 columns.length}, empty || 'None.')));
         }
-        return el('div.table-wrap', el('table.data.lines-ro', el('thead',
+        return el('div.table-wrap', el('table.data.lines-ro' + (nowrap ?
+            '.js-nowrap' : ''), el('thead',
             el('tr', columns.map(function (c) {
                 return el('th' + (c.num ? '.num' : ''), c.label);
             }))), body));
@@ -192,20 +212,38 @@
 
     /* A grid of field controls (UI.fieldControl): {node, get(), set(data),
      * controls} where data holds {name: value | {id, rec_name}} */
-    function fieldGrid(fields) {
+    function fieldGrid(fields, layout) {
         var controls = {};
-        var grid = el('div.grid-form', fields.map(function (f) {
-            var c = UI.fieldControl(f);
-            c.field = f;
-            controls[f.name] = c;
-            return el('div', f.span ? {style: {gridColumn: 'span ' +
-                f.span}} : null, el('label.field', f.label), c.node);
-        }));
+        var grid;
+        /* layout {frames, custom: {name: control}}: placed as Jobshop
+         * (fields with at), else the plain grid */
+        if (layout && UI.placedForm) {
+            grid = UI.placedForm({fields: fields, frames: layout.frames ||
+                [], buttons: layout.buttons || []}, function (f) {
+                    var c = layout.custom && layout.custom[f.name] ||
+                        UI.fieldControl(f);
+                    c.field = f;
+                    controls[f.name] = c;
+                    return c;
+                });
+        } else {
+            grid = el('div.grid-form', fields.map(function (f) {
+                var c = layout && layout.custom && layout.custom[f.name] ||
+                    UI.fieldControl(f);
+                c.field = f;
+                controls[f.name] = c;
+                return el('div', f.span ? {style: {gridColumn: 'span ' +
+                    f.span}} : null, el('label.field', f.label), c.node);
+            }));
+        }
         return {
             node: grid,
             controls: controls,
             set: function (data) {
                 fields.forEach(function (f) {
+                    if (f.custom) {
+                        return;
+                    }
                     var v = data ? data[f.name] : null;
                     controls[f.name].set(v === undefined ? (f.default !==
                         undefined ? f.default : null) : v);
@@ -214,7 +252,7 @@
             get: function () {
                 var values = {};
                 fields.forEach(function (f) {
-                    if (!f.readonly) {
+                    if (!f.readonly && !f.custom) {
                         var v = controls[f.name].get();
                         values[f.name] = f.type === 'date' ? iso(v) :
                             f.type === 'money' || f.type === 'decimal' ?
@@ -225,6 +263,9 @@
             },
             lock: function (editable) {
                 fields.forEach(function (f) {
+                    if (f.custom) {
+                        return;
+                    }
                     Array.prototype.forEach.call(controls[f.name].node
                         .querySelectorAll ? controls[f.name].node
                         .querySelectorAll('input, select, textarea, button') :
@@ -240,20 +281,119 @@
         };
     }
 
-    var ADDRESS_ROWS = [['name', 'Name'], ['street', 'Address'],
-        ['city', 'City'], ['state', 'State'], ['postal_code', 'Postal Code'],
-        ['country', 'Country'], ['contact', 'Contact'], ['title', 'Title'],
-        ['phone', 'Phone'], ['fax', 'Fax'], ['email', 'E-mail']];
+    /* Jobshop's Sold To / Ship To / Bill To tab (SalesOrderSubTabs,
+     * ShippingSubTabs, InvoicingSubTabs): [part, caption, at, split]; the
+     * second address line and the postal code sit beside the label column */
+    var ADDRESS_LAYOUT = [
+        ['name', 'Name', [12, 4, 456, 24], 72],
+        ['addr_1', 'Address', [12, 26, 456, 46], 72],
+        ['addr_2', '', [84, 48, 456, 68], 0],
+        ['city', 'City', [12, 70, 456, 90], 72],
+        ['state', 'State/Postal', [12, 92, 291, 112], 72],
+        ['postal', '', [294, 92, 456, 112], 0],
+        ['country', 'Country', [12, 114, 456, 134], 72],
+        ['etc', 'Etc.', [12, 136, 456, 156], 72],
+        ['contact', 'Contact', [477, 4, 807, 24], 59],
+        ['title', 'Title', [477, 26, 807, 46], 59],
+        ['phone', 'Phone', [477, 48, 807, 68], 59],
+        ['fax', 'Fax', [477, 70, 807, 90], 59],
+        ['email', 'E-mail', [477, 92, 807, 112], 59],
+        ['mobile', 'Mobile', [477, 114, 807, 134], 59]];
+    var ADDRESS_PARTS = ADDRESS_LAYOUT.map(function (r) {
+        return r[0];
+    });
 
-    /* A Sold To / Ship To / Bill To tab (read-only, as in Jobshop) */
-    function addressPane(pane, address, note) {
+    /* The address fields of a tab (name = prefix + part) */
+    function addressFields(prefix, readonly) {
+        return ADDRESS_LAYOUT.map(function (r) {
+            return {name: prefix + r[0], label: r[1] || (r[0] === 'addr_2' ?
+                'Address 2' : 'Postal Code'), type: 'char', readonly:
+                Boolean(readonly), at: r[2], split: r[1] ? r[3] : 0};
+        });
+    }
+
+    /* A Tryton address (desk.py _address) as the tab's parts */
+    function addressParts(a, mobile) {
+        a = a || {};
+        var street = String(a.street || '').split(/\r?\n/).filter(Boolean);
+        return {name: a.name || '', addr_1: street[0] || '',
+            addr_2: street.slice(1).join(', '), city: a.city || '',
+            state: a.state || '', postal: a.postal_code || '',
+            country: a.country || '', etc: '', contact: a.contact || '',
+            title: a.title || '', phone: a.phone || '', fax: a.fax || '',
+            email: a.email || '', mobile: mobile || ''};
+    }
+
+    /* The header's address box text from the parts */
+    function partsText(p) {
+        if (!p) {
+            return '';
+        }
+        return [p.name, p.addr_1, p.addr_2, [p.city, p.state, p.postal]
+            .filter(Boolean).join(' '), p.country, p.etc].filter(Boolean)
+            .join('\n');
+    }
+
+    function prefixed(prefix, parts) {
+        var out = {};
+        ADDRESS_PARTS.forEach(function (k) {
+            out[prefix + k] = parts ? parts[k] || '' : '';
+        });
+        return out;
+    }
+
+    function unprefixed(prefix, values) {
+        var out = {};
+        ADDRESS_PARTS.forEach(function (k) {
+            out[k] = values[prefix + k] || '';
+        });
+        return out;
+    }
+
+    /* Export Contact to Outlook: the contact as a vCard file */
+    function exportContact(p) {
+        if (!p.contact && !p.name) {
+            UI.toast('No contact to export', 'error');
+            return;
+        }
+        var esc = function (v) {
+            return String(v || '').replace(/([,;\\])/g, '\\$1');
+        };
+        var card = ['BEGIN:VCARD', 'VERSION:3.0',
+            'FN:' + esc(p.contact || p.name), 'ORG:' + esc(p.name),
+            p.title ? 'TITLE:' + esc(p.title) : null,
+            p.phone ? 'TEL;TYPE=WORK,VOICE:' + esc(p.phone) : null,
+            p.fax ? 'TEL;TYPE=WORK,FAX:' + esc(p.fax) : null,
+            p.mobile ? 'TEL;TYPE=CELL:' + esc(p.mobile) : null,
+            p.email ? 'EMAIL;TYPE=INTERNET:' + esc(p.email) : null,
+            'ADR;TYPE=WORK:;;' + esc([p.addr_1, p.addr_2].filter(Boolean)
+                .join(', ')) + ';' + esc(p.city) + ';' + esc(p.state) + ';' +
+                esc(p.postal) + ';' + esc(p.country), 'END:VCARD']
+            .filter(Boolean).join('\r\n');
+        var link = el('a', {href: global.URL.createObjectURL(new global.Blob(
+            [card], {type: 'text/vcard'})), download: (p.contact || p.name)
+            .replace(/[^\w .-]+/g, '_') + '.vcf'});
+        global.document.body.appendChild(link);
+        link.click();
+        link.remove();
+    }
+
+    /* A Sold To / Ship To / Bill To tab shown read-only (a shipper's or
+     * an invoice's: the customer's address) in Jobshop's layout */
+    function addressPane(pane, address, note, mobile) {
+        if (!pane) {
+            return;
+        }
         UI.clear(pane);
-        address = address || {};
-        pane.appendChild(el('div.grid-form', ADDRESS_ROWS.map(function (r) {
-            return el('div', r[0] === 'street' ? {style: {gridColumn:
-                'span 2'}} : null, el('label.field', r[1]),
-                el('div.js-address', address[r[0]] || ''));
-        })));
+        var parts = addressParts(address, mobile);
+        var grid = fieldGrid(addressFields('', true), {buttons: [
+            {label: 'Export Contact to Outlook', at: [581, 167, 776, 197],
+                onclick: function () {
+                    exportContact(parts);
+                }}]});
+        grid.set(parts);
+        grid.lock(false);
+        pane.appendChild(grid.node);
         if (note) {
             pane.appendChild(el('p.muted', note));
         }
@@ -375,6 +515,236 @@
             clientY: box.bottom}, items);
     }
 
+    /* A menu item that opens a submenu (Jobshop's "... of ▸") at the same
+     * place: UI.contextMenu has one level */
+    function submenu(event, label, items) {
+        return {label: label, items: items};
+    }
+
+    /* Jobshop's read-only description beside a code (type4): a span after
+     * each lookup of the labels, kept equal to the code's full name (the
+     * picker's tooltip) */
+    function placeAt(at) {
+        return {left: 'calc(var(--u) * ' + at[0] + ')',
+            top: 'calc(var(--u) * ' + at[1] + ')',
+            width: 'calc(var(--u) * ' + (at[2] - at[0]) + ')',
+            height: 'calc(var(--u) * ' + (at[3] - at[1]) + ')'};
+    }
+
+    /* labels: [code field label, Jobshop's box of the description (its
+     * type4 control) or null] */
+    function describe(root, labels) {
+        labels.forEach(function (pair) {
+            var lab = typeof pair === 'string' ? pair : pair[0];
+            var at = typeof pair === 'string' ? null : pair[1];
+            Array.prototype.forEach.call(root.querySelectorAll(
+                '.picker input[aria-label="' + lab + '"]'), function (input) {
+                var layout = input.closest('.js-layout');
+                var box = input.closest('.js-ctl') || input.closest(
+                    '.grid-form > div');
+                if (!box || box.dataset.described) {
+                    return;
+                }
+                box.dataset.described = '1';
+                var desc;
+                if (at && layout) {
+                    desc = el('div.js-ctl.js-desc', {style: placeAt(at)},
+                        el('input', {type: 'text', readonly: true,
+                            tabindex: -1, 'aria-label': lab +
+                                ' description'}));
+                    layout.appendChild(desc);
+                } else {
+                    desc = el('div.js-desc.muted');
+                    box.appendChild(desc);
+                }
+                var update = function () {
+                    var full = input.title || '';
+                    var cut = full.indexOf(' - ');
+                    var text = cut > 0 ? full.slice(cut + 3) : '';
+                    var field = desc.querySelector('input');
+                    if (field) {
+                        field.value = text;
+                    } else {
+                        desc.textContent = text;
+                    }
+                };
+                new global.MutationObserver(update).observe(input,
+                    {attributes: true, attributeFilter: ['title']});
+                update();
+            });
+        });
+    }
+
+    /* "1200 - Accounts Receivable": the code (the ID field) */
+    function codeOf(v) {
+        var n = name(v);
+        var at = n.indexOf(' - ');
+        return at > 0 ? n.slice(0, at) : n;
+    }
+
+    function descOf(v) {
+        var n = name(v);
+        var at = n.indexOf(' - ');
+        return at > 0 ? n.slice(at + 3) : '';
+    }
+
+    /* A desk service of this module: when the local server does not have
+     * it yet (module not updated) the window says so instead of failing */
+    function desk(method, args) {
+        return Rpc.desk(method, args).catch(function (error) {
+            var text = String(error && (error.message || error) || '');
+            if (/not found|has no attribute|Unknown|RPC/i.test(text) &&
+                    text.indexOf(method) >= 0) {
+                UI.toast('Update module nline_js_sales: ' + method +
+                    ' is missing', 'error');
+                error.cancelled = true;
+            }
+            throw error;
+        });
+    }
+
+    /* Jobshop's shipper statuses */
+    var SHIPPER_STATUS = [['unapproved', 'Unapproved'],
+        ['approved', 'Approved'], ['cancelled', 'Cancelled']];
+
+    /* A modal with Jobshop's tabs: specs [{title, node}] */
+    function tabbedModal(title, specs, buttons) {
+        var holder = el('div.js-sales');
+        tabs(holder, specs.map(function (s) {
+            return {title: s.title, build: function (pane) {
+                pane.appendChild(s.node);
+            }};
+        }));
+        return UI.modal(title, [holder], buttons);
+    }
+
+    /* A read-only list dialog of rows (the "... Lines..." windows) */
+    function listDialog(title, columns, rows, options) {
+        options = options || {};
+        UI.modal(title, [el('div.js-sales', table(columns, rows,
+            options.empty || 'None.'))], [{label: 'Close', primary: true}]);
+    }
+
+    /* The Sales Order Lines window (customer's, part's, order's) by order
+     * status, with its right-click menu (PopupSalesOrderLines) */
+    function orderLinesDialog(title, filters, statuses) {
+        desk('sales_order_lines', [Object.assign({}, filters, {statuses:
+            statuses})]).then(function (rows) {
+            var columns = ['Linked', 'Sales ID', 'Customer ID',
+                'Ship To Name', 'Sales Rep ID', 'Order Date', 'Order Status',
+                'Desired Ship Date', 'Customer PO No', 'PO Line No',
+                'Line No', 'Line Status', 'Order Qty', 'Shipped Qty',
+                'Part ID', 'Description', 'U/M', 'Unit Price',
+                'Discount Percent', 'Order Amount', 'Shipped Amount',
+                'Customer Part ID', 'Product Code', 'Commodity Code',
+                'Drawing ID', 'Rev'].map(function (l) {
+                    return {label: l, num: /Qty|Price|Amount|Percent/.test(
+                        l)};
+                });
+            listDialog(title + (statuses ? ' (' + statuses.map(function (s) {
+                return label(JS_STATUS, s);
+            }).join(', ') + ')' : ' (All)'), columns, rows.map(function (r) {
+                var open = function () {
+                    UI.closeMenu();
+                    openOrder(r.sale.id, r.sale.number);
+                };
+                return {ondblclick: open, oncontextmenu: function (event) {
+                    UI.contextMenu(event, [
+                        submenu(event, 'All Order Lines by Order Status of',
+                            statusItems(function (s) {
+                                orderLinesDialog(title, filters, s);
+                            })),
+                        {label: 'Open Sales Order...', onclick: open},
+                        {label: 'Open Customer...', onclick: function () {
+                            UI.openScreen('customer-window', 'Customers');
+                        }}]);
+                }, cells: [r.linked ? '✔' : '', r.sale.number, r.customer,
+                    r.ship_to_name, r.sales_rep, UI.date(r.order_date),
+                    label(JS_STATUS, r.order_status),
+                    UI.date(r.line_desired_date || r.desired_ship_date),
+                    r.reference, r.po_line, r.line_no, label(LINE_STATUS,
+                        r.line_status), num(r.quantity),
+                    num(r.shipped_quantity), name(r.product), r.description,
+                    r.unit, UI.money(r.unit_price), num(r.trade_discount),
+                    UI.money(r.amount), UI.money(r.shipped_amount),
+                    r.customer_part, r.product_code, r.commodity_code,
+                    r.drawing_id, r.drawing_rev]};
+            }), {empty: 'No order line.'});
+        }, failed);
+    }
+
+    /* View ... by Status of: All, then each Jobshop order status */
+    function statusItems(onpick) {
+        return [{label: 'All', onclick: function () {
+            onpick(null);
+        }}].concat(JS_STATUS.map(function (s) {
+            return {label: s[1], onclick: function () {
+                onpick([s[0]]);
+            }};
+        }));
+    }
+
+    /* View All Quote / PO Lines for Part by Status of */
+    function partLinesDialog(kind, product) {
+        var statuses = kind === 'quote' ? [['active', 'Active'],
+            ['cancelled', 'Cancelled'], ['lost', 'Lost'], ['ready', 'Ready'],
+            ['won', 'Won']] : [['draft', 'Unreleased'],
+            ['quotation', 'Firm'], ['confirmed', 'Released'],
+            ['processing', 'Released (receiving)'], ['done', 'Closed'],
+            ['cancelled', 'Cancelled']];
+        return function (event) {
+            return submenu(event, kind === 'quote' ?
+                'View All Quote Lines for Part by Quote Status of' :
+                'View All PO Lines for Part by Order Status of',
+                [['', 'All']].concat(statuses).map(function (s) {
+                    return {label: s[1], onclick: function () {
+                        desk('sales_part_lines', [kind, product, s[0] ?
+                            [s[0]] : null]).then(function (rows) {
+                            if (kind === 'quote') {
+                                listDialog('Quote Lines', ['Quote ID',
+                                    'Customer ID', 'Quote Date',
+                                    'Quote Status', 'Line No', 'Part ID',
+                                    'Description', 'Customer Part ID',
+                                    'Product Code', 'Commodity Code',
+                                    'Desired Ship Date'].map(function (l) {
+                                        return {label: l};
+                                    }), rows.map(function (r) {
+                                        return {ondblclick: function () {
+                                            UI.openScreen('quotes/' +
+                                                r.quote.id, 'Quote ' +
+                                                r.quote.number);
+                                        }, cells: [r.quote.number, r.customer,
+                                            UI.date(r.quote_date), label(
+                                                statuses, r.status),
+                                            r.line_no, name(r.product),
+                                            r.description, r.customer_part,
+                                            r.product_code, r.commodity_code,
+                                            UI.date(r.desired_ship_date)]};
+                                    }), {empty: 'No quote line.'});
+                            } else {
+                                listDialog('Purchase Order Lines', [
+                                    {label: 'Order ID'}, {label: 'Supplier'},
+                                    {label: 'Order Date'}, {label: 'Status'},
+                                    {label: 'Qty', num: true}, {label: 'U/M'},
+                                    {label: 'Unit Price', num: true},
+                                    {label: 'Desired Recv Date'},
+                                    {label: 'Description'}],
+                                    rows.map(function (r) {
+                                        return {cells: [r.purchase.number,
+                                            r.supplier, UI.date(r.order_date),
+                                            label(statuses, r.status),
+                                            num(r.quantity), r.unit,
+                                            UI.money(r.unit_price),
+                                            UI.date(r.delivery_date),
+                                            r.description]};
+                                    }), {empty: 'No purchase order line.'});
+                            }
+                        }, failed);
+                    }};
+                }));
+        };
+    }
+
     /* What the user may do: {model: {read, write, create, delete}} with
      * true when unknown (the server still refuses) */
     function rights(models) {
@@ -395,46 +765,222 @@
 
     /* ---- Code tables ---------------------------------------------------- */
 
+    /* A code table window with its own tab (Tax Groups, Discount
+     * Classes): the ID lookup placed where Jobshop has it (options.idAt),
+     * its Inactive box beside it, the Description; options.place: the
+     * boxes of active / description */
     function codeTable(main, params, options) {
         injectCss();
+        var place = options.place || {};
         var fields = [
-            {name: 'code', label: 'ID', type: 'char'},
-            {name: 'description', label: options.descriptionLabel ||
-                'Description', type: 'char', span: 2}
-        ].concat(options.fields || []).concat([
-            {name: 'active', label: 'Active', type: 'boolean',
-                default: true}]);
-        UI.master(main, {
+            /* Jobshop's Inactive: the model's Inactive (Tryton's Active
+             * reversed), written back as Active (beforeSave) */
+            Object.assign({name: 'inactive', label: 'Inactive',
+                type: 'boolean', default: false}, place.active ?
+                {at: place.active} : {}),
+            Object.assign({name: 'description', label:
+                options.descriptionLabel || 'Description', type: 'char',
+                span: 2}, place.description ? {at: place.description,
+                    split: options.idSplit} : {})
+        ].concat(options.fields || []);
+        var master = {
             title: options.title,
             model: options.model,
             label: options.label,
             order: [['code', 'ASC']],
             open: params && params[0] ? parseInt(params[0], 10) : null,
-            tabs: [{title: options.tab || options.title, fields: fields}]
-                .concat(options.tabs || []),
+            tabs: [{title: options.tab || options.title, fields: fields,
+                frames: options.frames}].concat(options.tabs || []),
             browse: [{name: 'code', label: options.label},
                 {name: 'description', label: options.descriptionLabel ||
-                    'Description'}].concat(options.browse || [])
-        });
+                    'Description'}].concat(options.browse || []),
+            beforeSave: function (values) {
+                if ('inactive' in values) {
+                    values.active = !values.inactive;
+                    delete values.inactive;
+                }
+                ['create_uid', 'write_uid'].forEach(function (n) {
+                    delete values[n];
+                });
+                return values;
+            },
+            onload: function (record) {
+                fillWho(main, options.model, record.id);
+            }
+        };
+        if (options.idAt) {
+            master.idAt = options.idAt;
+            master.idSplit = options.idSplit;
+            master.idField = 'code';
+        } else {
+            fields.unshift({name: 'code', label: options.label || 'ID',
+                type: 'char'});
+        }
+        UI.master(main, master);
         main.classList.add('js-sales');
     }
 
-    Screens.jsServiceCharges = function (main, params) {
-        codeTable(main, params, {title: 'Service Charges',
-            model: 'nline.service_charge', label: 'Service Charge ID',
-            fields: [
-                {name: 'amount', label: 'Amount', type: 'money'},
-                {name: 'account', label: 'Revenue Account ID',
-                    type: 'many2one', model: 'account.account',
-                    domain: [['type.revenue', '=', true]]}],
-            browse: [{name: 'amount', label: 'Amount', type: 'money'},
-                {name: 'account', label: 'Account ID', type: 'many2one'}]});
+    /* Jobshop's one-grid code table windows (Service Charges, Sales Reps,
+     * Territories, SIC Codes, Carriers): every row, active or not, edited
+     * in place; add / delete rows, Save. columns [field spec] */
+    function codeGrid(main, options) {
+        injectCss();
+        var model = options.model;
+        var can = {write: false, create: false, 'delete': false};
+        var rows = [], removed = [];
+        var body = el('tbody');
+        var form = UI.form(main, {title: options.title, onSave: function () {
+            return save();
+        }, onClear: function () {
+            load();
+        }});
+        main = form.body;
+        main.classList.add('js-sales');
+        var add = el('button', {type: 'button', onclick: function () {
+            addRow(null);
+        }}, 'Add Row');
+        var fields = options.columns;
+        main.appendChild(el('div.panel', el('h3', {style: {marginTop: 0}},
+            options.tab || options.title),
+            el('div.table-wrap', el('table.data', el('thead', el('tr',
+                fields.map(function (f) {
+                    return el('th' + (f.type === 'money' || f.type ===
+                        'decimal' ? '.num' : ''), f.label);
+                }), el('th', ''))), body)), el('div.toolbar', add)));
+
+        function addRow(record) {
+            var row = {id: record ? record.id : null, controls: {}};
+            var editable = record ? can.write : can.create;
+            var tr = el('tr', fields.map(function (f) {
+                var c = UI.fieldControl(f);
+                row.controls[f.name] = c;
+                if (record) {
+                    /* Inactive: the reverse of the record's active */
+                    var v = f.name === 'inactive' ? !record.active :
+                        record[f.name];
+                    if (f.type === 'many2one') {
+                        v = v ? {id: v, rec_name: (record[f.name + '.'] ||
+                            {}).rec_name} : null;
+                    }
+                    c.set(v);
+                } else if (f.default !== undefined) {
+                    c.set(f.default);
+                }
+                Array.prototype.forEach.call(c.node.querySelectorAll ?
+                    c.node.querySelectorAll('input, select, textarea, ' +
+                        'button') : [], function (n) {
+                        n.disabled = !editable;
+                    });
+                if (c.node.matches && c.node.matches(
+                        'input, select, textarea')) {
+                    c.node.disabled = !editable;
+                }
+                return el('td', c.node);
+            }), el('td.row-delete', can['delete'] || !record ? el('button',
+                {type: 'button', title: 'Delete Row', 'aria-label':
+                    'Delete Row', onclick: function () {
+                        if (row.id) {
+                            removed.push(row.id);
+                        }
+                        rows.splice(rows.indexOf(row), 1);
+                        tr.remove();
+                    }}, '✕') : null));
+            rows.push(row);
+            body.appendChild(tr);
+        }
+
+        function load() {
+            var names = [];
+            fields.forEach(function (f) {
+                names.push(f.name === 'inactive' ? 'active' : f.name);
+                if (f.type === 'many2one') {
+                    names.push(f.name + '.rec_name');
+                }
+            });
+            Rpc.searchRead(model, [['active', 'in', [true, false]]], names,
+                {order: [['code', 'ASC']]}).then(function (records) {
+                    UI.clear(body);
+                    rows = [];
+                    removed = [];
+                    records.forEach(addRow);
+                    add.hidden = !can.create;
+                }, UI.showError);
+        }
+
+        function save() {
+            var create = [], writes = [];
+            rows.forEach(function (row) {
+                var values = {};
+                fields.forEach(function (f) {
+                    var v = row.controls[f.name].get();
+                    values[f.name] = f.type === 'money' || f.type ===
+                        'decimal' ? (v === null || v === undefined || v ===
+                            '' ? null : Rpc.decimal(typeof v === 'object' &&
+                            v.decimal !== undefined ? v.decimal : v)) : v;
+                });
+                if ('inactive' in values) {
+                    values.active = !values.inactive;
+                    delete values.inactive;
+                }
+                if (row.id) {
+                    if (can.write) {
+                        writes.push([row.id], values);
+                    }
+                } else if (values.code) {
+                    create.push(values);
+                }
+            });
+            var calls = [];
+            if (writes.length) {
+                calls.push(function () {
+                    return Rpc.model(model, 'write', writes);
+                });
+            }
+            if (create.length) {
+                calls.push(function () {
+                    return Rpc.model(model, 'create', [create]);
+                });
+            }
+            if (removed.length) {
+                calls.push(function () {
+                    return Rpc.model(model, 'delete', [removed]);
+                });
+            }
+            return calls.reduce(function (p, call) {
+                return p.then(call);
+            }, Promise.resolve()).then(function () {
+                UI.toast(options.title + ' saved', 'ok');
+                load();
+            }, UI.showError);
+        }
+
+        rights([model]).then(function (r) {
+            can = r[model];
+            form.allow(can.write || can.create, []);
+            load();
+        });
+    }
+
+    Screens.jsServiceCharges = function (main) {
+        codeGrid(main, {title: 'Service Charges',
+            model: 'nline.service_charge', columns: [
+                {name: 'code', label: 'ID', type: 'char'},
+                {name: 'description', label: 'Description', type: 'char'},
+                {name: 'amount', label: 'Amount', type: 'decimal'},
+                {name: 'account', label: 'Account ID', type: 'many2one',
+                    model: 'account.account',
+                    domain: [['type.revenue', '=', true]]},
+                {name: 'inactive', label: 'Inactive', type: 'boolean'}]});
     };
 
     Screens.jsSalesTaxGroups = function (main, params) {
         codeTable(main, params, {title: 'Sales Tax Groups',
             model: 'nline.sales_tax_group', label: 'Tax Group ID',
-            tab: 'Tax Group',
+            tab: 'Sales Tax Group', idAt: [14, 4, 264, 24], idSplit: 120,
+            place: {active: [266, 4, 453, 24],
+                description: [14, 26, 833, 46]},
+            browse: [{name: 'inactive', label: 'Inactive',
+                type: 'boolean'}],
             tabs: [{title: 'Taxes', lines: {name: 'lines',
                 model: 'nline.sales_tax_group.line', inverse: 'group',
                 order: [['tax_name', 'ASC'], ['effective_date', 'ASC']],
@@ -448,7 +994,7 @@
                         type: 'many2one', model: 'account.account',
                         domain: [['type', '!=', null],
                             ['closed', '!=', true]]},
-                    {name: 'percent', label: 'Tax Percent',
+                    {name: 'percent', label: 'Percent',
                         type: 'decimal'},
                     /* The Tryton tax the line is (made from the line when
                      * it has an account) */
@@ -456,49 +1002,66 @@
                         model: 'account.tax'}]}}]});
     };
 
-    Screens.jsSalesReps = function (main, params) {
-        codeTable(main, params, {title: 'Sales Reps',
-            model: 'nline.sales_rep', label: 'Sales Rep ID',
-            tab: 'Sales Representative', descriptionLabel: 'Name',
-            fields: [{name: 'commission', label: 'Commission %',
-                type: 'decimal'}]});
+    Screens.jsSalesReps = function (main) {
+        codeGrid(main, {title: 'Sales Representatives', tab: 'Sales Reps',
+            model: 'nline.sales_rep', columns: [
+                {name: 'code', label: 'ID', type: 'char'},
+                {name: 'description', label: 'Name', type: 'char'},
+                {name: 'commission', label: 'Commission Percent',
+                    type: 'decimal'},
+                {name: 'inactive', label: 'Inactive', type: 'boolean'}]});
     };
 
-    Screens.jsTerritories = function (main, params) {
-        codeTable(main, params, {title: 'Territories',
-            model: 'nline.territory', label: 'Territory ID',
-            tab: 'Territory'});
+    Screens.jsTerritories = function (main) {
+        codeGrid(main, {title: 'Sales Territories', tab: 'Territories',
+            model: 'nline.territory', columns: [
+                {name: 'code', label: 'ID', type: 'char'},
+                {name: 'description', label: 'Description', type: 'char'},
+                {name: 'inactive', label: 'Inactive', type: 'boolean'}]});
     };
 
-    Screens.jsSicCodes = function (main, params) {
-        codeTable(main, params, {title: 'SIC Codes',
-            model: 'nline.sic_code', label: 'SIC Code', tab: 'SIC Code'});
+    Screens.jsSicCodes = function (main) {
+        codeGrid(main, {title: 'Standard Industry Codes',
+            tab: 'Standard Industry Classification Codes',
+            model: 'nline.sic_code', columns: [
+                {name: 'code', label: 'ID', type: 'char'},
+                {name: 'description', label: 'Description', type: 'char'},
+                {name: 'inactive', label: 'Inactive', type: 'boolean'}]});
     };
 
-    Screens.jsCarriers = function (main, params) {
-        codeTable(main, params, {title: 'Carriers', model: 'nline.carrier',
-            label: 'Carrier ID', tab: 'Carrier', descriptionLabel: 'Name',
-            fields: [
+    Screens.jsCarriers = function (main) {
+        codeGrid(main, {title: 'Carriers', model: 'nline.carrier',
+            columns: [
+                {name: 'code', label: 'ID', type: 'char'},
+                {name: 'description', label: 'Name', type: 'char'},
+                {name: 'instructions', label: 'Shipper Instructions',
+                    type: 'text', rows: 1},
                 {name: 'carrier_code', label: 'Carrier Code', type: 'char'},
                 {name: 'route', label: 'Route', type: 'char'},
-                {name: 'cod_charge', label: 'COD Charge', type: 'money'},
-                {name: 'instructions', label: 'Shipper Instructions',
-                    type: 'text', span: 3}],
-            browse: [{name: 'carrier_code', label: 'Carrier Code'},
-                {name: 'route', label: 'Route'}]});
+                {name: 'cod_charge', label: 'COD Charge', type: 'decimal'},
+                {name: 'inactive', label: 'Inactive', type: 'boolean'}]});
     };
 
     Screens.jsDiscountClasses = function (main, params) {
         codeTable(main, params, {title: 'Discount Classes',
             model: 'nline.discount_class', label: 'Discount Class ID',
-            tab: 'Discount Class',
-            fields: [{name: 'discount_percent', label: 'Discount Percent',
-                type: 'decimal'}],
-            tabs: [{title: 'Prices', render: function (pane, record) {
+            tab: 'Discount Class', idAt: [13, 34, 290, 54], idSplit: 144,
+            place: {active: [292, 34, 364, 54],
+                description: [13, 56, 833, 76]},
+            fields: [
+                {name: 'create_uid', label: 'Created by', type: 'char',
+                    readonly: true, at: [13, 4, 417, 24], split: 144},
+                {name: 'write_uid', label: 'Last Modified by',
+                    type: 'char', readonly: true, at: [430, 4, 834, 24],
+                    split: 126},
+                {name: 'discount_percent', label: 'Discount %',
+                type: 'decimal', at: [13, 78, 272, 98], split: 144}],
+            tabs: [{title: 'Part Prices', render: function (pane, record) {
                 pricesTab(pane, 'discount_class', record.id);
             }}],
             browse: [{name: 'discount_percent', label: 'Discount %',
-                type: 'float'}]});
+                type: 'float'}, {name: 'inactive', label: 'Inactive',
+                type: 'boolean'}]});
     };
 
     /* ---- Prices: the quantity / price break tables -------------------- */
@@ -520,17 +1083,18 @@
                     'create_date'], {order: [['id', 'ASC']]}).then(
                 function (prices) {
                     UI.clear(listPane).appendChild(table([
-                        {label: 'Part ID'}, {label: 'Customer Part ID'},
-                        {label: 'Selling U/M'}, {label: 'Type'},
+                        {label: 'Do Not Use Price Breaks'}, {label: 'Part ID'},
+                        {label: 'Selling U/M'}, {label: 'Customer Part ID'},
                         {label: 'As Of'}, {label: 'Expires'},
-                        {label: 'Quoted'}],
+                        {label: 'Part Description'}],
                         prices.map(function (p) {
-                            return {cells: [(p['product.'] || {}).rec_name,
-                                p.customer_part || '',
+                            var part = (p['product.'] || {}).rec_name || '';
+                            return {cells: [p.use_part_price ? '✔' : '',
+                                UI.shortName('product.product', part),
                                 (p['unit.'] || {}).rec_name || '',
-                                label(QUOTE_TYPES, p.quote_type),
+                                p.customer_part || '',
                                 UI.date(p.as_of), UI.date(p.expires),
-                                UI.date(p.create_date)],
+                                part.replace(/^\[[^\]]*\]\s*/, '')],
                                 className: p.id === selectId ? 'selected' :
                                     '', onclick: function () {
                                     edit(p);
@@ -567,12 +1131,12 @@
                     type: 'char'},
                 {name: 'quote_type', label: 'Type', type: 'selection',
                     options: QUOTE_TYPES, default: 'break'},
-                {name: 'as_of', label: 'As Of', type: 'date'},
+                {name: 'as_of', label: 'As of', type: 'date'},
                 {name: 'expires', label: 'Expires', type: 'date'},
-                {name: 'default_unit_price', label: 'Default Price',
+                {name: 'default_unit_price', label: 'Default Unit Price',
                     type: 'decimal'},
-                {name: 'use_part_price', label: 'Use Part Price',
-                    type: 'boolean'}]);
+                {name: 'use_part_price', label: 'Do Not Use Price Breaks ' +
+                    'During Price Lookup', type: 'boolean'}]);
             var data = price ? Object.assign({}, price, {
                 product: price.product ? {id: price.product, rec_name:
                     (price['product.'] || {}).rec_name} : null,
@@ -603,7 +1167,7 @@
                 body.appendChild(tr);
             }
             editPane.appendChild(el('div.table-wrap', el('table.data',
-                el('thead', el('tr', el('th.num', 'Qty Break'),
+                el('thead', el('tr', el('th.num', 'Quantity'),
                     el('th.num', 'Unit Price'), el('th', ''))), body)));
             var buttons = el('div.toolbar');
             editPane.appendChild(buttons);
@@ -726,18 +1290,50 @@
         };
     }
 
-    /* The Sales Orders tab: Released orders first, other statuses from the
-     * right-click menu (as Jobshop) */
+    /* The Sales Orders tab: Released orders first, "View Sales Orders by
+     * Status of" and the other commands of Jobshop's right-click menu
+     * (PopupCustSalesOrders) */
     function customerOrdersTab(pane, record) {
         var status = ['released'];
         var holder = el('div');
-        pane.appendChild(el('p.muted', 'Right-click the list to show the ' +
-            'orders of other statuses.'));
+        pane.appendChild(el('p.muted', 'Right-click the list: View Sales ' +
+            'Orders by Status of, Sales Order Lines, Open Sales Order.'));
         pane.appendChild(holder);
         var allowed = false;
         UI.screenAllowed('orders').then(function (ok) {
             allowed = ok;
         });
+
+        function menu(event, row) {
+            UI.contextMenu(event, [
+                submenu(event, 'View Sales Orders by Status of',
+                    statusItems(function (s) {
+                        status = s;
+                        load();
+                    })),
+                {label: 'Sales Order Lines...', onclick: function () {
+                    orderLinesDialog('Sales Order Lines - ' +
+                        record.rec_name, {party: record.id}, status);
+                }},
+                allowed && row ? {label: 'Open Sales Order...', onclick:
+                    function () {
+                        openOrder(row.id, row.number);
+                    }} : '-',
+                row && row.js_quote ? {label: 'Open Quote...', onclick:
+                    function () {
+                        Rpc.searchRead('nline.quote', [['number', '=',
+                            row.js_quote]], ['number'], {limit: 1}).then(
+                            function (q) {
+                                if (q.length) {
+                                    UI.openScreen('quotes/' + q[0].id,
+                                        'Quote ' + q[0].number);
+                                } else {
+                                    UI.toast('Quote ' + row.js_quote +
+                                        ' is not in the ERP', 'error');
+                                }
+                            }, UI.showError);
+                    }} : '-']);
+        }
 
         function load() {
             var domain = [['party', '=', record.id]];
@@ -747,10 +1343,13 @@
             Rpc.searchRead('sale.sale', domain, ['number', 'js_status',
                 'reference', 'sale_date', 'shipping_date', 'promise_date',
                 'js_last_shipped_date', 'total_amount', 'js_shipped_amount',
-                'js_quote'], {limit: 300, order: [['sale_date', 'DESC'],
-                    ['id', 'DESC']]}).then(function (rows) {
+                'js_quote', 'sales_rep.code',
+                'shipment_address.party_name'], {limit: 300, order:
+                    [['sale_date', 'DESC'], ['id', 'DESC']]}).then(
+                function (rows) {
                     var node = table([{label: 'Order ID'}, {label: 'Status'},
-                        {label: 'Purchase Order Number'},
+                        {label: 'Contact Name'}, {label: 'ShipTo Name'},
+                        {label: 'Sales Rep'}, {label: 'Purchase Order No'},
                         {label: 'Order Date'}, {label: 'Desired Ship Date'},
                         {label: 'Promise Date'}, {label: 'Last Shipped Date'},
                         {label: 'Order Amount', num: true},
@@ -760,8 +1359,14 @@
                             if (allowed) {
                                 openOrder(row.id, row.number);
                             }
+                        }, oncontextmenu: function (event) {
+                            event.stopPropagation();
+                            menu(event, row);
                         }, cells: [row.number || String(row.id),
                             label(JS_STATUS, row.js_status),
+                            record.customer_contact || '',
+                            (row['shipment_address.'] || {}).party_name || '',
+                            (row['sales_rep.'] || {}).code || '',
                             row.reference || '', UI.date(row.sale_date),
                             UI.date(row.shipping_date),
                             UI.date(row.promise_date),
@@ -776,25 +1381,203 @@
                 }, UI.showError);
         }
         holder.addEventListener('contextmenu', function (event) {
-            UI.contextMenu(event, JS_STATUS.map(function (s) {
-                return {label: 'Show ' + s[1], onclick: function () {
-                    status = [s[0]];
-                    load();
-                }};
-            }).concat(['-', {label: 'Show All', onclick: function () {
-                status = null;
-                load();
-            }}]));
+            menu(event, null);
         });
         load();
     }
 
+    /* The Quotes tab: the customer's Estimating quotes (PopupCustQuotes:
+     * View Quotes by Status of, View Quote Lines..., Open Quote...) */
+    var QUOTE_STATUS = [['active', 'Active'], ['cancelled', 'Cancelled'],
+        ['lost', 'Lost'], ['ready', 'Ready'], ['won', 'Won']];
+
+    function customerQuotesTab(pane, record) {
+        var status = null;
+        var holder = el('div');
+        pane.appendChild(holder);
+        var allowed = false;
+        UI.screenAllowed('quotes').then(function (ok) {
+            allowed = ok;
+        });
+
+        function menu(event, row) {
+            UI.contextMenu(event, [
+                submenu(event, 'View Quotes by Status of', [{label: 'All',
+                    onclick: function () {
+                        status = null;
+                        load();
+                    }}].concat(QUOTE_STATUS.map(function (s) {
+                        return {label: s[1], onclick: function () {
+                            status = [s[0]];
+                            load();
+                        }};
+                    }))),
+                {label: 'View Quote Lines...', onclick: function () {
+                    var domain = [['quote.party', '=', record.id]];
+                    if (status) {
+                        domain.push(['quote.status', 'in', status]);
+                    }
+                    Rpc.searchRead('nline.quote.line', domain,
+                        ['quote.number', 'quote.quote_date',
+                            'quote.status', 'line_no', 'product.rec_name',
+                            'description', 'customer_part',
+                            'product_code.code', 'commodity_code.code',
+                            'desired_ship_date'], {limit: 500, order:
+                            [['quote', 'DESC'], ['line_no', 'ASC']]}).then(
+                        function (rows) {
+                            listDialog('Quote Lines', ['Quote ID',
+                                'Customer ID', 'Quote Date', 'Quote Status',
+                                'Line No', 'Part ID', 'Description',
+                                'Customer Part ID', 'Product Code',
+                                'Commodity Code', 'Desired Ship Date'].map(
+                                function (l) {
+                                    return {label: l};
+                                }), rows.map(function (r) {
+                                    var q = r['quote.'] || {};
+                                    return {cells: [q.number, record.code,
+                                        UI.date(q.quote_date), label(
+                                            QUOTE_STATUS, q.status),
+                                        r.line_no, UI.shortName(
+                                            'product.product', (r[
+                                                'product.'] || {}).rec_name),
+                                        r.description, r.customer_part,
+                                        (r['product_code.'] || {}).code,
+                                        (r['commodity_code.'] || {}).code,
+                                        UI.date(r.desired_ship_date)]};
+                                }), {empty: 'No quote line.'});
+                        }, UI.showError);
+                }},
+                allowed && row ? {label: 'Open Quote...', onclick:
+                    function () {
+                        UI.openScreen('quotes/' + row.id, 'Quote ' +
+                            row.number);
+                    }} : '-']);
+        }
+
+        function load() {
+            var domain = [['party', '=', record.id]];
+            if (status) {
+                domain.push(['status', 'in', status]);
+            }
+            Rpc.searchRead('nline.quote', domain, ['number',
+                'customer_reference', 'ship_name', 'status', 'quote_date',
+                'expiration_date', 'quoted_leadtime', 'won_loss_date',
+                'won_loss_reason'], {limit: 300, order: [['quote_date',
+                    'DESC'], ['id', 'DESC']]}).then(function (rows) {
+                    UI.clear(holder).appendChild(table([{label: 'ID'},
+                        {label: 'Customer Reference'},
+                        {label: 'Shipto Name'}, {label: 'Status'},
+                        {label: 'Quote Date'}, {label: 'Expiration Date'},
+                        {label: 'Quoted Lead Time', num: true},
+                        {label: 'Won/Loss Date'}, {label: 'Won/Loss Reason'}],
+                        rows.map(function (row) {
+                            return {ondblclick: function () {
+                                if (allowed) {
+                                    UI.openScreen('quotes/' + row.id,
+                                        'Quote ' + row.number);
+                                }
+                            }, oncontextmenu: function (event) {
+                                event.stopPropagation();
+                                menu(event, row);
+                            }, cells: [row.number, row.customer_reference,
+                                row.ship_name, label(QUOTE_STATUS,
+                                    row.status), UI.date(row.quote_date),
+                                UI.date(row.expiration_date),
+                                row.quoted_leadtime, UI.date(
+                                    row.won_loss_date), row.won_loss_reason]};
+                        }), 'No quote.'));
+                }, function () {
+                    UI.clear(holder).appendChild(el('p.muted',
+                        'The Estimating quotes are not available.'));
+                });
+        }
+        holder.addEventListener('contextmenu', function (event) {
+            menu(event, null);
+        });
+        load();
+    }
+
+    /* The Customers window: the Customers tab (Jobshop's header), then
+     * General, Addresses, Prices, Specs, Special Instructions, Notes,
+     * Quotes, Sales Orders (and the desk's Contacts and Invoices) */
+    /* Jobshop's "user mm/dd/yyyy hh:mm" (Created by / Last Modified by) */
+    function whoText(user, when) {
+        if (!when) {
+            return name(user);
+        }
+        var pad = function (n) {
+            return (n < 10 ? '0' : '') + n;
+        };
+        var d = typeof when === 'string' ? new Date(when.replace(' ', 'T')) :
+            when.__class__ ? new Date(when.year, when.month - 1, when.day,
+                when.hour || 0, when.minute || 0) : new Date(when);
+        if (isNaN(d.getTime())) {
+            return name(user);
+        }
+        return (name(user) + ' ' + pad(d.getMonth() + 1) + '/' +
+            pad(d.getDate()) + '/' + d.getFullYear() + ' ' +
+            pad(d.getHours()) + ':' + pad(d.getMinutes())).trim();
+    }
+
+    /* Created by / Last Modified by of a placed window: the user and
+     * when (the fields create_uid / write_uid placed as read-only text) */
+    function fillWho(main, model, id) {
+        Rpc.model(model, 'read', [[id], ['create_uid.rec_name',
+            'create_date', 'write_uid.rec_name', 'write_date']]).then(
+            function (rows) {
+                var r = rows[0] || {};
+                var set = function (lab, text) {
+                    var input = main.querySelector('input[aria-label="' +
+                        lab + '"]');
+                    if (input) {
+                        input.value = text;
+                    }
+                };
+                set('Created by', whoText(r['create_uid.'], r.create_date));
+                set('Last Modified by', r.write_date ? whoText(
+                    r['write_uid.'], r.write_date) : '');
+            }, function () {});
+    }
+
+    /* The Customers window after a record loads: who / when, the Terms
+     * ID's and the Receivables Acct ID's description boxes */
+    function customerLoaded(main, record) {
+        var input = function (lab) {
+            return main.querySelector('input[aria-label="' + lab + '"]');
+        };
+        Rpc.model('party.party', 'read', [[record.id], ['create_uid.rec_name',
+            'create_date', 'write_uid.rec_name', 'write_date',
+            'customer_payment_term.rec_name',
+            'customer_payment_term.description',
+            'account_receivable.rec_name']]).then(function (rows) {
+                var r = rows[0] || {};
+                var created = input('Created by');
+                var modified = input('Last Modified by');
+                if (created) {
+                    created.value = whoText(r['create_uid.'], r.create_date);
+                }
+                if (modified) {
+                    modified.value = r.write_date ? whoText(r['write_uid.'],
+                        r.write_date) : '';
+                }
+                var term = r['customer_payment_term.'];
+                var termDesc = input('Terms ID description');
+                if (termDesc) {
+                    termDesc.value = term ? term.description ||
+                        term.rec_name || '' : '';
+                }
+                var account = input('Receivables Acct ID');
+                var full = name(r['account_receivable.']);
+                if (account && full) {
+                    account.value = codeOf(full);
+                    account.title = full;
+                }
+            }, function () {});
+    }
+
     Screens.customerWindow = function (main, params) {
         injectCss();
-        var openOrders = false, openInvoices = false;
-        UI.screenAllowed('orders').then(function (ok) {
-            openOrders = ok;
-        });
+        var openInvoices = false;
         UI.screenAllowed('invoicing').then(function (ok) {
             openInvoices = ok;
         });
@@ -806,103 +1589,117 @@
             title: 'Customers',
             model: 'party.party',
             label: 'Customer ID',
+            idAt: [7, 4, 439, 24],
+            idSplit: 105,
+            idField: 'code',
             order: [['name', 'ASC']],
             open: params && params[0] ? parseInt(params[0], 10) : null,
             tabs: [
-                {title: 'Customers', fields: [
-                    {name: 'code', label: 'ID', type: 'char',
-                        readonly: true},
-                    {name: 'name', label: 'Name', type: 'char', span: 2},
-                    {name: 'active', label: 'Active', type: 'boolean',
-                        default: true},
-                    {name: 'sold_to_street', label: 'Address',
-                        type: 'text', rows: 2, span: 2},
-                    {name: 'sold_to_city', label: 'City', type: 'char'},
-                    ref('sold_to_subdivision', 'State',
-                        'country.subdivision'),
-                    {name: 'sold_to_postal_code', label: 'Postal Code',
-                        type: 'char'},
-                    ref('sold_to_country', 'Country', 'country.country'),
-                    {name: 'sold_to_name', label: 'Etc. (attention)',
-                        type: 'char'},
-                    {name: 'contact_title', label: 'Title', type: 'char'},
-                    {name: 'phone', label: 'Phone', type: 'char',
-                        readonly: true},
-                    {name: 'fax', label: 'Fax', type: 'char',
-                        readonly: true},
-                    {name: 'email', label: 'Contact E-Mail', type: 'char',
-                        readonly: true}]},
-                /* Kept from the desk's window: the contacts (phone, fax,
-                 * e-mail above come from here) */
-                {title: 'Contacts', lines: {name: 'contact_mechanisms',
-                    model: 'party.contact_mechanism', inverse: 'party',
-                    fields: [
-                        {name: 'type', label: 'Type', type: 'selection',
-                            options: CONTACT_TYPES},
-                        {name: 'value', label: 'Value', type: 'char'},
-                        {name: 'name', label: 'Contact', type: 'char'}]}},
-                {title: 'Account', fields: [
-                    {name: 'customer_open_date', label: 'Account Opened Date',
-                        type: 'date'},
-                    {name: 'customer_last_order_date',
-                        label: 'Last Order Date', type: 'date',
-                        readonly: true},
-                    {name: 'our_supplier_id', label: 'Supplier ID (Ours)',
-                        type: 'char'},
-                    ref('account_receivable', 'Receivables Account ID',
-                        'account.account',
-                        {domain: [['type.receivable', '=', true]]}),
-                    ref('customer_payment_term', 'Terms ID',
-                        'account.invoice.payment_term'),
-                    {name: 'customer_freight_terms', label: 'Freight Terms',
-                        type: 'selection', options: FREIGHT_TERMS},
+                {title: 'Customers', frames: [
+                    {label: '', at: [7, 25, 448, 186]},
+                    {label: '', at: [461, 25, 831, 165]}], fields: [
+                    {name: 'customer_inactive', label: 'Inactive',
+                        type: 'boolean', at: [441, 4, 517, 24]},
+                    {name: 'customer_exported', label: 'Exported',
+                        type: 'boolean', at: [564, 4, 646, 24]},
+                    {name: 'customer_exported_date', label: 'Date',
+                        type: 'date', readonly: true, at: [666, 4, 825, 24],
+                        split: 56},
+                    {name: 'name', label: 'Name', type: 'char',
+                        at: [19, 32, 439, 52], split: 93},
+                    {name: 'sold_to_address_1', label: 'Address',
+                        type: 'char', at: [19, 54, 439, 74], split: 93},
+                    {name: 'sold_to_address_2', label: 'Address 2',
+                        type: 'char', at: [112, 76, 439, 96], split: 0},
+                    {name: 'sold_to_city', label: 'City', type: 'char',
+                        at: [19, 98, 439, 118], split: 93},
+                    ref('sold_to_subdivision', 'State/Postal',
+                        'country.subdivision', {at: [19, 120, 225, 140],
+                            split: 93}),
+                    {name: 'sold_to_postal_code', label: '/',
+                        type: 'char', at: [227, 120, 356, 140], split: 10},
+                    ref('sold_to_country', 'Country', 'country.country',
+                        {at: [19, 142, 439, 162], split: 93}),
+                    {name: 'sold_to_name', label: 'Etc.', type: 'char',
+                        at: [19, 164, 439, 184], split: 93},
+                    {name: 'customer_contact', label: 'Contact',
+                        type: 'char', at: [473, 32, 824, 52], split: 93},
+                    {name: 'contact_title', label: 'Title', type: 'char',
+                        at: [473, 54, 824, 74], split: 93},
+                    {name: 'customer_phone', label: 'Phone', type: 'char',
+                        at: [473, 76, 824, 96], split: 93},
+                    {name: 'customer_fax', label: 'Fax', type: 'char',
+                        at: [473, 98, 824, 118], split: 93},
+                    {name: 'customer_email', label: 'E-mail', type: 'char',
+                        at: [473, 120, 824, 140], split: 93},
+                    {name: 'customer_mobile', label: 'Mobile', type: 'char',
+                        at: [473, 142, 824, 162], split: 93},
+                    {name: 'customer_open_date', label: 'Acct Opened',
+                        type: 'date', at: [473, 164, 676, 184], split: 93},
                     {name: 'credit_status', label: 'Credit Status',
                         type: 'selection', options: CREDIT_STATUS,
-                        default: 'approved'},
-                    {name: 'credit_limit', label: 'Order Limit',
-                        type: 'money'},
-                    {name: 'receivable', label: 'Open balance',
-                        type: 'money', readonly: true},
-                    {name: 'customer_open_orders', label: 'Total Open Orders',
-                        type: 'money', readonly: true},
-                    {name: 'customer_open_order_count', label: 'Open Orders',
-                        type: 'integer', readonly: true}]},
-                {title: 'Details', fields: [
-                    ref('sales_rep', 'Sales Rep ID', 'nline.sales_rep'),
-                    ref('territory', 'Territory', 'nline.territory'),
-                    ref('customer_fob_point', 'FOB Point',
-                        'nline.fob_point'),
-                    ref('customer_ship_via', 'Ship VIA', 'nline.ship_via'),
-                    ref('carrier', 'Carrier ID', 'nline.carrier'),
-                    ref('customer_sic_code', 'SIC Code', 'nline.sic_code'),
-                    ref('discount_class', 'Discount Class',
-                        'nline.discount_class'),
+                        default: 'approved', at: [19, 191, 228, 211],
+                        split: 93},
+                    {name: 'customer_last_order_date',
+                        label: 'Last Order Date', type: 'date',
+                        readonly: true, at: [235, 191, 431, 211], split: 90},
+                    {name: 'credit_limit', label: 'Credit Limit',
+                        type: 'money', at: [436, 191, 601, 211], split: 64},
+                    {name: 'customer_open_orders',
+                        label: 'Total Released Orders', type: 'money',
+                        readonly: true, at: [605, 191, 824, 211],
+                        split: 120}]},
+                {title: 'General', fields: [
+                    /* Jobshop's "user date" texts (filled in onload) */
+                    {name: 'create_uid', label: 'Created by', type: 'char',
+                        readonly: true, at: [17, 4, 396, 24], split: 140},
+                    {name: 'write_uid', label: 'Last Modified by',
+                        type: 'char', readonly: true, at: [463, 4, 813, 24],
+                        split: 93},
+                    {name: 'our_supplier_id', label: 'Supplier ID (ours)',
+                        type: 'char', at: [17, 26, 337, 46], split: 140},
+                    ref('customer_payment_term', 'Terms ID',
+                        'account.invoice.payment_term',
+                        {at: [17, 48, 337, 68], split: 140}),
+                    ref('customer_tax_group', 'Default Tax Group',
+                        'nline.sales_tax_group',
+                        {at: [17, 70, 337, 90], split: 140}),
                     {name: 'customer_tax_id_number', label: 'Tax ID Number',
-                        type: 'char'},
-                    ref('customer_tax_group', 'Tax Group ID',
-                        'nline.sales_tax_group'),
+                        type: 'char', at: [17, 92, 337, 112], split: 140},
                     {name: 'customer_tax_exempt', label: 'Tax Exempt',
-                        type: 'boolean'},
-                    {name: 'quote_instructions',
-                        label: 'Special Instructions for Quotes',
-                        type: 'text', rows: 2, span: 2},
-                    {name: 'sales_instructions',
-                        label: 'Special Instructions for Sales Orders',
-                        type: 'text', rows: 2, span: 2},
-                    {name: 'quote_footer', label: 'Quote Footer',
-                        type: 'text', rows: 2, span: 2},
-                    {name: 'sales_order_footer', label: 'Sales Order Footer',
-                        type: 'text', rows: 2, span: 2},
-                    {name: 'shipper_footer', label: 'Shipper Footer',
-                        type: 'text', rows: 2, span: 2},
-                    {name: 'invoice_footer', label: 'Invoice Footer',
-                        type: 'text', rows: 2, span: 2},
-                    {name: 'customer_specs', label: 'Specifications',
-                        type: 'text', rows: 3, span: 4}]},
+                        type: 'boolean', at: [342, 92, 461, 112]},
+                    {name: 'customer_freight_terms', label: 'Freight Terms',
+                        type: 'selection', options: FREIGHT_TERMS,
+                        at: [17, 114, 337, 134], split: 140},
+                    ref('customer_fob_point', 'FOB Point ID',
+                        'nline.fob_point', {at: [17, 136, 337, 156],
+                            split: 140}),
+                    ref('customer_ship_via', 'Ship Via ID', 'nline.ship_via',
+                        {at: [17, 158, 337, 178], split: 140}),
+                    ref('carrier', 'Carrier ID', 'nline.carrier',
+                        {at: [17, 180, 337, 200], split: 140}),
+                    ref('sales_rep', 'Sales Rep ID', 'nline.sales_rep',
+                        {at: [17, 202, 337, 222], split: 140}),
+                    ref('territory', 'Sales Territory ID', 'nline.territory',
+                        {at: [17, 224, 337, 244], split: 140}),
+                    ref('discount_class', 'Discount Class ID',
+                        'nline.discount_class', {at: [17, 246, 337, 266],
+                            split: 140}),
+                    ref('customer_sic_code', 'SIC Code ID',
+                        'nline.sic_code', {at: [17, 268, 337, 288],
+                            split: 140}),
+                    ref('account_receivable', 'Receivables Acct ID',
+                        'account.account',
+                        {domain: [['type.receivable', '=', true]],
+                            at: [17, 290, 337, 310], split: 140})]},
                 {title: 'Addresses', lines: {name: 'addresses',
                     model: 'party.address', inverse: 'party',
                     order: [['sequence', 'ASC'], ['id', 'ASC']],
                     fields: [
+                        /* (the address's ID: N-Line's addresses have no
+                         * sequence; the Sales Order's Address No) */
+                        {name: 'id', label: 'Addr No',
+                            type: 'integer', readonly: true},
                         {name: 'ship_to_default', label: 'Default Ship To',
                             type: 'boolean'},
                         {name: 'party_name', label: 'Name', type: 'char'},
@@ -920,49 +1717,66 @@
                             type: 'char'},
                         {name: 'ship_to_fax', label: 'Contact Fax',
                             type: 'char'},
-                        {name: 'ship_to_email', label: 'Contact E-Mail',
+                        {name: 'ship_to_email', label: 'Contact E-mail',
                             type: 'char'},
-                        {name: 'invoice', label: 'Bill To',
-                            type: 'boolean'},
-                        {name: 'delivery', label: 'Ship To',
-                            type: 'boolean'},
                         {name: 'ship_to_tax_exempt', label: 'Tax Exempt',
                             type: 'boolean'},
                         ref('ship_to_tax_group', 'Tax Group ID',
                             'nline.sales_tax_group'),
                         {name: 'ship_to_tax_id_number',
                             label: 'Tax ID Number', type: 'char'},
-                        ref('ship_to_sales_rep', 'Sales Rep',
+                        ref('ship_to_sales_rep', 'Sales Rep ID',
                             'nline.sales_rep'),
                         ref('ship_to_territory', 'Territory ID',
                             'nline.territory'),
-                        ref('ship_to_fob_point', 'FOB Point',
+                        ref('ship_to_fob_point', 'FOB Point ID',
                             'nline.fob_point'),
                         ref('ship_to_ship_via', 'Ship Via ID',
                             'nline.ship_via'),
                         ref('ship_to_carrier', 'Carrier ID',
                             'nline.carrier'),
                         ref('ship_to_discount_class', 'Discount Class ID',
-                            'nline.discount_class')]}},
+                            'nline.discount_class'),
+                        /* Tryton's: which addresses bill / ship */
+                        {name: 'invoice', label: 'Bill To',
+                            type: 'boolean'},
+                        {name: 'delivery', label: 'Ship To',
+                            type: 'boolean'}]}},
                 {title: 'Prices', render: function (pane, record) {
                     pricesTab(pane, 'party', record.id);
                 }},
+                {title: 'Specs', fields: [
+                    {name: 'customer_specs', label: 'Specifications',
+                        type: 'text', at: [4, 4, 754, 456], split: 0}]},
+                {title: 'Special Instructions', frames: [
+                    {label: 'Estimating Quotes', at: [3, 4, 407, 163]},
+                    {label: 'Sales Orders', at: [416, 4, 820, 163]}],
+                    fields: [
+                    {name: 'quote_instructions', label: 'Estimating Quotes',
+                        type: 'text', at: [18, 24, 396, 156], split: 0},
+                    {name: 'sales_instructions', label: 'Sales Orders',
+                        type: 'text', at: [428, 24, 806, 156], split: 0},
+                    /* The footers printed on the documents */
+                    {name: 'quote_footer', label: 'Quote Footer',
+                        type: 'text', rows: 2, span: 2},
+                    {name: 'sales_order_footer', label: 'Sales Order Footer',
+                        type: 'text', rows: 2, span: 2},
+                    {name: 'shipper_footer', label: 'Shipper Footer',
+                        type: 'text', rows: 2, span: 2},
+                    {name: 'invoice_footer', label: 'Invoice Footer',
+                        type: 'text', rows: 2, span: 2}]},
                 {notes: true},
+                {title: 'Quotes', render: customerQuotesTab},
                 {title: 'Sales Orders', render: customerOrdersTab},
-                {title: 'Quotes', render: documentsTab('sale.sale',
-                    function (record) {
-                        return [['party', '=', record.id],
-                            ['state', 'in', ['draft', 'quotation']]];
-                    }, [['number', 'ID'], ['reference', 'Customer Reference'],
-                        ['js_status', 'Status', false, JS_STATUS],
-                        ['sale_date', 'Quote Date'],
-                        ['shipping_date', 'Desired Ship Date'],
-                        ['total_amount', 'Amount', true]], function (row) {
-                        if (openOrders) {
-                            openOrder(row.id, row.number);
-                        }
-                    })},
-                /* Kept from the desk's window */
+                /* Kept from the desk's window: the contacts (Phone, Fax,
+                 * E-mail, Mobile above are the first of each type) */
+                {title: 'Contacts', lines: {name: 'contact_mechanisms',
+                    model: 'party.contact_mechanism', inverse: 'party',
+                    fields: [
+                        {name: 'type', label: 'Type', type: 'selection',
+                            options: CONTACT_TYPES},
+                        {name: 'value', label: 'Value', type: 'char'},
+                        {name: 'name', label: 'Contact', type: 'char'}]}},
                 {title: 'Invoices', render: documentsTab('account.invoice',
                     function (record) {
                         return [['party', '=', record.id],
@@ -981,71 +1795,141 @@
                     })}
             ],
             browse: [
-                {name: 'code', label: 'ID'},
+                {name: 'code', label: 'Customer ID'},
                 {name: 'name', label: 'Name'},
-                {name: 'sold_to_street', label: 'Address'},
+                {name: 'sold_to_address_1', label: 'Address 1'},
+                {name: 'sold_to_address_2', label: 'Address 2'},
                 {name: 'sold_to_city', label: 'City'},
                 {name: 'sold_to_subdivision', label: 'State',
                     type: 'many2one'},
-                {name: 'sold_to_postal_code', label: 'Postal Code'},
-                {name: 'receivable', label: 'Balance', type: 'money'}],
+                {name: 'sold_to_postal_code', label: 'Postal Code'}],
             beforeSave: function (values) {
                 ['receivable', 'customer_open_orders',
                     'customer_open_order_count', 'customer_last_order_date',
-                    'phone', 'fax', 'email'].forEach(function (n) {
+                    'customer_exported_date', 'create_uid', 'write_uid']
+                    .forEach(function (n) {
                         delete values[n];
                     });
                 return values;
+            },
+            onload: function (record) {
+                customerLoaded(main, record);
             }
         });
         main.classList.add('js-sales');
+        describe(main, [['Terms ID', [339, 48, 802, 68]],
+            ['Default Tax Group', [339, 70, 802, 90]],
+            ['FOB Point ID', [339, 136, 802, 156]],
+            ['Ship Via ID', [339, 158, 802, 178]],
+            ['Carrier ID', [339, 180, 802, 200]],
+            ['Sales Rep ID', [339, 202, 802, 222]],
+            ['Sales Territory ID', [339, 224, 802, 244]],
+            ['Discount Class ID', [339, 246, 802, 266]],
+            ['SIC Code ID', [339, 268, 802, 288]],
+            ['Receivables Acct ID', [339, 290, 802, 310]]]);
     };
 
     /* ---- Sales Orders ----------------------------------------------------- */
 
+    /* The Sales Order tab below its sub-tabs (Jobshop's layout, moved up
+     * by 372 units: the sub-tabs are not drawn in the layout) */
     var DETAIL_FIELDS = [
-        {name: 'promise_date', label: 'Promise Date', type: 'date'},
-        {name: 'last_shipped_date', label: 'Last Shipped Date', type: 'date',
-            readonly: true},
         {name: 'sales_rep', label: 'Sales Rep ID', type: 'many2one',
-            model: 'nline.sales_rep'},
-        {name: 'territory', label: 'Territory ID', type: 'many2one',
-            model: 'nline.territory'},
+            model: 'nline.sales_rep', at: [11, 8, 240, 28], split: 120},
+        {name: 'territory', label: 'Sales Territory ID', type: 'many2one',
+            model: 'nline.territory', at: [11, 30, 240, 50], split: 120},
         {name: 'fob_point', label: 'FOB Point ID', type: 'many2one',
-            model: 'nline.fob_point'},
+            model: 'nline.fob_point', at: [11, 52, 240, 72], split: 120},
         {name: 'ship_via', label: 'Ship Via ID', type: 'many2one',
-            model: 'nline.ship_via'},
+            model: 'nline.ship_via', at: [11, 74, 240, 94], split: 120},
         {name: 'js_carrier', label: 'Carrier ID', type: 'many2one',
-            model: 'nline.carrier'},
-        {name: 'tax_group', label: 'Tax Group ID', type: 'many2one',
-            model: 'nline.sales_tax_group'},
+            model: 'nline.carrier', at: [11, 96, 240, 116], split: 120},
+        {name: 'payment_term', label: 'Terms ID', type: 'many2one',
+            custom: true, at: [438, 8, 668, 28], split: 130},
+        {name: 'payment_term_descr', label: 'Terms description',
+            type: 'char', readonly: true, at: [670, 8, 838, 28], split: 0},
         {name: 'freight_terms', label: 'Freight Terms', type: 'selection',
-            options: FREIGHT_TERMS},
+            options: FREIGHT_TERMS, at: [438, 30, 668, 50], split: 130},
         {name: 'discount_class', label: 'Discount Class ID',
-            type: 'many2one', model: 'nline.discount_class'},
-        {name: 'js_quote', label: 'Quote ID', type: 'char'}];
+            type: 'many2one', model: 'nline.discount_class',
+            at: [438, 52, 668, 72], split: 130},
+        {name: 'tax_group', label: 'Tax Group ID', type: 'many2one',
+            model: 'nline.sales_tax_group', at: [438, 74, 668, 94],
+            split: 130},
+        {name: 'receivable', label: 'Receivables Acct ID', type: 'char',
+            readonly: true, at: [438, 96, 668, 116], split: 130},
+        {name: 'receivable_descr', label: 'Receivables description',
+            type: 'char', readonly: true, at: [670, 96, 838, 116], split: 0},
+        {name: 'lines_total', label: 'Lines', type: 'char', readonly: true,
+            at: [635, 121, 838, 141], split: 80},
+        {name: 'charges_total', label: 'Charges', type: 'char',
+            readonly: true, at: [635, 143, 838, 163], split: 80},
+        {name: 'tax_total', label: 'Tax', type: 'char', readonly: true,
+            at: [635, 165, 838, 185], split: 80},
+        {name: 'order_total', label: 'Total', type: 'char', readonly: true,
+            at: [635, 187, 838, 207], split: 80}];
+    var DETAIL_DESCRIPTIONS = [['Sales Rep ID', [242, 8, 417, 28]],
+        ['Sales Territory ID', [242, 30, 417, 50]],
+        ['FOB Point ID', [242, 52, 417, 72]],
+        ['Ship Via ID', [242, 74, 417, 94]],
+        ['Carrier ID', [242, 96, 417, 116]],
+        ['Discount Class ID', [670, 52, 838, 72]],
+        ['Tax Group ID', [670, 74, 838, 94]]];
 
+    /* The Order Line window (VSales SalesLine): General, Other, Specs,
+     * Links; the fields a line keeps beside the grid's */
     var LINE_DETAIL_FIELDS = [
-        {name: 'customer_po_line', label: 'Customer PO Line #',
-            type: 'char'},
-        {name: 'promise_date', label: 'Promise Date', type: 'date'},
+        {name: 'customer_po_line', label: 'PO Line No', type: 'char',
+            at: [212, 34, 339, 54], split: 70},
+        {name: 'customer_part', label: 'Customer Part ID', type: 'char',
+            at: [17, 100, 424, 120], split: 120},
+        {name: 'drawing_id', label: 'Drawing ID/Rev', type: 'char',
+            at: [433, 100, 770, 120], split: 120},
+        {name: 'drawing_rev', label: '/', type: 'char',
+            at: [772, 100, 852, 120], split: 10},
         {name: 'product_code', label: 'Product Code ID', type: 'many2one',
-            model: 'nline.product_code'},
+            model: 'nline.product_code', at: [17, 123, 240, 143],
+            split: 120},
         {name: 'commodity_code', label: 'Commodity Code ID',
-            type: 'many2one', model: 'nline.commodity_code'},
+            type: 'many2one', model: 'nline.commodity_code',
+            at: [433, 123, 656, 143], split: 120},
+        {name: 'commissionable', label: 'Commissionable', type: 'boolean',
+            at: [16, 213, 130, 233]},
         {name: 'line_tax_group', label: 'Tax Group ID', type: 'many2one',
-            model: 'nline.sales_tax_group'},
-        {name: 'js_line_specs', label: 'Specifications', type: 'text',
-            span: 3}];
+            model: 'nline.sales_tax_group', at: [433, 213, 656, 233],
+            split: 120},
+        {name: 'js_desired_date', label: 'Desired Ship Date', type: 'date',
+            at: [18, 328, 263, 348], split: 120},
+        {name: 'promise_date', label: 'Promised Date', type: 'date',
+            at: [18, 350, 263, 370], split: 120}];
+    var LINE_OTHER_FIELDS = [
+        {name: 'user_0', label: 'User 0', type: 'char',
+            at: [23, 24, 393, 44], split: 60},
+        {name: 'user_1', label: 'User 1', type: 'char',
+            at: [23, 45, 393, 65], split: 60},
+        {name: 'user_2', label: 'User 2', type: 'char',
+            at: [23, 66, 393, 86], split: 60}];
+    var LINE_SPEC_FIELDS = [{name: 'js_line_specs', label: 'Specifications',
+        type: 'text', at: [4, 4, 902, 400], split: 0}];
+    var LINE_ALL_FIELDS = LINE_DETAIL_FIELDS.concat(LINE_OTHER_FIELDS,
+        LINE_SPEC_FIELDS);
+
+    /* A read-only placed text of the Order Line window */
+    function infoField(name, label, at, split) {
+        return {name: name, label: label, type: 'char', readonly: true,
+            at: at, split: split === undefined ? 120 : split};
+    }
 
     Screens.salesOrder = function (main, params) {
         injectCss();
         var order = null;
+        var copied = null;
         var openId = params && params[0] ? parseInt(params[0], 10) : null;
         var can = {save: true, create: true, delete: true, workOrder: true,
             charges: true};
-        var screens = {shipping: false, invoicing: false, workorders: false};
-        var form = UI.form(main, {title: 'Sales Order',
+        var screens = {shipping: false, invoicing: false, workorders: false,
+            parts: false};
+        var form = UI.form(main, {title: 'Sales Orders',
             kind: 'customer',
             find: {model: 'sale.sale', title: 'Find orders',
                 order: [['sale_date', 'DESC'], ['id', 'DESC']],
@@ -1057,26 +1941,31 @@
                     {field: 'js_status', label: 'Status'}]},
             extra: [
                 {label: 'New From Quote', title: 'File > New Document ' +
-                    'From > Quote', onclick: fromQuote},
-                {label: 'Copy', title: 'Edit > Copy Document: a new order ' +
-                    'with the lines of this one', onclick: copyOrder},
+                    'From > Quote...', onclick: fromQuote},
+                {label: 'Copy Document', title: 'Edit > Copy Document: a ' +
+                    'new order with the lines of this one',
+                    onclick: copyOrder},
+                {label: 'Delete Document', title: 'Edit > Delete Document',
+                    onclick: deleteOrder},
+                {label: 'Add Details', title: 'Tools > Add Details: a new ' +
+                    'line in the Order Line window', onclick: function () {
+                        addDetails();
+                    }},
                 {label: 'Change Status', title: 'Tools > Change Status',
                     onclick: function (event) {
                         statusMenu(event.currentTarget);
                     }},
-                {label: 'Reset Prices', title: 'Reset unit price from ' +
-                    'customer (all lines)', onclick: resetPrices},
-                {label: 'Print', title: 'Print the acknowledgement',
-                    onclick: function () {
-                        if (order) {
-                            Rpc.report('sale.sale', [order.id]).then(
-                                function (r) {
-                                    UI.openReport(r, 'Order');
-                                }, UI.showError);
-                        }
+                {label: 'Re-price Lines', title: 'Tools > Re-price Lines',
+                    onclick: function (event) {
+                        menuAt(event.currentTarget, [
+                            {label: 'All Lines', onclick: resetPrices},
+                            {label: 'Selected Lines', onclick: function () {
+                                UI.toast('Right-click a line: Calculate ' +
+                                    'Sales Order Line Price', 'ok');
+                            }}]);
                     }},
-                {label: 'Delete', title: 'Edit > Delete Document',
-                    onclick: deleteOrder}],
+                {label: 'Print', title: 'Print the acknowledgement',
+                    onclick: printOrder}],
             onSave: function () {
                 return save();
             },
@@ -1086,107 +1975,194 @@
         main = form.body;
         main.classList.add('js-sales');
 
-        /* Sales Order tab: the header and the lines */
+        /* The header (Jobshop's fraOrderHeader) */
         var number = el('input', {type: 'text', 'aria-label': 'Order ID',
             placeholder: '(automatic)'});
-        var status = el('span.badge.open.js-status', 'Unreleased');
         var customer = UI.picker('party.party', {placeholder: 'Customer ID',
-            label: 'Customer ID', fields: ['customer_payment_term'],
-            onselect: function (record) {
+            label: 'Customer ID', fields: ['customer_payment_term', 'code',
+                'name'], onselect: function (record) {
+                customerName.value = record.name || record.rec_name || '';
                 form.showParty(record.id);
                 customerDefaults(record.id);
             }});
+        var customerName = el('input', {type: 'text', readonly: true,
+            tabindex: -1, 'aria-label': 'Customer name'});
         var date = el('input', {type: 'date', value: UI.today(),
             'aria-label': 'Order Date'});
         var desired = el('input', {type: 'date', 'aria-label':
             'Desired Ship Date'});
         var po = el('input', {type: 'text', 'aria-label':
             'Purchase Order No'});
-        var term = el('select', {'aria-label': 'Terms'}, el('option',
-            {value: ''}, ''));
+        var statusSel = el('select', {'aria-label': 'Status'},
+            JS_STATUS.map(function (s) {
+                return el('option', {value: s[0]}, s[1]);
+            }));
+        var promise = el('input', {type: 'date', 'aria-label':
+            'Promised Date'});
+        var soldToText = el('textarea', {readonly: true, tabindex: -1,
+            'aria-label': 'Sold to'});
+        var shipToText = el('textarea', {readonly: true, tabindex: -1,
+            'aria-label': 'Ship to'});
+        var info = {};
+        ['created_by', 'modified_by', 'last_shipped', 'printed', 'quote',
+            'shipped_amount'].forEach(function (n) {
+                info[n] = el('input', {type: 'text', readonly: true,
+                    tabindex: -1, 'aria-label': n});
+            });
+        /* Tryton's description (the desk's Memo): not in Jobshop's window,
+         * kept as it is on save */
         var memo = el('input', {type: 'text', 'aria-label': 'Memo'});
-        var total = el('div.big-total', '$0.00');
-        var totals = el('div.js-totals');
-        var linesPanel = el('div');
-        var links = el('div');
-        var grid = null;
-
-        /* The other tabs */
-        var shipTo = UI.picker('party.address', {placeholder: 'Ship to',
-            label: 'Ship To address', onselect: function () {
-                showShipTo(null);
+        /* Terms ID: a lookup with its description beside it */
+        var term = UI.picker('account.invoice.payment_term', {label:
+            'Terms ID', placeholder: 'Terms ID', fields: ['description'],
+            onselect: function (record) {
+                termDescription(record);
             }});
-        var details = fieldGrid(DETAIL_FIELDS);
-        var specs = el('textarea', {rows: 10, 'aria-label': 'Specifications',
+        var copyNotes = el('input', {type: 'checkbox', 'aria-label':
+            'Copy Notes to Shipper'});
+        var linesPanel = el('div');
+
+        function plain(node) {
+            return {node: node};
+        }
+        var header = UI.placedForm ? UI.placedForm({frames: [{label: '',
+            at: [7, 4, 850, 164]}], fields: [
+                {name: 'number', label: 'Order ID', at: [17, 4, 247, 24],
+                    split: 100},
+                {name: 'customer', label: 'Customer ID',
+                    at: [17, 26, 247, 46], split: 100},
+                {name: 'customer_name', label: '', at: [250, 26, 492, 46],
+                    split: 0},
+                {name: 'date', label: 'Order Date', at: [17, 48, 247, 68],
+                    split: 100},
+                {name: 'desired', label: 'Desired Ship Date',
+                    at: [17, 70, 247, 90], split: 100},
+                {name: 'po', label: 'Purchase Order No',
+                    at: [17, 92, 247, 112], split: 100},
+                {name: 'status', label: 'Status', at: [17, 114, 247, 134],
+                    split: 100},
+                {name: 'promise', label: 'Promised Date',
+                    at: [17, 136, 247, 156], split: 100},
+                {name: 'sold_to', label: 'Sold to', type: 'text',
+                    at: [256, 51, 421, 153], split: 100},
+                {name: 'ship_to', label: 'Ship to', type: 'text',
+                    at: [425, 51, 586, 153], split: 100},
+                {name: 'created_by', label: 'Created by',
+                    at: [503, 4, 831, 24], split: 100},
+                {name: 'modified_by', label: 'Last Modified by',
+                    at: [503, 26, 831, 46], split: 100},
+                {name: 'last_shipped', label: "Last Ship'd Date",
+                    at: [601, 70, 829, 90], split: 100},
+                {name: 'printed', label: 'Printed Date',
+                    at: [601, 92, 829, 112], split: 100},
+                {name: 'quote', label: 'Quote ID', at: [601, 114, 829, 134],
+                    split: 100},
+                {name: 'shipped_amount', label: 'Shipped Amount',
+                    at: [601, 136, 829, 156], split: 100}]}, function (f) {
+                    return plain({number: number, customer: customer.node,
+                        customer_name: customerName, date: date,
+                        desired: desired, po: po, status: statusSel,
+                        promise: promise, sold_to: soldToText,
+                        ship_to: shipToText}[f.name] ||
+                        info[f.name]);
+                }) : el('div.grid-form', [['Order ID', number],
+                ['Customer ID', customer.node], ['Order Date', date],
+                ['Desired Ship Date', desired], ['Purchase Order No', po],
+                ['Status', statusSel], ['Promised Date', promise],
+                ['Memo', memo]].map(function (p) {
+                    return el('div', el('label.field', p[0]), p[1]);
+                }));
+
+        var details = fieldGrid(DETAIL_FIELDS, {custom: {payment_term:
+            plain(term.node)}});
+        /* The Sold To / Ship To tabs: the order's own address (Jobshop's
+         * NAME, ADDR_1... of the order), the customer's by default */
+        var soldTo = fieldGrid(addressFields('js_sold_'), {buttons: [
+            {label: 'Restore Default Address', at: [172, 167, 367, 190],
+                onclick: restoreSoldTo},
+            {label: 'Export Contact to Outlook', at: [581, 167, 776, 197],
+                onclick: function () {
+                    exportContact(unprefixed('js_sold_', soldTo.get()));
+                }}]});
+        var shipFields = addressFields('js_ship_');
+        shipFields[0] = Object.assign({}, shipFields[0], {custom: true,
+            type: 'many2one'});
+        shipFields.push(
+            {name: 'ship_customer', label: 'Ship To Customer ID',
+                type: 'char', readonly: true, at: [477, 136, 631, 156],
+                split: 114},
+            {name: 'ship_addr_no', label: 'Address No', type: 'char',
+                readonly: true, at: [670, 136, 791, 156], split: 84});
+        /* Ship To Name: typed, or a ship to address of the customer
+         * looked up (it fills the tab) */
+        var shipToOptions = {placeholder: '', label: 'Ship To Name',
+            fields: ['party_name', 'party.code'], domain: [['id', '=', -1]],
+            onselect: function (record) {
+                pickShipTo(record.id);
+            }};
+        var shipTo = UI.picker('party.address', shipToOptions);
+        shipTo.input.addEventListener('input', refreshAddressBoxes);
+        var shipToGrid = fieldGrid(shipFields, {custom: {js_ship_name: {
+            node: shipTo.node}}, buttons: [
+            {label: 'Add New', at: [154, 165, 249, 191], onclick: addShipTo},
+            {label: 'Clear Address', at: [264, 165, 359, 191],
+                onclick: clearShipTo},
+            {label: 'Export Contact to Outlook', at: [581, 167, 776, 197],
+                onclick: function () {
+                    exportContact(shipParts());
+                }}]});
+        var specs = el('textarea', {rows: 14, 'aria-label': 'Specifications',
             style: {width: '100%'}});
         var charges = chargesEditor({editable: true});
-        var soldToPane, shipToPane, taxesPane, docsPane, browsePane;
-        var shipToAddress = el('div');
+        var taxesPane, docsPane, browsePane, notesPane;
+        var grid = null;
 
-        Rpc.searchRead('account.invoice.payment_term', [], ['name'],
-            {order: [['name', 'ASC']]}).then(function (rows) {
-            rows.forEach(function (row) {
-                term.appendChild(el('option', {value: row.id}, row.name));
-            });
-            if (order) {
-                term.value = order.payment_term || '';
-            }
-        });
-
+        var subTabs;
         var orderTabs = tabs(main, [
             {title: 'Sales Order', build: function (pane) {
-                pane.appendChild(el('div.grid-form',
-                    el('div', el('label.field', 'Order ID'), number, status),
-                    el('div', {style: {gridColumn: 'span 2'}},
-                        el('label.field', 'Customer ID'), customer.node),
-                    el('div', el('label.field', 'Order Date'), date),
-                    el('div', el('label.field', 'Desired Ship Date'),
-                        desired),
-                    el('div', el('label.field', 'Purchase Order No'), po),
-                    el('div', el('label.field', 'Terms'), term),
-                    el('div', el('label.field', 'Memo'), memo)));
-                pane.appendChild(el('h2', 'Lines'));
-                pane.appendChild(el('p.muted', 'Right-click a line for its ' +
-                    'overrides, specs and price.'));
-                pane.appendChild(linesPanel);
-                pane.appendChild(el('div.grid-form', {style: {marginTop:
-                    '12px'}}, el('div', {style: {gridColumn: 'span 3'}},
-                        totals), el('div', el('label.field', 'Total'),
-                        total)));
-                pane.appendChild(el('h2', 'Links: work orders of the lines'));
-                pane.appendChild(links);
-            }},
-            {title: 'Sold To', build: function (pane) {
-                soldToPane = pane;
-                addressPane(pane, null, 'The customer\'s bill to address ' +
-                    '(change it in the Customers window).');
-            }},
-            {title: 'Ship To', build: function (pane) {
-                shipToPane = pane;
-                pane.appendChild(el('div.grid-form', el('div', {style:
-                    {gridColumn: 'span 2'}}, el('label.field',
-                    'Ship To address'), shipTo.node)));
-                pane.appendChild(shipToAddress);
-            }},
-            {title: 'Details', build: function (pane) {
-                pane.appendChild(details.node);
-            }},
-            {title: 'Specs', build: function (pane) {
-                pane.appendChild(el('p.muted', 'Printed at the bottom of ' +
-                    'the Sales Order Acknowledgement; saved on this order ' +
-                    'only.'));
-                pane.appendChild(specs);
-            }},
-            {title: 'Charges', build: function (pane) {
-                pane.appendChild(el('p.muted', 'Applied charges go on the ' +
-                    'next invoice of the order.'));
-                pane.appendChild(charges.node);
-            }},
-            {title: 'Taxes', build: function (pane) {
-                taxesPane = pane;
-            }},
-            {title: 'Shippers/Invoices', build: function (pane) {
-                docsPane = pane;
+                pane.appendChild(header);
+                var holder = el('div');
+                pane.appendChild(holder);
+                subTabs = tabs(holder, [
+                    {title: 'Order Lines', build: function (p) {
+                        p.appendChild(el('p.muted', 'Double-click a line ' +
+                            'for its Order Line window; right-click for ' +
+                            'the line commands.'));
+                        p.appendChild(linesPanel);
+                    }},
+                    {title: 'Sold To', build: function (p) {
+                        p.appendChild(soldTo.node);
+                    }},
+                    {title: 'Ship To', build: function (p) {
+                        p.appendChild(shipToGrid.node);
+                    }},
+                    {title: 'Specs', build: function (p) {
+                        p.appendChild(specs);
+                    }},
+                    {title: 'Notes', build: function (p) {
+                        p.appendChild(el('label', {style: {display:
+                            'inline-flex', gap: '6px', alignItems: 'center',
+                            margin: '0 0 6px 0'}}, copyNotes,
+                            'Copy Notes to Shipper'));
+                        notesPane = el('div');
+                        p.appendChild(notesPane);
+                        notesPane.appendChild(el('p.muted',
+                            'Save the order first.'));
+                    }},
+                    {title: 'Charges', build: function (p) {
+                        p.appendChild(el('p.muted', 'Applied charges go on ' +
+                            'the next invoice of the order.'));
+                        p.appendChild(charges.node);
+                    }},
+                    {title: 'Taxes', build: function (p) {
+                        taxesPane = p;
+                    }},
+                    {title: 'Shippers/Invoices', build: function (p) {
+                        docsPane = p;
+                    }}
+                ]);
+                pane.appendChild(el('div', {style: {marginTop: '8px'}},
+                    details.node));
             }},
             {title: 'Browse', build: function (pane) {
                 browsePane = pane;
@@ -1194,6 +2170,7 @@
                 browse();
             }}
         ]);
+        describe(main, DETAIL_DESCRIPTIONS);
         charges.set([], true);
         details.set({});
 
@@ -1208,29 +2185,31 @@
                     r['nline.sale_charge'].create;
                 applyRights();
             });
-        ['shipping', 'invoicing', 'workorders'].forEach(function (s) {
-            UI.screenAllowed(s).then(function (ok) {
-                screens[s] = ok;
+        ['shipping', 'invoicing', 'workorders', 'parts'].forEach(
+            function (s) {
+                UI.screenAllowed(s).then(function (ok) {
+                    screens[s] = ok;
+                });
             });
-        });
 
         function applyRights() {
             var hidden = [];
             if (!can.create) {
-                hidden.push('New From Quote', 'Copy');
+                hidden.push('New From Quote', 'Copy Document');
             }
             if (!can.save) {
-                hidden.push('Change Status', 'Reset Prices');
+                hidden.push('Change Status', 'Re-price Lines',
+                    'Add Details');
             }
             if (!can['delete'] || !order || ['unreleased', 'firm',
                     'cancelled'].indexOf(order.js_status) < 0) {
-                hidden.push('Delete');
+                hidden.push('Delete Document');
             }
             if (!order) {
-                hidden.push('Copy', 'Change Status', 'Print');
+                hidden.push('Copy Document', 'Change Status', 'Print');
             }
             if (order && order.state !== 'draft') {
-                hidden.push('Reset Prices');
+                hidden.push('Re-price Lines', 'Add Details');
             }
             form.allow(order ? can.save : can.create, hidden);
             if (order) {
@@ -1239,60 +2218,178 @@
                 charges.set([], false);
             }
             details.lock(can.save);
+            term.input.disabled = !can.save || Boolean(order &&
+                order.state !== 'draft');
             specs.disabled = !can.save;
+            copyNotes.disabled = !(order ? can.save : can.create);
+            statusSel.disabled = !(order ? can.save : can.create);
+            [po, desired, promise, memo].forEach(function (n) {
+                n.disabled = !(order ? can.save : can.create);
+            });
+            var edit = order ? can.save : can.create;
+            soldTo.lock(edit);
+            shipToGrid.lock(edit);
+            shipTo.input.disabled = !edit;
+            [soldTo.node, shipToGrid.node].forEach(function (n) {
+                Array.prototype.forEach.call(n.querySelectorAll(
+                    'button.js-btn'), function (b) {
+                        b.hidden = !edit && !/Outlook/.test(b.textContent);
+                    });
+            });
+        }
+
+        /* Terms ID: the description box (the terms' description, else
+         * its name: N-Line's terms have no separate code) */
+        function termDescription(record) {
+            var box = details.controls.payment_term_descr;
+            if (!record) {
+                box.set('');
+                return;
+            }
+            box.set(record.description || record.rec_name || '');
+            if (record.description === undefined) {
+                Rpc.model('account.invoice.payment_term', 'read',
+                    [[record.id], ['description', 'rec_name']]).then(
+                    function (rows) {
+                        if (rows[0] && term.value() === record.id) {
+                            if (!term.input.value) {
+                                term.set(record.id, rows[0].rec_name);
+                            }
+                            box.set(rows[0].description ||
+                                rows[0].rec_name || '');
+                        }
+                    }, function () {});
+            }
+        }
+
+        function setTerm(id, recName) {
+            term.set(id || null, recName || '');
+            termDescription(id ? {id: id, rec_name: recName} : null);
+        }
+
+        /* The Sold To / Ship To tabs and the header's boxes */
+        var shipAddressId = null;
+        function shipParts() {
+            var parts = unprefixed('js_ship_', shipToGrid.get());
+            parts.name = shipTo.input.value;
+            return parts;
+        }
+
+        function refreshAddressBoxes() {
+            var sold = unprefixed('js_sold_', soldTo.get());
+            var ship = shipParts();
+            soldToText.value = partsText(sold);
+            var empty = ADDRESS_PARTS.every(function (k) {
+                return !ship[k];
+            });
+            shipToText.value = partsText(empty ? sold : ship);
+        }
+        [soldTo.node, shipToGrid.node].forEach(function (n) {
+            n.addEventListener('input', refreshAddressBoxes);
+        });
+
+        function fillSoldTo(parts) {
+            soldTo.set(prefixed('js_sold_', parts));
+            refreshAddressBoxes();
+        }
+
+        function fillShipTo(parts, address, customerCode) {
+            shipAddressId = address ? idOf(address) : null;
+            shipToGrid.set(Object.assign(prefixed('js_ship_', parts), {
+                ship_customer: shipAddressId ? customerCode ||
+                    customer.input.value : '',
+                ship_addr_no: shipAddressId ? String(shipAddressId) : ''}));
+            shipTo.set(shipAddressId, parts ? parts.name : '');
+            if (!shipAddressId) {
+                shipTo.input.value = parts ? parts.name || '' : '';
+            }
+            refreshAddressBoxes();
+        }
+
+        function setShipDomain(partyId) {
+            shipToOptions.domain = [['party', '=', partyId || -1]];
+        }
+
+        /* Restore Default Address: the customer's (Sold To tab) */
+        function restoreSoldTo() {
+            if (!customer.value()) {
+                return;
+            }
+            Rpc.desk('sales_order_defaults', [customer.value()]).then(
+                function (d) {
+                    fillSoldTo(addressParts(d.sold_to, d.customer_mobile));
+                }, UI.showError);
+        }
+
+        /* Ship To Name's lookup: a ship to address of the customer */
+        function pickShipTo(id) {
+            Rpc.model('party.address', 'read', [[id], ['party_name',
+                'street', 'city', 'postal_code', 'subdivision.rec_name',
+                'country.rec_name', 'ship_to_contact', 'ship_to_title',
+                'ship_to_phone', 'ship_to_fax', 'ship_to_email',
+                'party.code', 'party.rec_name']]).then(function (rows) {
+                    var a = rows[0];
+                    var party = a['party.'] || {};
+                    fillShipTo(addressParts({name: a.party_name ||
+                        party.rec_name, street: a.street, city: a.city,
+                        postal_code: a.postal_code, state:
+                            (a['subdivision.'] || {}).rec_name, country:
+                            (a['country.'] || {}).rec_name, contact:
+                            a.ship_to_contact, title: a.ship_to_title,
+                        phone: a.ship_to_phone, fax: a.ship_to_fax,
+                        email: a.ship_to_email}), {id: id}, party.code);
+                }, UI.showError);
+        }
+
+        /* Add New: the tab's address becomes a new ship to address of
+         * the customer */
+        function addShipTo() {
+            var p = shipParts();
+            if (!customer.value() || !p.name) {
+                UI.showError('Choose the customer and type the ship to ' +
+                    'name first.');
+                return;
+            }
+            Rpc.model('party.address', 'create', [[{party: customer.value(),
+                party_name: p.name, street: [p.addr_1, p.addr_2].filter(
+                    Boolean).join('\n') || null, city: p.city || null,
+                postal_code: p.postal || null, ship_to_contact: p.contact ||
+                    null, ship_to_title: p.title || null, ship_to_phone:
+                    p.phone || null, ship_to_fax: p.fax || null,
+                ship_to_email: p.email || null}]]).then(function (ids) {
+                    UI.toast('Ship to address added to the customer', 'ok');
+                    fillShipTo(p, {id: ids[0]});
+                }, UI.showError);
+        }
+
+        function clearShipTo() {
+            fillShipTo(null, null);
         }
 
         function customerDefaults(partyId) {
+            setShipDomain(partyId);
             Rpc.desk('sales_order_defaults', [partyId]).then(function (d) {
                 if (d.payment_term) {
-                    term.value = d.payment_term;
+                    setTerm(d.payment_term, null);
                 }
-                shipTo.set(idOf(d.shipment_address),
-                    name(d.shipment_address));
-                details.set(Object.assign(details.get(), d));
                 ['sales_rep', 'territory', 'fob_point', 'ship_via',
                     'js_carrier', 'tax_group', 'discount_class'].forEach(
                     function (n) {
                         details.controls[n].set(d[n]);
                     });
+                details.controls.freight_terms.set(d.freight_terms);
                 if (!specs.value && d.js_specs) {
                     specs.value = d.js_specs;
                 }
-                addressPane(soldToPane, d.sold_to);
-                showShipTo(d.ship_to);
+                fillSoldTo(addressParts(d.sold_to, d.customer_mobile));
+                fillShipTo(d.shipment_address ? addressParts(d.ship_to) :
+                    null, d.shipment_address);
                 if (d.credit_status === 'hold_orders') {
-                    UI.toast('Credit status: Hold Orders', 'error');
+                    UI.toast('Customer has a hold type credit status', 'error');
                 } else if (d.credit_status === 'hold_shipments') {
                     UI.toast('Credit status: Hold Shipments', 'error');
                 }
             }, UI.showError);
-        }
-
-        function showShipTo(address) {
-            if (address) {
-                addressPane(shipToAddress, address);
-                return;
-            }
-            var id = shipTo.value();
-            if (!id) {
-                addressPane(shipToAddress, null, 'The sold to address is ' +
-                    'used.');
-                return;
-            }
-            Rpc.model('party.address', 'read', [[id], ['party_name',
-                'street', 'city', 'postal_code', 'subdivision.rec_name',
-                'country.rec_name', 'ship_to_contact', 'ship_to_title',
-                'ship_to_phone', 'ship_to_fax', 'ship_to_email']]).then(
-                function (rows) {
-                    var a = rows[0];
-                    addressPane(shipToAddress, {name: a.party_name,
-                        street: a.street, city: a.city, postal_code:
-                            a.postal_code, state: (a['subdivision.'] || {})
-                            .rec_name, country: (a['country.'] || {})
-                            .rec_name, contact: a.ship_to_contact, title:
-                            a.ship_to_title, phone: a.ship_to_phone, fax:
-                            a.ship_to_fax, email: a.ship_to_email});
-                }, UI.showError);
         }
 
         function extension(v) {
@@ -1306,25 +2403,110 @@
             if (!partyId || !product) {
                 return Promise.resolve();
             }
-            return Rpc.desk('sales_price', [partyId, product,
-                UI.parseMoney(controls.quantity.value) || 1,
-                date.value || null]).then(function (p) {
-                    controls.price.value = UI.money(p.gross_unit_price);
-                    controls.discount.value = num(p.trade_discount);
-                    if (p.customer_part) {
-                        controls.customer_part.value = p.customer_part;
-                    }
-                    grid.update();
-                }, UI.showError);
+            var args = [partyId, product, UI.parseMoney(
+                controls.quantity.value) || 1, date.value || null];
+            if (controls.unit.value()) {
+                args.push(controls.unit.value());
+            }
+            return Rpc.desk('sales_price', args).then(function (p) {
+                controls.price.value = UI.money(p.gross_unit_price);
+                controls.discount.value = num(p.trade_discount);
+                if (p.customer_part) {
+                    controls.customer_part.value = p.customer_part;
+                }
+                grid.update();
+            }, UI.showError);
+        }
+
+        /* Jobshop's ORDER_LINE grid (SalesOrderSubTabs.txt), in its order;
+         * Order Qty (not a column of the layout file, the grid's quantity)
+         * after U/M. ro: shown, not typed (Jobshop's readonly columns) */
+        var RO_KEYS = ['line_no', 'line_status', 'last_shipped', 'available',
+            'specs', 'linked', 'quotes'];
+
+        function lineCommission(v) {
+            var pct = parseFloat(String(v.commission_pct || '')
+                .replace(/,/g, '')) || 0;
+            return Math.round(extension(v) * pct) / 100;
+        }
+
+        /* A grid row's controls from a line */
+        function fillRow(controls, line) {
+            if (line.product) {
+                controls.part.set(line.product.id, line.product.rec_name);
+            }
+            if (line.unit && typeof line.unit === 'object') {
+                controls.unit.set(line.unit.id, line.unit.rec_name);
+            }
+            controls.line_no.value = line.line_no ? String(line.line_no) : '';
+            controls.po_line.value = line.customer_po_line || '';
+            controls.description.value = line.description || '';
+            controls.description.title = line.description || '';
+            controls.quantity.value = String(line.quantity || 1);
+            controls.price.value = UI.money(line.gross_unit_price);
+            controls.discount.value = num(line.trade_discount);
+            controls.part.lineId = line.id || null;
+            controls.part.extra = line;
+            fillRowExtra(controls, line);
+        }
+
+        /* The columns the Order Line window also edits */
+        function fillRowExtra(controls, line) {
+            controls.line_status.value = line.id ? label(LINE_STATUS,
+                line.js_line_status) || 'Open' : '';
+            controls.desired.value = iso(line.js_desired_date) || '';
+            controls.last_shipped.value = UI.date(line.last_shipped_date);
+            controls.available.value = num(line.available);
+            controls.specs.checked = Boolean(line.js_line_specs);
+            controls.product_code.set(idOf(line.product_code),
+                name(line.product_code));
+            controls.commodity_code.set(idOf(line.commodity_code),
+                name(line.commodity_code));
+            controls.linked.checked = Boolean((line.links || []).length ||
+                (line.link_details || []).length);
+            controls.commissionable.checked = line.commissionable ===
+                undefined ? true : Boolean(line.commissionable);
+            controls.commission_pct.value = num(line.commission_percent);
+            controls.customer_part.value = line.customer_part || '';
+            controls.drawing_id.value = line.drawing_id || '';
+            controls.drawing_rev.value = line.drawing_rev || '';
+            controls.ship_via.set(idOf(line.js_ship_via),
+                name(line.js_ship_via));
+            controls.quotes.checked = Boolean(line.quotes_exist);
+        }
+
+        function lockRow(controls) {
+            controls.description.style.minWidth = '20em';
+            RO_KEYS.forEach(function (k) {
+                var c = controls[k];
+                if (c.type === 'checkbox') {
+                    c.disabled = true;
+                } else {
+                    c.readOnly = true;
+                }
+                c.tabIndex = -1;
+            });
         }
 
         function newGrid(lines) {
+            var codePicker = function (model, placeholder) {
+                return {model: model, placeholder: placeholder};
+            };
             grid = UI.grid({total: 'amount', required: 'part',
                 onchange: function () {
                     updateTotals();
                 }, columns: [
-                    {key: 'part', label: 'Part ID', width: '22%',
-                        kind: 'picker', picker: {model: 'product.product',
+                    {key: 'line_no', label: 'Line No', width: '4em'},
+                    {key: 'po_line', label: 'PO Line No', width: '5em'},
+                    {key: 'line_status', label: 'Line Status', width: '6em'},
+                    {key: 'desired', label: 'Line Desired Ship Date',
+                        kind: 'date'},
+                    {key: 'last_shipped', label: 'Last Shipped Date',
+                        width: '7em'},
+                    {key: 'available', label: 'Avail. to Promise (stk U/M)',
+                        width: '6em'},
+                    {key: 'part', label: 'Part ID', kind: 'picker',
+                        width: '10em', picker: {model: 'product.product',
                             domain: [['salable', '=', true]],
                             placeholder: 'Part', fields: ['list_price'],
                             onselect: function (record, controls) {
@@ -1336,130 +2518,403 @@
                                 }
                                 priceFor(controls);
                             }}},
-                    {key: 'description', label: 'Description'},
-                    {key: 'customer_part', label: 'Customer Part ID',
-                        width: '11%'},
-                    {key: 'quantity', label: 'Order Qty', width: '8%',
-                        kind: 'number', default: '1'},
-                    {key: 'price', label: 'Unit Price', width: '11%',
-                        kind: 'money'},
-                    {key: 'discount', label: 'Disc %', width: '7%',
-                        kind: 'number', default: '0'},
-                    {key: 'amount', label: 'Extension', width: '11%',
-                        kind: 'computed', compute: extension}
+                    {key: 'description', label: 'Description',
+                        width: '20em'},
+                    {key: 'unit', label: 'U/M', kind: 'picker',
+                        picker: {model: 'product.uom', placeholder: 'U/M'}},
+                    {key: 'quantity', label: 'Order Qty', kind: 'number',
+                        default: '1'},
+                    {key: 'price', label: 'Unit Price', kind: 'money'},
+                    {key: 'discount', label: 'Trade Disc%', kind: 'number',
+                        default: '0'},
+                    {key: 'amount', label: 'Extension', kind: 'computed',
+                        compute: extension},
+                    {key: 'specs', label: 'Specs', kind: 'check'},
+                    {key: 'product_code', label: 'Product Code',
+                        kind: 'picker', picker: codePicker(
+                            'nline.product_code', 'Product Code')},
+                    {key: 'commodity_code', label: 'Commodity Code',
+                        kind: 'picker', picker: codePicker(
+                            'nline.commodity_code', 'Commodity Code')},
+                    {key: 'linked', label: 'Linked', kind: 'check'},
+                    {key: 'commissionable', label: 'Commissionable',
+                        kind: 'check', default: true},
+                    {key: 'commission_pct', label: 'Commission Percent',
+                        width: '6em'},
+                    {key: 'commission', label: 'Commission',
+                        kind: 'computed', compute: lineCommission},
+                    {key: 'customer_part', label: 'Customer Part ID'},
+                    {key: 'drawing_id', label: 'Drawing ID'},
+                    {key: 'drawing_rev', label: 'Drawing Rev', width: '5em'},
+                    {key: 'ship_via', label: 'Ship Via', kind: 'picker',
+                        picker: codePicker('nline.ship_via', 'Ship Via')},
+                    {key: 'quotes', label: 'Quote(s) Exist', kind: 'check'}
                 ]});
             var first = true;
             (lines || []).forEach(function (line) {
                 var row = first ? null : grid.addRow();
                 var controls = row ? row.controls : grid.controls()[0];
                 first = false;
-                if (line.product) {
-                    controls.part.set(line.product.id, line.product.rec_name);
-                }
-                controls.description.value = line.description;
-                controls.customer_part.value = line.customer_part || '';
-                controls.quantity.value = String(line.quantity);
-                controls.price.value = UI.money(line.gross_unit_price);
-                controls.discount.value = num(line.trade_discount);
-                controls.part.lineId = line.id;
-                controls.part.extra = line;
+                fillRow(controls, line);
             });
+            grid.controls().forEach(lockRow);
             grid.update();
             UI.clear(linesPanel).appendChild(grid.node);
+            grid.node.querySelector('table').classList.add('js-nowrap');
+            /* Rows the grid adds (Enter, a filled last line) */
+            new global.MutationObserver(function () {
+                grid.controls().forEach(lockRow);
+            }).observe(grid.node.querySelector('tbody'), {childList: true});
+            grid.node.addEventListener('input', function (event) {
+                if (event.target.getAttribute('aria-label') ===
+                        'Commission Percent') {
+                    grid.update();
+                }
+            });
             grid.node.addEventListener('contextmenu', function (event) {
-                var tr = event.target.closest('tbody tr');
-                if (!tr) {
-                    return;
+                var controls = rowControls(event);
+                if (controls) {
+                    lineMenu(event, controls.part.extra || {}, controls);
                 }
-                var index = Array.prototype.indexOf.call(tr.parentNode
-                    .children, tr);
-                var controls = grid.controls()[index];
-                if (!controls) {
-                    return;
+            });
+            grid.node.addEventListener('dblclick', function (event) {
+                var controls = rowControls(event);
+                if (controls) {
+                    editDraftLine(controls);
                 }
-                UI.contextMenu(event, [
-                    {label: 'Line Overrides and Specs…', onclick: function () {
-                        lineDetails(controls.part.extra || {}, true,
-                            function (values) {
-                                controls.part.extra = Object.assign(
-                                    controls.part.extra || {}, values);
-                            });
-                    }},
-                    {label: 'Reset Unit Price from Customer', onclick:
-                        function () {
-                            priceFor(controls);
-                        }},
-                    controls.part.value() ? {label: 'Open Part', onclick:
-                        function () {
-                            UI.openScreen('parts', 'Parts');
-                        }} : '-']);
             });
         }
 
-        /* The overrides of a line (Jobshop's Sales Order Line window:
-         * Overrides and Specs tabs) */
-        function lineDetails(line, editable, done) {
-            var g = fieldGrid(LINE_DETAIL_FIELDS);
-            g.set(line);
-            g.lock(editable);
-            var info = line.id ? el('p.muted', 'Line ' + (line.line_no ||
-                '') + ': shipped ' + num(line.shipped_quantity || 0) +
-                ', status ' + label(LINE_STATUS, line.js_line_status) +
-                (line.last_shipped_date ? ', last shipped ' +
-                    UI.date(line.last_shipped_date) : '') +
-                (line.available !== null && line.available !== undefined ?
-                    ', available ' + num(line.available) : '')) : null;
-            UI.modal('Sales Order Line ' + (line.line_no || ''), [info,
-                g.node], editable ? [
+        function rowControls(event) {
+            var tr = event.target.closest('tbody tr');
+            if (!tr || !grid) {
+                return null;
+            }
+            var index = Array.prototype.indexOf.call(tr.parentNode
+                .children, tr);
+            return grid.controls()[index] || null;
+        }
+
+        function pickerRef(p) {
+            return p.value() ? {id: p.value(), rec_name: p.input.title ||
+                p.input.value} : null;
+        }
+
+        /* The values of a draft grid row as a line */
+        function rowLine(controls) {
+            var extra = controls.part.extra || {};
+            return Object.assign({}, extra, {
+                product: controls.part.value() ? {id: controls.part.value(),
+                    rec_name: controls.part.input.title ||
+                        controls.part.input.value} : null,
+                unit: controls.unit.value() ? {id: controls.unit.value(),
+                    rec_name: controls.unit.input.value} : extra.unit,
+                customer_po_line: controls.po_line.value,
+                description: controls.description.value,
+                customer_part: controls.customer_part.value,
+                quantity: UI.parseMoney(controls.quantity.value) || 1,
+                gross_unit_price: UI.parseMoney(controls.price.value),
+                trade_discount: UI.parseMoney(controls.discount.value) || 0,
+                amount: controls.amount.amount,
+                js_desired_date: controls.desired.value || null,
+                product_code: pickerRef(controls.product_code),
+                commodity_code: pickerRef(controls.commodity_code),
+                commissionable: controls.commissionable.checked,
+                commission_percent: controls.commission_pct.value === '' ?
+                    null : String(UI.parseMoney(controls.commission_pct
+                        .value)),
+                drawing_id: controls.drawing_id.value,
+                drawing_rev: controls.drawing_rev.value,
+                js_ship_via: pickerRef(controls.ship_via)
+            });
+        }
+
+        function editDraftLine(controls) {
+            lineWindow(rowLine(controls), can.save || !order, function (v) {
+                controls.part.extra = Object.assign(controls.part.extra ||
+                    {}, v);
+                if (v.customer_po_line !== undefined) {
+                    controls.po_line.value = v.customer_po_line || '';
+                }
+                fillRowExtra(controls, Object.assign(rowLine(controls), v));
+                grid.update();
+            });
+        }
+
+        function addDetails() {
+            if (!grid) {
+                return;
+            }
+            var last = grid.controls()[grid.controls().length - 1];
+            var controls = last && !last.part.value() ? last :
+                grid.addRow().controls;
+            editDraftLine(controls);
+        }
+
+        /* The right-click menu of a line (Jobshop's PopupCustWOLinks) */
+        function lineMenu(event, line, controls) {
+            var draft = Boolean(controls);
+            var product = draft ? controls.part.value() :
+                idOf(line.product);
+            var items = [];
+            if (draft && can.save) {
+                items.push({label: 'Add Details...', onclick: addDetails});
+            }
+            items.push({label: 'Edit Details...', onclick: function () {
+                if (draft) {
+                    editDraftLine(controls);
+                } else {
+                    releasedLine(line);
+                }
+            }});
+            items.push({label: 'Copy Line', onclick: function () {
+                copied = draft ? rowLine(controls) : Object.assign({}, line);
+                UI.toast('Line copied', 'ok');
+            }});
+            if (draft && copied && can.save) {
+                items.push({label: 'Paste Line', onclick: function () {
+                    var target = grid.controls()[grid.controls().length - 1];
+                    if (target.part.value()) {
+                        target = grid.addRow().controls;
+                    }
+                    var paste = Object.assign({}, copied, {id: null});
+                    fillRow(target, paste);
+                    target.part.extra = Object.assign({}, paste, {id: null,
+                        links: [], link_details: []});
+                    grid.update();
+                }});
+            }
+            items.push('-', {label: 'Work Order Links...', onclick:
+                function () {
+                    linksDialog(draft ? rowLine(controls) : line);
+                }});
+            if (product) {
+                items.push(partLinesDialog('quote', product)(event),
+                    submenu(event,
+                        'View All Order Lines for Part by Order Status of',
+                        statusItems(function (s) {
+                            orderLinesDialog('Order Lines for Part',
+                                {product: product}, s);
+                        })),
+                    partLinesDialog('purchase', product)(event));
+                if (screens.parts) {
+                    items.push({label: 'Open Part...', onclick: function () {
+                        UI.openScreen('parts/' + product, 'Part');
+                    }});
+                }
+            }
+            if (draft && can.save) {
+                items.push('-', {label: 'Calculate Sales Order Line Price',
+                    onclick: function () {
+                        priceFor(controls);
+                    }});
+            }
+            UI.contextMenu(event, items);
+        }
+
+        /* Work Order Links...: the work orders of the line (the Order
+         * Line window's Links tab) */
+        function linksNode(line, close) {
+            var details = line.link_details || (line.links || []).map(
+                function (l) {
+                    return {id: l.id, number: l.number, state: l.state};
+                });
+            var node = el('div', table([{label: 'Work ID'},
+                {label: 'Quantity', num: true}, {label: 'Status'},
+                {label: 'Description'}, {label: 'Desired Finish Date'},
+                {label: 'Scheduled Finish Date'}], details.map(function (l) {
+                    return {ondblclick: function () {
+                        if (screens.workorders) {
+                            if (close) {
+                                close();
+                            }
+                            UI.openScreen('workorders/' + l.id, 'WO ' +
+                                l.number);
+                        }
+                    }, cells: [l.number, num(l.quantity), l.state,
+                        l.description, UI.date(l.planned_date),
+                        UI.date(l.planned_end_date)]};
+                }), 'Not linked to a work order.'));
+            var released = order && (order.state === 'confirmed' ||
+                order.state === 'processing');
+            if (line.id && released && !details.length && can.workOrder) {
+                node.appendChild(el('div.toolbar', el('button', {type:
+                    'button', onclick: function () {
+                        UI.service('sale_line_work_order', line.id).then(
+                            function (wo) {
+                                UI.toast('Work order ' + wo.number +
+                                    ' created', 'ok');
+                                if (close) {
+                                    close();
+                                }
+                                load(order.id);
+                            }, failed);
+                    }}, 'New Work Order')));
+            } else if (!released) {
+                node.appendChild(el('p.muted', 'Release the order to ' +
+                    'create the work order of the line.'));
+            }
+            return node;
+        }
+
+        function linksDialog(line) {
+            var close = UI.modal('Work Order Links - line ' + (line.line_no ||
+                ''), [el('div.js-sales', linksNode(line, function () {
+                    close();
+                }))], [{label: 'Close', primary: true}]);
+        }
+
+        /* The Order Line window: General (the grid's values read-only and
+         * the line's overrides), Other (User 0-2), Specs, Links */
+        function lineWindow(line, editable, done) {
+            var general = fieldGrid([
+                infoField('line_no', 'Line No', [17, 34, 188, 54], 70),
+                infoField('line_status', 'Line Status', [360, 34, 579, 54],
+                    80),
+                infoField('quote_line_no', 'Quote Line No',
+                    [691, 34, 852, 54], 90),
+                infoField('part', 'Part ID', [17, 56, 493, 76]),
+                infoField('description', 'Description', [17, 78, 852, 98]),
+                infoField('quantity', 'Order Qty', [17, 169, 262, 189]),
+                infoField('unit', 'Unit of Measure', [308, 169, 544, 189],
+                    110),
+                infoField('price', 'Unit Price', [17, 191, 262, 211]),
+                infoField('discount', 'Trade Discount %',
+                    [308, 191, 544, 211], 110),
+                infoField('amount', 'Extension', [616, 191, 850, 211], 80),
+                infoField('shipped', "Ship'd Qty", [448, 328, 607, 348], 80),
+                infoField('last_shipped', 'Last Shipped',
+                    [448, 350, 607, 370], 80),
+                infoField('shipped_amount', "Ship'd Amount",
+                    [616, 394, 850, 414], 110)].concat(LINE_DETAIL_FIELDS),
+                {frames: [{label: '', at: [9, 34, 862, 147]},
+                    {label: 'Sales', at: [9, 147, 862, 258]},
+                    {label: 'Shipping', at: [9, 305, 862, 416]}]});
+            var other = fieldGrid(LINE_OTHER_FIELDS, {frames: [{label:
+                'User Defined Fields', at: [7, 4, 831, 100]}], buttons: [
+                {label: '!', at: [393, 24, 413, 44], onclick: function () {
+                    var path = other.controls.user_0.get();
+                    if (path) {
+                        global.open('file:///' + String(path).replace(
+                            /\\/g, '/'), '_blank');
+                    }
+                }}]});
+            var spec = fieldGrid(LINE_SPEC_FIELDS, {});
+            var data = Object.assign({}, line, {
+                line_status: label(LINE_STATUS, line.js_line_status) ||
+                    'Open',
+                part: line.product ? line.product.rec_name : '',
+                quantity: num(line.quantity),
+                unit: name(line.unit),
+                price: UI.money(line.gross_unit_price),
+                discount: num(line.trade_discount),
+                amount: UI.money(line.amount),
+                shipped: num(line.shipped_quantity || 0),
+                last_shipped: UI.date(line.last_shipped_date),
+                shipped_amount: UI.money(line.shipped_amount || 0),
+                commissionable: line.commissionable === undefined ? true :
+                    line.commissionable
+            });
+            [general, other, spec].forEach(function (g) {
+                g.set(data);
+                g.lock(editable);
+            });
+            describe(general.node, [['Product Code ID', [242, 123, 425, 143]],
+                ['Commodity Code ID', [658, 123, 854, 143]],
+                ['Tax Group ID', [658, 213, 854, 233]]]);
+            tabbedModal('Order Line - [' + (line.line_no || 'new') + ']', [
+                {title: 'General', node: general.node},
+                {title: 'Other', node: other.node},
+                {title: 'Specs', node: spec.node},
+                {title: 'Links', node: linksNode(line, null)}
+            ], editable ? [
                 {label: 'Cancel'},
                 {label: 'OK', primary: true, onclick: function () {
-                    var values = g.get();
-                    LINE_DETAIL_FIELDS.forEach(function (f) {
+                    var values = Object.assign(general.get(), other.get(),
+                        spec.get());
+                    ['line_no', 'line_status', 'quote_line_no', 'part',
+                        'description', 'quantity', 'unit', 'price',
+                        'discount', 'amount', 'shipped', 'last_shipped',
+                        'shipped_amount'].forEach(function (n) {
+                            delete values[n];
+                        });
+                    LINE_ALL_FIELDS.forEach(function (f) {
                         if (f.type === 'many2one') {
-                            var c = g.controls[f.name];
-                            values[f.name] = c.get() ? {id: c.get(),
-                                rec_name: c.picker.input.value} : null;
+                            var c = general.controls[f.name];
+                            values[f.name] = c && c.get() ? {id: c.get(),
+                                rec_name: c.picker.input.title ||
+                                    c.picker.input.value} : null;
                         }
                     });
                     done(values);
                 }}] : [{label: 'Close', primary: true}]);
         }
 
+        function releasedLine(line) {
+            lineWindow(line, can.save, function (values) {
+                Object.assign(line, values);
+                line.changed = true;
+                save();
+            });
+        }
+
         function readOnlyLines(lines) {
             grid = null;
             UI.clear(linesPanel).appendChild(table([
-                {label: 'Line No'}, {label: 'Line Status'},
-                {label: 'Desired Ship'}, {label: 'Available', num: true},
-                {label: 'Order Qty', num: true}, {label: 'Part ID'},
-                {label: 'Description'}, {label: 'Customer Part ID'},
-                {label: 'Unit Price', num: true}, {label: 'Disc %', num: true},
-                {label: 'Extension', num: true},
-                {label: 'Shipped Qty', num: true}, {label: 'Specs'}],
+                {label: 'Line No'}, {label: 'PO Line No'},
+                {label: 'Line Status'}, {label: 'Line Desired Ship Date'},
+                {label: 'Last Shipped Date'},
+                {label: 'Avail. to Promise (stk U/M)', num: true},
+                {label: 'Part ID'}, {label: 'Description'}, {label: 'U/M'},
+                {label: 'Order Qty', num: true},
+                {label: 'Total Shipped Qty', num: true},
+                {label: 'Unit Price', num: true},
+                {label: 'Trade Disc%', num: true},
+                {label: 'Extension', num: true}, {label: 'Specs'},
+                {label: 'Product Code'}, {label: 'Commodity Code'},
+                {label: 'Linked'}, {label: 'Commissionable'},
+                {label: 'Commission Percent', num: true},
+                {label: 'Commission', num: true},
+                {label: 'Customer Part ID'}, {label: 'Drawing ID'},
+                {label: 'Drawing Rev'}, {label: 'Ship Via'},
+                {label: 'Quote(s) Exist'}],
                 lines.map(function (line) {
+                    var pct = Number(line.commission_percent || 0);
                     return {
-                        oncontextmenu: function (event) {
-                            UI.contextMenu(event, [{label: can.save ?
-                                'Line Overrides and Specs…' :
-                                'Line Overrides and Specs', onclick:
-                                function () {
-                                    lineDetails(line, can.save,
-                                        function (values) {
-                                            Object.assign(line, values);
-                                            line.changed = true;
-                                            save();
-                                        });
-                                }}]);
+                        ondblclick: function () {
+                            releasedLine(line);
                         },
-                        cells: [String(line.line_no), label(LINE_STATUS,
-                            line.js_line_status), UI.date(line.shipping_date),
-                            num(line.available), num(line.quantity),
-                            line.product ? line.product.rec_name : '',
-                            line.description, line.customer_part,
+                        oncontextmenu: function (event) {
+                            lineMenu(event, line, null);
+                        },
+                        cells: [String(line.line_no), line.customer_po_line,
+                            label(LINE_STATUS, line.js_line_status),
+                            UI.date(line.js_desired_date ||
+                                line.shipping_date),
+                            UI.date(line.last_shipped_date),
+                            num(line.available),
+                            line.product ? el('span', {title:
+                                line.product.rec_name}, UI.shortName(
+                                'product.product', line.product.rec_name)) :
+                                '',
+                            clip(line.description),
+                            name(line.unit) || line.unit,
+                            num(line.quantity), num(line.shipped_quantity),
                             UI.money(line.gross_unit_price),
                             num(line.trade_discount), UI.money(line.amount),
-                            num(line.shipped_quantity),
-                            line.js_line_specs ? '✔' : '']};
-                })));
+                            check(line.js_line_specs),
+                            codeOf(line.product_code),
+                            codeOf(line.commodity_code),
+                            check((line.links || []).length ||
+                                (line.link_details || []).length),
+                            check(line.commissionable),
+                            num(line.commission_percent),
+                            pct ? UI.money(Number(line.amount || 0) * pct /
+                                100) : '',
+                            line.customer_part, line.drawing_id,
+                            line.drawing_rev, codeOf(line.js_ship_via),
+                            check(line.quotes_exist)]};
+                }), 'No line.', true));
         }
 
         function updateTotals() {
@@ -1469,60 +2924,11 @@
                 return s + (c.amount ? Number(c.amount) : 0);
             }, 0);
             var tax = order ? Number(order.tax_amount || 0) : 0;
-            UI.clear(totals).appendChild(el('div', el('div', el('span.muted',
-                'Lines '), UI.money(lineTotal)), el('div', el('span.muted',
-                'Charges '), UI.money(chargeTotal)), el('div',
-                el('span.muted', 'Tax '), UI.money(tax))));
-            total.textContent = UI.money(lineTotal + chargeTotal + (grid ?
-                0 : tax), true);
-        }
-
-        function renderLinks() {
-            UI.clear(links);
-            if (!order) {
-                links.appendChild(el('p.muted', 'Save the order first.'));
-                return;
-            }
-            var body = el('tbody');
-            order.lines.forEach(function (line) {
-                var cell = el('td');
-                line.links.forEach(function (l) {
-                    cell.appendChild(el('a', {href: '#', onclick: function (
-                        event) {
-                        event.preventDefault();
-                        if (screens.workorders) {
-                            UI.openScreen('workorders/' + l.id, 'WO ' +
-                                l.number);
-                        }
-                    }}, (l.job ? 'Job ' : 'WO ') + l.number + ' (' +
-                        l.state + ')'));
-                    cell.appendChild(el('span', ' '));
-                });
-                var confirmed = order.state === 'confirmed' ||
-                    order.state === 'processing';
-                body.appendChild(el('tr', el('td', String(line.line_no)),
-                    el('td', line.product ? line.product.rec_name : ''),
-                    el('td.num', String(line.quantity)),
-                    el('td', UI.date(line.shipping_date)), cell,
-                    el('td', confirmed && !line.links.length &&
-                        can.workOrder ? el('button', {type: 'button',
-                            onclick: function () {
-                                UI.service('sale_line_work_order', line.id)
-                                    .then(function (wo) {
-                                        UI.toast('Work order ' + wo.number +
-                                            ' created', 'ok');
-                                        load(order.id);
-                                    }, failed);
-                            }}, 'New WO') : null)));
-            });
-            links.appendChild(el('div.table-wrap', el('table.data',
-                el('thead', el('tr', el('th', 'Line No'), el('th', 'Part'),
-                    el('th.num', 'Qty'), el('th', 'Ship date'),
-                    el('th', 'Work orders'), el('th', ''))), body)));
-            if (order.state === 'draft' || order.state === 'quotation') {
-                links.appendChild(el('p.muted', 'Release the order to ' +
-                    'create the work orders of its lines.'));
-            }
+            details.controls.lines_total.set(UI.money(lineTotal));
+            details.controls.charges_total.set(UI.money(chargeTotal));
+            details.controls.tax_total.set(UI.money(tax));
+            details.controls.order_total.set(UI.money(lineTotal +
+                chargeTotal + (grid && !order ? 0 : tax)));
         }
 
         function renderTaxes() {
@@ -1531,44 +2937,123 @@
             taxesPane.appendChild(table([{label: 'Tax Group ID'},
                 {label: 'Tax Name'}, {label: 'Description'},
                 {label: 'Account ID'}, {label: 'Tax Percent', num: true},
-                {label: 'Taxable', num: true},
-                {label: 'Tax Amount', num: true}], taxes.map(function (t) {
+                {label: 'Tax Amount', num: true},
+                {label: 'Taxable', num: true}], taxes.map(function (t) {
                     return {cells: [t.tax_group, t.tax_name, t.description,
-                        t.account, num(t.percent), UI.money(t.base),
-                        UI.money(t.amount)]};
+                        t.account, num(t.percent), UI.money(t.amount),
+                        UI.money(t.base)]};
                 }), order ? 'No tax on this order.' : 'Save the order ' +
                 'first.'));
         }
 
+        function openDocument(d, invoice) {
+            if (invoice) {
+                if (screens.invoicing) {
+                    UI.openScreen('invoicing/' + invoice.id, 'Invoice ' +
+                        (invoice.number || invoice.id));
+                } else {
+                    UI.openRecord('account.invoice', invoice.id,
+                        invoice.number);
+                }
+            } else if (d.model === 'stock.shipment.out' && screens.shipping) {
+                UI.openScreen('shipping/' + d.id, 'Shipper ' + d.number);
+            } else {
+                UI.openRecord(d.model, d.id, d.number);
+            }
+        }
+
+        function shipperLines(statuses) {
+            desk('sales_shipper_lines', [order.id, statuses]).then(
+                function (rows) {
+                    listDialog('Shipper Lines', ['Transacted', 'Shipper ID',
+                        'Shipper Status', 'Shipper Type', 'Shipped Date',
+                        'Line No', 'Sales Line No', 'Part ID', 'Description',
+                        'Shipped Qty', 'U/M', 'Unit Price', 'Shipped Amount',
+                        'Customer Part ID', 'Product Code',
+                        'Commodity Code'].map(function (l) {
+                            return {label: l, num: /Qty|Price|Amount/.test(
+                                l)};
+                        }), rows.map(function (r) {
+                            return {cells: [r.transacted ? '✔' : '',
+                                r.shipper.number, label(SHIPPER_STATUS,
+                                    r.status), r.type, UI.date(
+                                    r.shipped_date), r.line_no,
+                                r.sales_line_no, name(r.product),
+                                r.description, num(r.quantity), r.unit,
+                                UI.money(r.unit_price), UI.money(r.amount),
+                                r.customer_part, r.product_code,
+                                r.commodity_code]};
+                        }), {empty: 'No shipper line.'});
+                }, failed);
+        }
+
+        var docsStatus = null;
         function renderDocuments() {
             UI.clear(docsPane);
-            var rows = order ? order.shippers : [];
-            docsPane.appendChild(table([{label: 'Shipper / Invoice ID'},
-                {label: 'Type'}, {label: 'Status'}, {label: 'Date'},
-                {label: 'Amount', num: true}], rows.map(function (d) {
-                    var open = function () {
-                        if (d.model === 'account.invoice') {
-                            if (screens.invoicing) {
-                                UI.openScreen('invoicing/' + d.id,
-                                    'Invoice ' + d.number);
-                            } else {
-                                UI.openRecord(d.model, d.id, d.number);
-                            }
-                        } else if (d.model === 'stock.shipment.out' &&
-                                screens.shipping) {
-                            UI.openScreen('shipping/' + d.id, 'Shipper ' +
-                                d.number);
-                        } else {
-                            UI.openRecord(d.model, d.id, d.number);
-                        }
-                    };
-                    return {ondblclick: open, oncontextmenu: function (e) {
-                        UI.contextMenu(e, [{label: 'Open ' + d.type,
-                            onclick: open}]);
-                    }, cells: [d.number, d.type, d.state, UI.date(d.date),
-                        UI.money(d.amount)]};
+            var rows = (order ? order.shippers : []).filter(function (d) {
+                return !docsStatus || docsStatus.indexOf(d.status) >= 0;
+            });
+            var shipperStatusItems = function (onpick) {
+                return [{label: 'All', onclick: function () {
+                    onpick(null);
+                }}].concat(SHIPPER_STATUS.map(function (s) {
+                    return {label: s[1], onclick: function () {
+                        onpick([s[0]]);
+                    }};
+                }));
+            };
+            var menu = function (event, d) {
+                event.stopPropagation();
+                if (!order) {
+                    return;
+                }
+                UI.contextMenu(event, [
+                    submenu(event, 'View Shippers by Shipper Status of',
+                        shipperStatusItems(function (s) {
+                            docsStatus = s;
+                            renderDocuments();
+                        })),
+                    {label: 'View Shipper Lines...', onclick: function () {
+                        shipperLines(null);
+                    }},
+                    submenu(event,
+                        'View All Shipper Lines by Shipper Status of',
+                        shipperStatusItems(shipperLines)),
+                    d && d.model !== 'account.invoice' ? {label:
+                        'Open Shipper...', onclick: function () {
+                            openDocument(d, null);
+                        }} : '-',
+                    d && d.invoice ? {label: 'Open Invoice...', onclick:
+                        function () {
+                            openDocument(d, d.invoice);
+                        }} : '-']);
+            };
+            var node = table([{label: 'Shipper ID'}, {label: 'Status'},
+                {label: 'Type'}, {label: 'Shipped Amount', num: true},
+                {label: 'Shipped Date'}, {label: 'Invoice ID'},
+                {label: 'Invoiced Date'},
+                {label: 'Credit Amount Applied', num: true},
+                {label: 'Invoiced Amount (incl. taxes & charges)',
+                    num: true}], rows.map(function (d) {
+                    return {ondblclick: function () {
+                        openDocument(d, d.model === 'account.invoice' ?
+                            d.invoice || d : null);
+                    }, oncontextmenu: function (e) {
+                        menu(e, d);
+                    }, cells: [d.model === 'account.invoice' ? '' :
+                        d.number, label(SHIPPER_STATUS, d.status) || d.state,
+                        d.type, UI.money(d.amount), UI.date(d.shipped_date ||
+                            d.date), d.invoice_number || (d.model ===
+                            'account.invoice' ? d.number : ''),
+                        UI.date(d.invoiced_date), UI.money(
+                            d.credit_applied || 0), UI.money(
+                            d.invoiced_amount)]};
                 }), order ? 'Nothing shipped or invoiced yet.' :
-                'Save the order first.'));
+                'Save the order first.');
+            node.addEventListener('contextmenu', function (e) {
+                menu(e, null);
+            });
+            docsPane.appendChild(node);
         }
 
         function browse() {
@@ -1580,26 +3065,23 @@
                 var domain = text ? [['rec_name', 'ilike', text.indexOf(
                     '%') >= 0 ? text : '%' + text + '%']] : [];
                 Rpc.searchRead('sale.sale', domain, ['number',
-                    'party.rec_name', 'party.code', 'reference', 'sale_date',
-                    'js_status', 'total_amount'], {limit: 300, order:
-                    [['sale_date', 'DESC'], ['id', 'DESC']]}).then(
+                    'party.code', 'reference', 'sale_date', 'js_status'],
+                    {limit: 300, order: [['sale_date', 'DESC'],
+                        ['id', 'DESC']]}).then(
                     function (rows) {
                         UI.clear(holder).appendChild(table([
                             {label: 'Order ID'}, {label: 'Customer ID'},
-                            {label: 'Customer'}, {label: 'PO Ref #'},
-                            {label: 'Order Date'}, {label: 'Status'},
-                            {label: 'Amount', num: true}],
+                            {label: 'PO Ref#'}, {label: 'Order Date'},
+                            {label: 'Status'}],
                             rows.map(function (row) {
                                 return {ondblclick: function () {
                                     load(row.id);
                                     orderTabs.show(0);
                                 }, cells: [row.number || String(row.id),
                                     (row['party.'] || {}).code || '',
-                                    (row['party.'] || {}).rec_name || '',
                                     row.reference || '',
                                     UI.date(row.sale_date),
-                                    label(JS_STATUS, row.js_status),
-                                    UI.money(row.total_amount)]};
+                                    label(JS_STATUS, row.js_status)]};
                             })));
                     }, UI.showError);
             }
@@ -1618,39 +3100,58 @@
             order = data;
             number.value = data.number || '';
             number.disabled = data.state !== 'draft';
-            status.textContent = label(JS_STATUS, data.js_status);
-            status.className = 'badge js-status ' + (data.js_status ===
-                'closed' ? 'paid' : 'open');
+            statusSel.value = data.js_status;
             customer.set(data.party.id, data.party.rec_name);
             customer.input.disabled = data.state !== 'draft';
+            customerName.value = data.customer_name || data.party.rec_name;
             form.showParty(data.party.id);
             date.value = data.sale_date || '';
             desired.value = data.shipping_date || '';
+            promise.value = data.promise_date || '';
             po.value = data.reference;
             memo.value = data.description;
-            term.value = data.payment_term || '';
-            [date, term].forEach(function (n) {
-                n.disabled = data.state !== 'draft';
-            });
-            shipTo.set(data.shipment_address && data.shipment_address.id,
-                data.shipment_address && data.shipment_address.rec_name);
-            shipTo.input.disabled = data.state !== 'draft';
-            details.set(data);
+            setTerm(idOf(data.payment_term_ref || data.payment_term),
+                name(data.payment_term_ref));
+            date.disabled = data.state !== 'draft';
+            info.created_by.value = data.created_by || '';
+            info.modified_by.value = data.modified_by || '';
+            info.last_shipped.value = UI.date(data.last_shipped_date);
+            info.printed.value = UI.date(data.js_printed_date);
+            info.quote.value = data.js_quote || '';
+            info.shipped_amount.value = UI.money(data.shipped_amount || 0);
+            details.set(Object.assign({}, data, {
+                receivable: codeOf(data.receivable),
+                receivable_descr: descOf(data.receivable)}));
             specs.value = data.js_specs || '';
-            addressPane(soldToPane, data.sold_to);
-            addressPane(shipToAddress, data.ship_to);
+            copyNotes.checked = Boolean(data.js_copy_notes);
+            /* The order's own addresses, else the customer's (as Jobshop
+             * copies them onto a new order) */
+            setShipDomain(data.party.id);
+            var stored = function (prefix) {
+                return ADDRESS_PARTS.some(function (k) {
+                    return data[prefix + k];
+                });
+            };
+            fillSoldTo(stored('js_sold_') ? unprefixed('js_sold_', data) :
+                addressParts(data.sold_to, data.customer_mobile));
+            var shipAddress = data.shipment_address && data.shipment_address
+                .id ? data.shipment_address : null;
+            fillShipTo(stored('js_ship_') ? unprefixed('js_ship_', data) :
+                shipAddress ? addressParts(data.ship_to) : null, shipAddress,
+                data.customer_code);
             if (data.state === 'draft') {
                 newGrid(data.lines);
             } else {
                 readOnlyLines(data.lines);
             }
-            renderLinks();
+            UI.clear(notesPane);
+            UI.notesTab(notesPane, 'sale.sale', data.id, can.save);
             renderTaxes();
             renderDocuments();
             applyRights();
             updateTotals();
-            total.textContent = UI.money(data.order_amount, true);
-            UI.setTitle('Order ' + (data.number || data.id));
+            details.controls.order_total.set(UI.money(data.order_amount));
+            UI.setTitle('Sales Order :: ' + (data.number || data.id));
         }
 
         function load(id) {
@@ -1659,7 +3160,7 @@
 
         function lineExtra(extra) {
             var values = {};
-            LINE_DETAIL_FIELDS.forEach(function (f) {
+            LINE_ALL_FIELDS.forEach(function (f) {
                 if (extra && extra[f.name] !== undefined) {
                     values[f.name] = f.type === 'many2one' ?
                         idOf(extra[f.name]) : f.type === 'date' ?
@@ -1671,12 +3172,19 @@
 
         function headerValues() {
             var values = details.get();
-            delete values.last_shipped_date;
+            ['receivable', 'lines_total', 'charges_total', 'tax_total',
+                'order_total', 'payment_term'].forEach(function (n) {
+                    delete values[n];
+                });
             values.js_specs = specs.value || null;
+            values.js_copy_notes = copyNotes.checked;
+            Object.assign(values, soldTo.get(), prefixed('js_ship_',
+                shipParts()));
             values.charges = charges.values();
             values.reference = po.value || null;
             values.description = memo.value || null;
             values.shipping_date = desired.value || null;
+            values.promise_date = promise.value || null;
             return values;
         }
 
@@ -1686,15 +3194,25 @@
                 return;
             }
             var values = headerValues();
+            var wanted = statusSel.value;
             if (!order || order.state === 'draft') {
+                /* A line without a part (a description line, as Jobshop
+                 * allows) is kept too: dropped, the save deleted it */
                 values.lines = grid.controls().filter(function (c) {
-                    return c.part.value();
+                    return c.part.value() || c.part.lineId ||
+                        c.description.value.trim();
                 }).map(function (c) {
-                    return Object.assign(lineExtra(c.part.extra), {
+                    var row = rowLine(c);
+                    return Object.assign(lineExtra(c.part.extra),
+                        lineExtra(row), {
+                        commission_percent: row.commission_percent,
+                        js_ship_via: idOf(row.js_ship_via),
                         id: c.part.lineId || null,
                         product: c.part.value(),
+                        unit: c.unit.value() || undefined,
                         description: c.description.value || null,
                         customer_part: c.customer_part.value || null,
+                        customer_po_line: c.po_line.value || null,
                         quantity: UI.parseMoney(c.quantity.value) || 1,
                         gross_unit_price: c.price.value === '' ? null :
                             String(UI.parseMoney(c.price.value)),
@@ -1706,9 +3224,8 @@
                     id: order ? order.id : null,
                     number: number.value || null,
                     party: customer.value(), sale_date: date.value || null,
-                    payment_term: term.value ? parseInt(term.value, 10) :
-                        null,
-                    shipment_address: shipTo.value()});
+                    payment_term: term.value() || null,
+                    shipment_address: shipAddressId});
             } else {
                 values.id = order.id;
                 values.party = order.party.id;
@@ -1727,14 +3244,47 @@
                             data.id);
                     }
                     show(data);
+                    /* The Status chosen on a new order */
+                    if (wanted && wanted !== data.js_status &&
+                            data.js_status === 'unreleased') {
+                        changeStatus(wanted);
+                    }
                 }, failed);
         }
 
-        function statusMenu(button) {
+        function changeStatus(s) {
             if (!order) {
                 return;
             }
-            var allowedNext = {
+            var ask = s === 'cancelled' || s === 'closed' ?
+                UI.confirm('Change Status', 'Set order ' +
+                    (order.number || order.id) + ' to ' +
+                    label(JS_STATUS, s) + '?') : Promise.resolve(true);
+            ask.then(function (ok) {
+                if (!ok) {
+                    statusSel.value = order.js_status;
+                    return;
+                }
+                Rpc.desk('sales_order_status', [order.id, s]).then(
+                    function (data) {
+                        UI.toast('Order ' + (data.number || data.id) + ': ' +
+                            label(JS_STATUS, s), 'ok');
+                        show(data);
+                    }, function (error) {
+                        statusSel.value = order.js_status;
+                        UI.showError(error);
+                    });
+            });
+        }
+
+        statusSel.addEventListener('change', function () {
+            if (order && statusSel.value !== order.js_status) {
+                changeStatus(statusSel.value);
+            }
+        });
+
+        function allowedNext() {
+            return {
                 unreleased: ['firm', 'released', 'hold', 'cancelled'],
                 firm: ['unreleased', 'released', 'hold', 'cancelled'],
                 released: ['hold', 'closed'],
@@ -1745,27 +3295,32 @@
                 closed: order.state === 'done' ? [] : ['released'],
                 cancelled: ['unreleased']
             }[order.js_status] || [];
-            menuAt(button, allowedNext.map(function (s) {
-                return {label: label(JS_STATUS, s), onclick: function () {
-                    var ask = s === 'cancelled' || s === 'closed' ?
-                        UI.confirm('Change Status', 'Set order ' +
-                            (order.number || order.id) + ' to ' +
-                            label(JS_STATUS, s) + '?') :
-                        Promise.resolve(true);
-                    ask.then(function (ok) {
-                        if (!ok) {
-                            return;
-                        }
-                        Rpc.desk('sales_order_status', [order.id, s]).then(
-                            function (data) {
-                                UI.toast('Order ' + (data.number ||
-                                    data.id) + ': ' + label(JS_STATUS, s),
-                                    'ok');
-                                show(data);
-                            }, UI.showError);
-                    });
+        }
+
+        function statusMenu(button) {
+            if (!order) {
+                return;
+            }
+            var names = {unreleased: 'UnReleased...', firm: 'Firm...',
+                released: 'Release...', hold: 'Hold...', closed: 'Close...',
+                cancelled: 'Cancel...'};
+            menuAt(button, allowedNext().map(function (s) {
+                return {label: names[s], onclick: function () {
+                    changeStatus(s);
                 }};
             }));
+        }
+
+        function printOrder() {
+            if (!order) {
+                return;
+            }
+            Rpc.report('sale.sale', [order.id]).then(function (r) {
+                UI.openReport(r, 'Order');
+                desk('sales_order_printed', [order.id]).then(function () {
+                    info.printed.value = UI.date(UI.today());
+                }, function () {});
+            }, UI.showError);
         }
 
         function copyOrder() {
@@ -1781,24 +3336,100 @@
                 }, UI.showError);
         }
 
+        /* File > New Document From > Quote: Jobshop's Create Sales Order
+         * from Quote dialog on an Estimating quote */
         function fromQuote() {
-            UI.browse('sale.sale', {title: 'Create Sales Order from Quote',
-                domain: [['state', 'in', ['draft', 'quotation']]],
-                order: [['sale_date', 'DESC']],
+            UI.browse('nline.quote', {title: 'Quote ID',
+                domain: [['status', 'in', ['active', 'ready']]],
+                order: [['quote_date', 'DESC']],
                 columns: [{field: 'number', label: 'Quote ID'},
                     {field: 'rec_name', label: 'Customer'},
-                    {field: 'sale_date', label: 'Date'},
-                    {field: 'total_amount', label: 'Amount', money: true}]})
+                    {field: 'quote_date', label: 'Quote Date'},
+                    {field: 'total_amount', label: 'Total', money: true}]})
                 .then(function (quote) {
-                    return Rpc.desk('sales_order_copy', [quote.id, 'quote'])
-                        .then(function (data) {
-                            UI.toast('New order from quote ' +
-                                (quote.number || quote.id), 'ok');
+                    return desk('sales_quote_get', [quote.id]).then(
+                        quoteDialog);
+                }).catch(failed);
+        }
+
+        function quoteDialog(quote) {
+            var head = fieldGrid([
+                {name: 'quote', label: 'Quote ID', type: 'char',
+                    readonly: true, at: [14, 4, 244, 24], split: 110},
+                {name: 'number', label: 'Sales Order ID', type: 'char',
+                    at: [14, 26, 244, 46], split: 110},
+                {name: 'customer', label: 'Customer ID', type: 'char',
+                    readonly: true, at: [14, 48, 244, 68], split: 110},
+                {name: 'sale_date', label: 'Order Date', type: 'date',
+                    at: [14, 70, 244, 90], split: 110},
+                {name: 'leadtime', label: 'Quoted Leadtime (days)',
+                    type: 'char', readonly: true, at: [249, 70, 474, 90],
+                    split: 130},
+                {name: 'shipping_date', label: 'Desired Ship Date',
+                    type: 'date', at: [14, 92, 244, 112], split: 110},
+                {name: 'reference', label: 'Purchase Order No',
+                    type: 'char', at: [14, 114, 244, 134], split: 110},
+                {name: 'status', label: 'Status', type: 'selection',
+                    options: JS_STATUS.filter(function (s) {
+                        return s[0] !== 'closed';
+                    }), at: [14, 136, 244, 156], split: 110}], {});
+            head.set({quote: quote.number, customer: name(quote.party),
+                sale_date: UI.today(), leadtime: quote.quoted_leadtime ===
+                    null ? '' : String(quote.quoted_leadtime),
+                shipping_date: quote.desired_ship_date,
+                reference: quote.customer_reference, status: 'unreleased'});
+            var inputs = [];
+            var rows = quote.lines.map(function (l) {
+                var include = el('input', {type: 'checkbox',
+                    'aria-label': 'Include'});
+                include.checked = l.include;
+                var qty = el('input.js-qty', {type: 'text', value:
+                    num(l.quantity), 'aria-label': 'Order Qty'});
+                var when = el('input', {type: 'date', value:
+                    l.desired_ship_date || '', 'aria-label':
+                        'Desired Ship Date'});
+                inputs.push({id: l.id, include: include, qty: qty,
+                    when: when});
+                return {cells: [include, l.line_no, qty, name(l.product) ?
+                    UI.shortName('product.product', name(l.product)) : '',
+                    l.description, name(l.unit), UI.money(l.unit_price),
+                    num(l.trade_discount), l.cost_from === 'quote' &&
+                        l.quote_master ? 'Quote Master ' +
+                        name(l.quote_master) : l.cost_from === 'engineering'
+                        ? 'Engineering Master' : 'Part',
+                    l.leadtime === null ? '' : l.leadtime, when,
+                    num(l.available), l.stock_unit]};
+            });
+            var lines = table([{label: 'Include?'}, {label: 'Line No'},
+                {label: 'Order Qty'}, {label: 'Part ID'},
+                {label: 'Description'}, {label: 'Selling U/M'},
+                {label: 'Unit Price', num: true}, {label: 'Disc%', num: true},
+                {label: 'Create WO From'}, {label: 'Leadtime (days)'},
+                {label: 'Desired Ship Date'},
+                {label: 'Proj Avail (stk U/M)', num: true},
+                {label: 'Stock U/M'}], rows, 'The quote has no line.');
+            UI.modal('Create Sales Order from Quote', [el('div.js-sales',
+                head.node, lines)], [
+                {label: 'Cancel'},
+                {label: 'Copy', primary: true, onclick: function () {
+                    var v = head.get();
+                    desk('sales_order_from_quote', [{quote: quote.id,
+                        number: v.number || null, sale_date: v.sale_date,
+                        shipping_date: v.shipping_date,
+                        reference: v.reference, status: v.status,
+                        lines: inputs.map(function (i) {
+                            return {id: i.id, include: i.include.checked,
+                                quantity: UI.parseMoney(i.qty.value) || 0,
+                                desired_ship_date: i.when.value || null};
+                        })}]).then(function (data) {
+                            UI.toast('Sales order ' + (data.number ||
+                                data.id) + ' made from quote ' +
+                                quote.number, 'ok');
                             global.history.replaceState(null, '',
                                 '#/orders/' + data.id);
                             show(data);
-                        });
-                }).catch(failed);
+                        }, failed);
+                }}]);
         }
 
         function resetPrices() {
@@ -1849,10 +3480,10 @@
             load(openId);
         } else {
             newGrid([]);
-            renderLinks();
             renderTaxes();
             renderDocuments();
-            addressPane(shipToAddress, null);
+            fillSoldTo(null);
+            fillShipTo(null, null);
             updateTotals();
         }
     };
@@ -1866,40 +3497,114 @@
         packed: [['done', 'Ship']]
     };
 
+    function shortCode(v) {
+        return name(v).split(' - ')[0];
+    }
+
+    /* The Shipping window: Shipping Activity, Shipper (header, its sub-tabs
+     * Shipper Lines, Sold To, Ship To, Specs, Notes, Charges, the details
+     * under them), Browse */
     Screens.shipping = function (main, params) {
         injectCss();
         var form = UI.form(main, {title: 'Shipping'});
         main = form.body;
         main.classList.add('js-sales');
         var shipped = false;
+        var horizon = el('input', {type: 'date', 'aria-label':
+            'Show Sales Orders with a Desired Ship Date On or Before'});
+        var canShipOnly = el('input', {type: 'checkbox', 'aria-label':
+            'Show Only Orders where \'Some Can Ship\''});
         var shipper = null;
-        var can = {write: true, create: true, sale: true};
-        var activityPane, shipperPane, soldToPane, shipToPane;
-        var detailsGrid = fieldGrid([
+        var can = {write: true, create: true, sale: true, returns: true};
+        var screens = {orders: false};
+        UI.screenAllowed('orders').then(function (ok) {
+            screens.orders = ok;
+        });
+        var activityPane, shipperPane, browsePane;
+        var linesPane, soldToPane, shipToPane, notesPane;
+        /* Jobshop's SHIP_OR_RETURN: a caption beside the Ship button */
+        var shipOrReturn = el('span', {style: {display: 'flex',
+            alignItems: 'center', justifyContent: 'flex-end', height: '100%',
+            fontWeight: '600'}}, 'Ship');
+        var head = fieldGrid([
+            {name: 'number', label: 'Shipper ID', type: 'char',
+                readonly: true, at: [17, 4, 233, 24], split: 100},
+            {name: 'sales_text', label: 'Sales Order ID', type: 'char',
+                readonly: true, at: [17, 26, 233, 46], split: 100},
+            {name: 'customer_code', label: 'Customer ID', type: 'char',
+                readonly: true, at: [17, 48, 233, 68], split: 100},
+            {name: 'effective_date', label: 'Shipped Date', type: 'date',
+                at: [17, 70, 233, 90], split: 100},
+            {name: 'reference', label: 'Purchase Order No', type: 'char',
+                readonly: true, at: [17, 92, 233, 112], split: 100},
+            {name: 'js_shipper_status', label: 'Status', type: 'selection',
+                options: SHIPPER_STATUS, readonly: true,
+                at: [17, 114, 233, 134], split: 100},
+            {name: 'ship_or_return', label: '', type: 'char', custom: true,
+                readonly: true, at: [265, 31, 415, 59], split: 0},
+            {name: 'sold_to_text', label: 'Sold to', type: 'text',
+                readonly: true, at: [248, 65, 418, 137], split: 165},
+            {name: 'ship_to_text', label: 'Ship to', type: 'text',
+                readonly: true, at: [421, 65, 591, 137], split: 165},
+            {name: 'created_by', label: 'Created by', type: 'char',
+                readonly: true, at: [249, 4, 549, 24], split: 97},
+            {name: 'modified_by', label: 'Last Modified by', type: 'char',
+                readonly: true, at: [554, 4, 840, 24], split: 96},
             {name: 'order_date', label: 'Order Date', type: 'date',
-                readonly: true},
-            {name: 'effective_date', label: 'Shipped Date', type: 'date'},
-            {name: 'fob_point', label: 'FOB Point', type: 'many2one',
-                model: 'nline.fob_point'},
-            {name: 'ship_via', label: 'Ship Via', type: 'many2one',
-                model: 'nline.ship_via'},
+                readonly: true, at: [601, 26, 840, 46], split: 120},
+            {name: 'printed_date', label: 'Invoice Printed Date',
+                type: 'char', readonly: true, at: [601, 48, 840, 68],
+                split: 120},
+            {name: 'payment_due', label: 'Payment Due Date', type: 'date',
+                readonly: true, at: [601, 70, 840, 90], split: 120},
+            {name: 'invoice_id', label: 'Invoice ID', type: 'char',
+                readonly: true, at: [601, 92, 840, 112], split: 120},
+            {name: 'invoiced_date', label: 'Invoiced Date', type: 'date',
+                readonly: true, at: [601, 114, 840, 134], split: 120}],
+            {frames: [{label: '', at: [7, 4, 850, 143]}], custom: {
+                ship_or_return: {node: shipOrReturn}}, buttons: [
+                {label: 'Ship', at: [423, 30, 541, 60], onclick: function () {
+                    if (!shipper) {
+                        return;
+                    }
+                    if (shipper['return']) {
+                        receive(shipper.id);
+                    } else {
+                        ship(shipper, true);
+                    }
+                }}]});
+        var detailsGrid = fieldGrid([
+            {name: 'fob_point', label: 'FOB Point ID', type: 'many2one',
+                model: 'nline.fob_point', at: [12, 8, 236, 28], split: 120},
+            {name: 'ship_via', label: 'Ship Via ID', type: 'many2one',
+                model: 'nline.ship_via', at: [12, 30, 236, 50], split: 120},
             {name: 'js_carrier', label: 'Carrier ID', type: 'many2one',
-                model: 'nline.carrier'},
-            {name: 'js_tracking_number', label: 'Shipment Tracking Number',
-                type: 'char'},
-            {name: 'freight_terms', label: 'Freight Terms',
-                type: 'selection', options: FREIGHT_TERMS},
+                model: 'nline.carrier', at: [12, 52, 236, 72], split: 120},
+            {name: 'js_tracking_number', label: 'Shipment Tracking No',
+                type: 'char', at: [12, 74, 425, 94], split: 120},
+            {name: 'shipped_by', label: 'Shipped By', type: 'char',
+                readonly: true, at: [12, 96, 337, 116], split: 120},
             {name: 'tax_group', label: 'Tax Group ID', type: 'many2one',
-                model: 'nline.sales_tax_group', readonly: true},
-            {name: 'payment_term', label: 'Terms Rule ID', type: 'char',
-                readonly: true},
+                model: 'nline.sales_tax_group', readonly: true,
+                at: [442, 8, 662, 28], split: 130},
+            {name: 'payment_term', label: 'Terms ID', type: 'char',
+                readonly: true, at: [442, 30, 662, 50], split: 130},
+            {name: 'payment_term_descr', label: 'Terms description',
+                type: 'char', readonly: true, at: [664, 30, 840, 50],
+                split: 0},
+            {name: 'freight_terms', label: 'Freight Terms',
+                type: 'selection', options: FREIGHT_TERMS,
+                at: [442, 52, 662, 72], split: 130},
             {name: 'discount_class', label: 'Discount Class ID',
                 type: 'many2one', model: 'nline.discount_class',
-                readonly: true},
-            {name: 'invoice_ids', label: 'Invoice ID', type: 'char',
-                readonly: true},
-            {name: 'invoice_dates', label: 'Invoiced Date', type: 'char',
-                readonly: true}]);
+                readonly: true, at: [442, 74, 662, 94], split: 130},
+            {name: 'receivable', label: 'Receivables Acct ID', type: 'char',
+                readonly: true, at: [442, 96, 662, 116], split: 130},
+            {name: 'receivable_descr', label: 'Receivables description',
+                type: 'char', readonly: true, at: [664, 96, 840, 116],
+                split: 0}],
+            {frames: [{label: '', at: [8, 1, 435, 121]},
+                {label: '', at: [438, 1, 854, 120]}]});
         var specs = el('textarea', {rows: 10, style: {width: '100%'},
             'aria-label': 'Specifications'});
         var charges = chargesEditor({editable: true, adding: false});
@@ -1911,31 +3616,51 @@
             }},
             {title: 'Shipper', build: function (pane) {
                 shipperPane = pane;
-                pane.appendChild(el('p.muted', 'Double-click an order on ' +
-                    'the Shipping Activity tab.'));
+                pane.appendChild(head.node);
+                var holder = el('div');
+                pane.appendChild(holder);
+                tabs(holder, [
+                    {title: 'Shipper Lines', build: function (p) {
+                        linesPane = p;
+                        p.appendChild(el('p.muted', 'Double-click an order ' +
+                            'on the Shipping Activity tab.'));
+                    }},
+                    {title: 'Sold To', build: function (p) {
+                        soldToPane = p;
+                    }},
+                    {title: 'Ship To', build: function (p) {
+                        shipToPane = p;
+                    }},
+                    {title: 'Specs', build: function (p) {
+                        p.appendChild(specs);
+                    }},
+                    {title: 'Notes', build: function (p) {
+                        notesPane = p;
+                    }},
+                    {title: 'Charges', build: function (p) {
+                        p.appendChild(el('p.muted', 'The charges of the ' +
+                            'order still to invoice: the applied ones go ' +
+                            'on the invoice of this shipment.'));
+                        p.appendChild(charges.node);
+                    }}
+                ]);
+                pane.appendChild(el('div', {style: {marginTop: '8px'}},
+                    detailsGrid.node));
             }},
-            {title: 'Sold To', build: function (pane) {
-                soldToPane = pane;
-            }},
-            {title: 'Ship To', build: function (pane) {
-                shipToPane = pane;
-            }},
-            {title: 'Details', build: function (pane) {
-                pane.appendChild(detailsGrid.node);
-            }},
-            {title: 'Specs', build: function (pane) {
-                pane.appendChild(el('p.muted', 'Printed on the packing ' +
-                    'list.'));
-                pane.appendChild(specs);
-            }},
-            {title: 'Charges', build: function (pane) {
-                pane.appendChild(el('p.muted', 'The charges of the order ' +
-                    'still to invoice: the applied ones go on the ' +
-                    'invoice of this shipment.'));
-                pane.appendChild(charges.node);
+            {title: 'Browse', build: function (pane) {
+                browsePane = pane;
+            }, onshow: function () {
+                browse();
             }}
         ]);
+        describe(main, [['FOB Point ID', [238, 8, 420, 28]],
+            ['Ship Via ID', [238, 30, 420, 50]],
+            ['Carrier ID', [238, 52, 420, 72]],
+            ['Tax Group ID', [664, 8, 840, 28]],
+            ['Discount Class ID', [664, 74, 840, 94]]]);
         charges.set([], false);
+        head.lock(false);
+        detailsGrid.lock(false);
 
         rights(['stock.shipment.out', 'stock.shipment.out.return',
             'sale.sale']).then(function (r) {
@@ -1948,9 +3673,20 @@
                 }
             });
 
+        function salesLines(row) {
+            if (!row.sales.length) {
+                return;
+            }
+            orderLinesDialog('Sales Order Lines - ' + row.sales[0].number,
+                {sale: row.sales[0].id}, null);
+        }
+
         function loadActivity() {
-            Rpc.desk('sales_shipping_activity', [shipped]).then(
-                function (rows) {
+            var args = [shipped];
+            if (horizon.value || canShipOnly.checked) {
+                args.push(horizon.value || null, canShipOnly.checked);
+            }
+            desk('sales_shipping_activity', args).then(function (rows) {
                     UI.clear(activityPane);
                     var mode = el('select', {'aria-label': 'View'},
                         el('option', {value: 'unshipped'},
@@ -1962,14 +3698,26 @@
                         shipped = mode.value === 'shipped';
                         loadActivity();
                     });
-                    activityPane.appendChild(el('div.toolbar', mode,
-                        el('span.muted', ' Right-click an order to ship ' +
-                            'or return it.')));
-                    activityPane.appendChild(table([
-                        {label: 'Sales Order ID'}, {label: 'Shipper ID'},
-                        {label: 'Return'}, {label: 'Desired Ship'},
-                        {label: 'Customer Name'}, {label: 'PO Ref No'},
-                        {label: 'Status'}, {label: 'Message'}],
+                    activityPane.appendChild(el('div.toolbar',
+                        el('label', 'Show Sales Orders with a Desired Ship ' +
+                            'Date On or Before ', horizon),
+                        el('label', canShipOnly, ' Show Only Orders where ' +
+                            '\'Some Can Ship\''), mode));
+                    var box = function (on) {
+                        var c = el('input', {type: 'checkbox', disabled: true,
+                            tabindex: -1});
+                        c.checked = Boolean(on);
+                        return c;
+                    };
+                    var orders = el('div');
+                    activityPane.appendChild(el('div', {style: {display:
+                        'grid', gridTemplateColumns: 'minmax(0, 1fr) ' +
+                        'minmax(0, 1fr)', gap: '10px'}}, el('div', table([
+                        {label: 'Some Can Ship'}, {label: 'Sales Order ID'},
+                        {label: 'Shipper ID'}, {label: 'Return'},
+                        {label: 'Desired Ship'}, {label: 'Carrier ID'},
+                        {label: 'Customer'}, {label: 'PO Ref No'},
+                        {label: 'Ship To Name'}, {label: 'Message'}],
                         rows.map(function (row) {
                             var open = function () {
                                 loadShipper(row.id, row.model);
@@ -1978,21 +3726,49 @@
                             return {ondblclick: open, oncontextmenu:
                                 function (event) {
                                     activityMenu(event, row, open);
-                                }, cells: [row.sales.map(function (s) {
-                                    return s.number;
-                                }).join(', '), row.number, row['return'] ?
-                                    '✔' : '', UI.date(row.planned_date),
-                                    row.customer, row.reference, row.state,
+                                }, cells: [box(row.some_can_ship),
+                                    row.sales.map(function (s) {
+                                        return s.number;
+                                    }).join(', '), row.number,
+                                    box(row['return']),
+                                    UI.date(row.planned_date),
+                                    row.carrier || '', clip(row.customer),
+                                    row.reference, clip(row.ship_to_name),
                                     el('span' + (/late|hold/i.test(
                                         row.message) ? '.js-late' : ''),
                                         row.message)]};
                         }), shipped ? 'Nothing shipped in the last 90 days.' :
-                        'Nothing to ship.'));
-                }, UI.showError);
+                        'Nothing to ship.', true)), orders));
+                    /* GRID_ORDER: the released orders (double-click: the
+                     * Sales Order window) */
+                    Rpc.searchRead('sale.sale', [['js_status', '=',
+                        'released']], ['number', 'party.code', 'reference',
+                        'sale_date', 'js_last_shipped_date'], {limit: 300,
+                        order: [['sale_date', 'DESC'], ['id', 'DESC']]})
+                        .then(function (list) {
+                            orders.appendChild(table([{label: 'Order ID'},
+                                {label: 'Customer ID'}, {label: 'PO Ref No'},
+                                {label: 'Order Date'},
+                                {label: 'Last Shipped Date'}],
+                                list.map(function (o) {
+                                    return {ondblclick: screens.orders ?
+                                        function () {
+                                            openOrder(o.id, o.number);
+                                        } : null, cells: [o.number ||
+                                        String(o.id), (o['party.'] || {})
+                                        .code || '', o.reference || '',
+                                        UI.date(o.sale_date), UI.date(
+                                            o.js_last_shipped_date)]};
+                                }), 'No released order.', true));
+                        }, function () {});
+                }, failed);
         }
+        horizon.addEventListener('change', loadActivity);
+        canShipOnly.addEventListener('change', loadActivity);
 
+        /* Jobshop's PopupShipping */
         function activityMenu(event, row, open) {
-            var items = [{label: 'Open', onclick: open}];
+            var items = [];
             if (!row['return'] && row.state !== 'done' && can.write) {
                 items.push({label: 'Ship', onclick: function () {
                     Rpc.desk('sales_shipper_get', [row.id, row.model]).then(
@@ -2002,20 +3778,35 @@
                 }});
             }
             if (row['return'] && row.state !== 'done' && can.returns) {
-                items.push({label: 'Receive Return', onclick: function () {
+                items.push({label: 'Return', onclick: function () {
                     receive(row.id);
                 }});
             }
             if (!row['return'] && row.state === 'done' && can.sale &&
                     row.sales.length) {
-                items.push('-', {label: 'Mark for Return…', onclick:
+                items.push({label: 'Return', onclick: function () {
+                    returnDialog(row.sales[0]);
+                }});
+            }
+            items.push({label: 'Edit Shipper', onclick: open});
+            items.push('-');
+            if (screens.orders && row.sales.length) {
+                items.push({label: 'Open Sales Order...', onclick:
                     function () {
-                        returnDialog(row.sales[0]);
+                        openOrder(row.sales[0].id, row.sales[0].number);
                     }});
             }
-            items.push('-', {label: shipped ? 'View Unshipped Orders' :
-                'View Shipped Orders', onclick: function () {
-                    shipped = !shipped;
+            items.push({label: 'Sales Order Lines...', disabled:
+                !row.sales.length, onclick: function () {
+                    salesLines(row);
+                }});
+            items.push('-', {label: 'View Unshipped Orders', checked:
+                !shipped, onclick: function () {
+                    shipped = false;
+                    loadActivity();
+                }}, {label: 'View Shipped Orders', checked: shipped,
+                onclick: function () {
+                    shipped = true;
                     loadActivity();
                 }});
             UI.contextMenu(event, items);
@@ -2026,61 +3817,88 @@
                 'stock.shipment.out']).then(showShipper, UI.showError);
         }
 
+        function addressText(a) {
+            if (!a) {
+                return '';
+            }
+            return [a.name, a.street, [a.city, a.state, a.postal_code]
+                .filter(Boolean).join(' '), a.country].filter(Boolean)
+                .join('\n');
+        }
+
         function showShipper(data) {
             shipper = data;
             var editable = can.write && !data['return'] &&
                 ['draft', 'waiting', 'assigned'].indexOf(data.state) >= 0;
-            UI.clear(shipperPane);
-            shipperPane.appendChild(el('div.grid-form',
-                el('div', el('label.field', 'Shipper ID'),
-                    el('strong', data.number), ' ', el('span.badge' +
-                        (data.state === 'done' ? '.paid' : '.open'),
-                        data.state), data['return'] ? el('span.badge.open',
-                        'Return') : null),
-                el('div', el('label.field', 'Sales Order ID'),
-                    data.sales.map(function (s) {
-                        return el('a', {href: '#', onclick: function (e) {
-                            e.preventDefault();
-                            openOrder(s.id, s.number);
-                        }}, s.number + ' (' + label(JS_STATUS,
-                            s.js_status) + ') ');
-                    })),
-                el('div', el('label.field', 'Customer ID'),
-                    name(data.customer)),
-                el('div', el('label.field', 'Shipped Date'),
-                    UI.date(data.effective_date) || '—'),
-                el('div', el('label.field', 'Purchase Order Number'),
-                    data.reference),
-                el('div', el('label.field', 'Invoice Status'),
-                    data.invoices.length ? data.invoices.map(function (i) {
-                        return (i.number || 'draft') + ' (' + i.state + ')';
-                    }).join(', ') : 'Unapproved')));
+            head.set(Object.assign({}, data, {
+                sales_text: data.sales.map(function (s) {
+                    return s.number;
+                }).join(', '),
+                customer_code: data.customer_code || name(data.customer),
+                sold_to_text: addressText(data.sold_to),
+                ship_to_text: addressText(data.ship_to),
+                printed_date: UI.date(data.printed_date)}));
+            head.lock(editable);
+            shipOrReturn.textContent = data['return'] ? 'Return' : 'Ship';
+            var custInput = head.controls.customer_code.node.querySelector ?
+                head.controls.customer_code.node.querySelector('input') ||
+                head.controls.customer_code.node : null;
+            if (custInput) {
+                custInput.title = name(data.customer);
+            }
+            var shipButton = shipperPane.querySelector('button.js-btn');
+            if (shipButton) {
+                shipButton.textContent = data['return'] ? 'Return' : 'Ship';
+                shipButton.hidden = data.state === 'done' ||
+                    data.state === 'cancelled' || !(data['return'] ?
+                        can.returns : can.write);
+            }
             qtyInputs = [];
-            shipperPane.appendChild(table([{label: 'Line No'},
-                {label: 'SO Line No'}, {label: 'Line Desired Ship Date'},
-                {label: 'Part ID'}, {label: 'Description'},
-                {label: 'Customer Part ID'}, {label: 'Ordered', num: true},
-                {label: data['return'] ? 'Return Qty' : 'Ship Qty',
-                    num: true}, {label: 'U/M'}, {label: 'Location'},
-                {label: 'Qty Available', num: true}, {label: 'Transacted'}],
+            UI.clear(linesPane);
+            linesPane.appendChild(table([{label: 'Close Short'},
+                {label: 'Line No'}, {label: 'SO Line No'},
+                {label: 'Line Desired Ship Date'}, {label: 'Part ID'},
+                {label: 'Description'},
+                {label: 'Could Ship Qty (stock U/M)', num: true},
+                {label: 'Ship Qty (stock U/M)', num: true},
+                {label: 'Stock U/M'},
+                {label: data['return'] ? 'Ship/Rtn Qty (selling U/M)' :
+                    'Ship/Rtn Qty (selling U/M)', num: true},
+                {label: 'Selling U/M'}, {label: 'Location'},
+                {label: 'Loc Qty Avail (stock U/M)', num: true},
+                {label: 'Ship Via'}, {label: 'Transacted'},
+                {label: 'Tracked'}, {label: 'Lot Tracking No/Quantity'},
+                {label: 'Linked'}],
                 data.lines.map(function (line) {
                     var qty = el('input.js-qty', {type: 'text', value:
                         num(line.quantity), 'aria-label': 'Ship Qty'});
-                    qty.disabled = !editable;
+                    var short = el('input', {type: 'checkbox', 'aria-label':
+                        'Close Short'});
+                    qty.disabled = short.disabled = !editable;
                     qtyInputs.push({move: line.move, input: qty,
-                        quantity: line.quantity});
-                    return {cells: [String(line.line_no),
-                        line.so_line_no === null ? '' :
+                        quantity: line.quantity, short: short});
+                    return {cells: [short, String(line.line_no),
+                        line.so_line_no === null ||
+                            line.so_line_no === undefined ? '' :
                             String(line.so_line_no),
-                        UI.date(line.desired_date), name(line.product),
-                        line.description, line.customer_part,
-                        num(line.ordered), qty, line.unit, line.location,
-                        num(line.available), line.state === 'done' ? '✔' :
-                            '']};
-                })));
+                        UI.date(line.desired_date), el('span', {title:
+                            name(line.product)}, UI.shortName(
+                            'product.product', name(line.product))),
+                        clip(line.description),
+                        num(line.could_ship === undefined ? line.available :
+                            line.could_ship),
+                        num(line.stock_quantity === undefined ?
+                            line.quantity : line.stock_quantity),
+                        line.stock_unit || line.unit, qty, line.unit,
+                        line.location, num(line.available),
+                        line.ship_via || '', check(line.state === 'done'),
+                        check(line.tracked), line.lot || '',
+                        check(line.linked)]};
+                }), 'No shipper line.', true));
             if (editable) {
-                shipperPane.appendChild(el('p.muted', 'Ship less than the ' +
-                    'quantity to back order the rest (0: the whole line).'));
+                linesPane.appendChild(el('p.muted', 'Ship less than the ' +
+                    'quantity to back order the rest (0: the whole line); ' +
+                    'tick Close Short to close the line instead.'));
             }
             var buttons = el('div.toolbar');
             if (editable) {
@@ -2088,10 +3906,6 @@
                     function () {
                         ship(data, false);
                     }}, 'Save'));
-                buttons.appendChild(el('button.primary', {type: 'button',
-                    onclick: function () {
-                        ship(data, true);
-                    }}, 'Ship'));
             }
             if (!data['return'] && can.write) {
                 /* The step by step buttons of the desk's window */
@@ -2107,12 +3921,6 @@
                                 }, UI.showError);
                         }}, step[1]));
                 });
-            }
-            if (data['return'] && data.state !== 'done' && can.returns) {
-                buttons.appendChild(el('button.primary', {type: 'button',
-                    onclick: function () {
-                        receive(data.id);
-                    }}, 'Receive Return'));
             }
             if (!data['return']) {
                 [['stock.shipment.out.picking_list', 'Picking List'],
@@ -2133,40 +3941,46 @@
                         returnDialog(data.sales[0]);
                     }}, 'Return…'));
             }
-            shipperPane.appendChild(buttons);
+            linesPane.appendChild(buttons);
             addressPane(soldToPane, data.sold_to);
             addressPane(shipToPane, data.ship_to);
+            UI.clear(notesPane);
+            UI.notesTab(notesPane, data.model || 'stock.shipment.out',
+                data.id, can.write);
             detailsGrid.set(Object.assign({}, data, {
-                invoice_ids: data.invoices.map(function (i) {
-                    return i.number || 'draft';
-                }).join(', '),
-                invoice_dates: data.invoices.map(function (i) {
-                    return UI.date(i.date);
-                }).join(', ')}));
+                receivable: codeOf(data.receivable),
+                receivable_descr: descOf(data.receivable),
+                payment_term_descr: data.payment_term_descr ||
+                    data.payment_term || ''}));
             detailsGrid.lock(can.write && !data['return'] &&
                 data.state !== 'done' && data.state !== 'cancelled');
             specs.value = data.js_specs || '';
             specs.disabled = !(can.write && !data['return']);
             charges.set(data.charges, can.write && !data['return'] &&
                 data.state !== 'done');
-            UI.setTitle('Shipper ' + data.number);
+            UI.setTitle('Shipper :: ' + data.number);
         }
 
         function ship(data, doShip) {
             var values = {id: data.id, ship: doShip};
             if (shipper && shipper.id === data.id) {
                 Object.assign(values, detailsGrid.get());
-                delete values.order_date;
-                delete values.payment_term;
-                delete values.invoice_ids;
-                delete values.invoice_dates;
+                ['payment_term', 'shipped_by', 'receivable', 'tax_group',
+                    'discount_class'].forEach(function (n) {
+                        delete values[n];
+                    });
+                var h = head.get();
+                if (h.effective_date) {
+                    values.effective_date = h.effective_date;
+                }
                 values.js_specs = specs.value || null;
                 values.charges = charges.values().filter(function (c) {
                     return c.id;
                 });
                 values.lines = qtyInputs.map(function (q) {
                     return {move: q.move, quantity: q.input.value === '' ?
-                        q.quantity : UI.parseMoney(q.input.value)};
+                        q.quantity : UI.parseMoney(q.input.value),
+                        close_short: q.short.checked};
                 });
             }
             UI.service('sales_ship', values).then(function (result) {
@@ -2175,8 +3989,8 @@
                 showShipper(result);
                 loadActivity();
                 if (doShip) {
-                    UI.confirm('Packing List', 'Print the packing list?')
-                        .then(function (ok) {
+                    UI.confirm('Packing List', 'Print the Pack List for ' +
+                        'shipper ' + result.number + '?').then(function (ok) {
                             if (ok) {
                                 Rpc.report('stock.shipment.out.delivery_note',
                                     [result.id]).then(function (x) {
@@ -2239,6 +4053,38 @@
             }, UI.showError);
         }
 
+        function browse() {
+            var search = el('input', {type: 'text', placeholder:
+                'Search', 'aria-label': 'Search'});
+            var holder = el('div');
+            function run() {
+                desk('sales_shipper_browse', [search.value.trim() || null])
+                    .then(function (rows) {
+                        UI.clear(holder).appendChild(table([
+                            {label: 'Shipper ID'}, {label: 'Sales Order ID'},
+                            {label: 'Customer Name'},
+                            {label: 'Shipper Status'},
+                            {label: 'Shipper Type'}], rows.map(function (r) {
+                                return {ondblclick: function () {
+                                    loadShipper(r.id, r.model);
+                                    shipTabs.show(1);
+                                }, cells: [r.number, r.sales, r.customer,
+                                    label(SHIPPER_STATUS, r.status),
+                                    r.type]};
+                            }), 'No shipper.'));
+                    }, failed);
+            }
+            var timer;
+            search.addEventListener('input', function () {
+                global.clearTimeout(timer);
+                timer = global.setTimeout(run, 250);
+            });
+            UI.clear(browsePane).appendChild(el('div.toolbar', el('div',
+                {style: {width: '320px'}}, search)));
+            browsePane.appendChild(holder);
+            run();
+        }
+
         global.document.addEventListener('keydown', function onKey(event) {
             if (!main.isConnected) {
                 global.document.removeEventListener('keydown', onKey);
@@ -2262,91 +4108,228 @@
 
     /* ---- Invoicing ------------------------------------------------------------ */
 
+    /* The Invoicing window: Invoicing Activity, Invoice (header, sub-tabs
+     * Invoice Lines, Bill To, Ship To, Specs, Notes, Charges, Taxes, the
+     * details and totals under them), Browse */
     Screens.invoicing = function (main, params) {
         injectCss();
         var form = UI.form(main, {title: 'Invoicing', extra: [
             {label: 'Post Selected', title: 'Tools > Invoicing > Invoice: ' +
                 'post and print the ticked invoices', onclick: function () {
                     postSelected();
+                }},
+            {label: 'Set Shipper Line Unit Price', title: 'N-Line: the ' +
+                'shipped lines waiting without a unit price', onclick:
+                function () {
+                    unpricedDialog();
                 }}]});
         main = form.body;
         main.classList.add('js-sales');
         var invoice = null;
         var activity = [];
         var can = {write: true, create: true};
-        var activityPane, invoicePane, billToPane, shipToPane, taxesPane;
-        var details = fieldGrid([
+        var screens = {orders: false};
+        UI.screenAllowed('orders').then(function (ok) {
+            screens.orders = ok;
+        });
+        var activityPane, browsePane, linesPane, billToPane, shipToPane,
+            taxesPane, notesPane, buttonsPane;
+        var finder = UI.picker('account.invoice', {label: 'Invoice ID',
+            placeholder: 'Invoice ID', domain: [['type', '=', 'out']],
+            onselect: function (r) {
+                loadInvoice(r.id);
+            }});
+        var reference = el('input', {type: 'text', 'aria-label':
+            'Purchase Order No'});
+        /* Jobshop's lblType: a caption beside the Invoice button */
+        var typeLabel = el('span', {style: {display: 'flex',
+            alignItems: 'center', justifyContent: 'flex-end', height: '100%',
+            fontWeight: '600'}});
+        var head = fieldGrid([
+            {name: 'invoice_finder', label: 'Invoice ID', custom: true,
+                at: [17, 4, 250, 24], split: 100},
+            {name: 'shipper_text', label: 'Shipper ID', type: 'char',
+                readonly: true, at: [17, 26, 233, 46], split: 100},
+            {name: 'sales_text', label: 'Sales Order ID', type: 'char',
+                readonly: true, at: [17, 48, 233, 68], split: 100},
+            {name: 'customer_code', label: 'Customer ID', type: 'char',
+                readonly: true, at: [17, 70, 233, 90], split: 100},
+            {name: 'shipped_text', label: 'Shipped Date', type: 'char',
+                readonly: true, at: [17, 92, 233, 112], split: 100},
+            {name: 'reference', label: 'Purchase Order No', custom: true,
+                at: [17, 114, 233, 134], split: 100},
+            {name: 'js_shipper_status', label: 'Status', type: 'selection',
+                options: SHIPPER_STATUS, readonly: true,
+                at: [17, 136, 233, 156], split: 100},
+            {name: 'type_text', label: '', type: 'char', custom: true,
+                at: [257, 35, 417, 59], split: 0},
+            {name: 'bill_to_text', label: 'Bill to', type: 'text',
+                readonly: true, at: [251, 67, 412, 155], split: 143},
+            {name: 'ship_to_text', label: 'Ship to', type: 'text',
+                readonly: true, at: [422, 67, 583, 155], split: 139},
+            {name: 'created_by', label: 'Created by', type: 'char',
+                readonly: true, at: [261, 4, 563, 24], split: 97},
+            {name: 'modified_by', label: 'Last Modified by', type: 'char',
+                readonly: true, at: [571, 4, 839, 24], split: 90},
+            {name: 'payment_due', label: 'Payment Due Date', type: 'date',
+                readonly: true, at: [600, 26, 840, 46], split: 120},
             {name: 'order_date', label: 'Order Date', type: 'date',
-                readonly: true},
-            {name: 'invoice_date', label: 'Invoiced Date', type: 'date'},
-            {name: 'payment_term', label: 'Terms Rule ID', type: 'many2one',
-                model: 'account.invoice.payment_term'},
-            {name: 'receivable', label: 'Receivables Account ID',
-                type: 'char', readonly: true},
-            {name: 'fob_point', label: 'FOB Point', type: 'many2one',
-                model: 'nline.fob_point', readonly: true},
-            {name: 'ship_via', label: 'Ship Via', type: 'many2one',
-                model: 'nline.ship_via', readonly: true},
+                readonly: true, at: [600, 48, 840, 68], split: 120},
+            {name: 'js_printed_date', label: 'Invoice Printed Date',
+                type: 'date', readonly: true, at: [600, 70, 840, 90],
+                split: 120},
+            {name: 'invoice_date', label: 'Invoiced Date', type: 'date',
+                at: [600, 92, 840, 112], split: 120},
+            /* Exported: posted to the accounting (QuickBooks emulation) */
+            {name: 'exported', label: 'Exported', type: 'boolean',
+                readonly: true, at: [600, 114, 679, 134]},
+            {name: 'exported_date', label: 'Date', type: 'date',
+                readonly: true, at: [686, 114, 840, 134], split: 33},
+            {name: 'paid_amount', label: 'Paid Amount', type: 'money',
+                readonly: true, at: [600, 136, 787, 156], split: 80},
+            {name: 'paid', label: 'Paid', type: 'boolean', readonly: true,
+                at: [791, 136, 840, 156]}],
+            {frames: [{label: '', at: [7, 4, 852, 159]}], buttons: [
+                {label: 'Invoice', at: [422, 31, 564, 62], onclick:
+                    function () {
+                        if (invoice && invoice.state === 'draft' &&
+                                can.write) {
+                            saveInvoice().then(function () {
+                                post([invoice.id]);
+                            });
+                        } else if (invoice) {
+                            printInvoice(invoice.id);
+                        }
+                    }}],
+                custom: {invoice_finder: {node: finder.node},
+                    reference: {node: reference},
+                    type_text: {node: typeLabel}}});
+        var details = fieldGrid([
+            {name: 'fob_point', label: 'FOB Point ID', type: 'many2one',
+                model: 'nline.fob_point', readonly: true,
+                at: [16, 8, 232, 28], split: 100},
+            {name: 'ship_via', label: 'Ship Via ID', type: 'many2one',
+                model: 'nline.ship_via', readonly: true,
+                at: [16, 30, 232, 50], split: 100},
             {name: 'js_carrier', label: 'Carrier ID', type: 'many2one',
-                model: 'nline.carrier', readonly: true},
-            {name: 'tax_group', label: 'Tax Group ID', type: 'many2one',
-                model: 'nline.sales_tax_group', readonly: true},
+                model: 'nline.carrier', readonly: true,
+                at: [16, 52, 232, 72], split: 100},
             {name: 'freight_terms', label: 'Freight Terms',
-                type: 'selection', options: FREIGHT_TERMS, readonly: true},
+                type: 'selection', options: FREIGHT_TERMS, readonly: true,
+                at: [16, 74, 232, 94], split: 100},
+            {name: 'tax_group', label: 'Tax Group ID', type: 'many2one',
+                model: 'nline.sales_tax_group', readonly: true,
+                at: [436, 8, 668, 28], split: 130},
+            {name: 'payment_term', label: 'Terms ID', type: 'many2one',
+                model: 'account.invoice.payment_term',
+                at: [436, 30, 668, 50], split: 130},
+            {name: 'payment_term_descr', label: 'Terms description',
+                type: 'char', readonly: true, at: [670, 30, 839, 50],
+                split: 0},
             {name: 'discount_class', label: 'Discount Class ID',
                 type: 'many2one', model: 'nline.discount_class',
-                readonly: true}]);
+                readonly: true, at: [436, 52, 668, 72], split: 130},
+            {name: 'receivable', label: 'Receivables Acct ID', type: 'char',
+                readonly: true, at: [436, 74, 668, 94], split: 130},
+            {name: 'receivable_descr', label: 'Receivables description',
+                type: 'char', readonly: true, at: [670, 74, 839, 94],
+                split: 0},
+            {name: 'lines_total', label: 'Lines', type: 'char',
+                readonly: true, at: [687, 98, 852, 118], split: 53},
+            {name: 'charges_total', label: 'Charges', type: 'char',
+                readonly: true, at: [687, 120, 852, 140], split: 53},
+            {name: 'tax_total', label: 'Tax', type: 'char',
+                readonly: true, at: [687, 142, 852, 162], split: 53},
+            {name: 'total', label: 'Total', type: 'char',
+                readonly: true, at: [687, 164, 852, 184], split: 53}],
+            {frames: [{label: '', at: [6, 2, 424, 98]},
+                {label: '', at: [432, 2, 852, 97]}]});
         var specs = el('textarea', {rows: 10, style: {width: '100%'},
             'aria-label': 'Specifications'});
         var charges = chargesEditor({editable: true, invoiceEdit: true});
         var lineInputs = [];
-        var reference = el('input', {type: 'text', 'aria-label':
-            'Purchase Order Number'});
-        var finder = UI.picker('account.invoice', {label: 'Invoice ID',
-            placeholder: 'Invoice ID (any status)', domain: [['type', '=',
-                'out']], onselect: function (r) {
-                    loadInvoice(r.id);
-                }});
 
         var invoiceTabs = tabs(main, [
             {title: 'Invoicing Activity', build: function (pane) {
                 activityPane = pane;
             }},
             {title: 'Invoice', build: function (pane) {
-                invoicePane = pane;
+                pane.appendChild(head.node);
+                var holder = el('div');
+                pane.appendChild(holder);
+                tabs(holder, [
+                    {title: 'Invoice Lines', build: function (p) {
+                        linesPane = p;
+                        p.appendChild(el('p.muted', 'Double-click an ' +
+                            'invoice on the Invoicing Activity tab, or ' +
+                            'find one.'));
+                    }},
+                    {title: 'Bill To', build: function (p) {
+                        billToPane = p;
+                    }},
+                    {title: 'Ship To', build: function (p) {
+                        shipToPane = p;
+                    }},
+                    {title: 'Specs', build: function (p) {
+                        p.appendChild(specs);
+                    }},
+                    {title: 'Notes', build: function (p) {
+                        notesPane = p;
+                    }},
+                    {title: 'Charges', build: function (p) {
+                        p.appendChild(charges.node);
+                    }},
+                    {title: 'Taxes', build: function (p) {
+                        taxesPane = p;
+                    }}
+                ]);
+                buttonsPane = el('div.toolbar');
+                pane.appendChild(buttonsPane);
+                pane.appendChild(el('div', {style: {marginTop: '8px'}},
+                    details.node));
             }},
-            {title: 'Bill To', build: function (pane) {
-                billToPane = pane;
-            }},
-            {title: 'Ship To', build: function (pane) {
-                shipToPane = pane;
-            }},
-            {title: 'Details', build: function (pane) {
-                pane.appendChild(details.node);
-            }},
-            {title: 'Specs', build: function (pane) {
-                pane.appendChild(el('p.muted', 'Printed on the invoice.'));
-                pane.appendChild(specs);
-            }},
-            {title: 'Charges', build: function (pane) {
-                pane.appendChild(charges.node);
-            }},
-            {title: 'Taxes', build: function (pane) {
-                taxesPane = pane;
+            {title: 'Browse', build: function (pane) {
+                browsePane = pane;
+            }, onshow: function () {
+                browse();
             }}
         ]);
+        describe(main, [['FOB Point ID', [234, 8, 412, 28]],
+            ['Ship Via ID', [234, 30, 412, 50]],
+            ['Carrier ID', [234, 52, 412, 72]],
+            ['Tax Group ID', [670, 8, 839, 28]],
+            ['Discount Class ID', [670, 52, 839, 72]]]);
         charges.set([], false);
-        renderInvoice();
+        head.lock(false);
+        details.lock(false);
 
         rights(['account.invoice']).then(function (r) {
             can.write = r['account.invoice'].write;
             can.create = r['account.invoice'].create;
-            form.allow(true, can.write ? [] : ['Post Selected']);
+            form.allow(true, can.write ? [] : ['Post Selected',
+                'Set Shipper Line Unit Price']);
             loadActivity();
             if (invoice) {
                 showInvoice(invoice);
             }
         });
+
+        /* Jobshop's PopupInvoicing */
+        function activityMenu(event, row, open) {
+            UI.contextMenu(event, [
+                {label: 'Invoice', disabled: !can.write, onclick:
+                    function () {
+                        post([row.id]);
+                    }},
+                {label: 'Edit Invoice', onclick: open},
+                '-',
+                {label: 'Open Sales Order...', disabled: !screens.orders ||
+                    !row.sales.length, onclick: function () {
+                        openOrder(row.sales[0].id, row.sales[0].number);
+                    }},
+                {label: 'Set Shipper Line Unit Price...', disabled:
+                    !can.write, onclick: unpricedDialog}]);
+        }
 
         function loadActivity() {
             Rpc.desk('sales_invoicing_activity', []).then(function (rows) {
@@ -2354,11 +4337,11 @@
                 UI.clear(activityPane);
                 activityPane.appendChild(el('p.muted', 'The invoices of ' +
                     'shipped orders and the credit memos of returns wait ' +
-                    'here as drafts: check them, then tick and post.'));
+                    'here: tick and Post Selected, or right-click.'));
                 activityPane.appendChild(table([{label: ''},
                     {label: 'Shipper ID'}, {label: 'Order ID'},
-                    {label: 'Name'}, {label: 'Ship Date'},
-                    {label: 'Reference'}, {label: 'Amount', num: true},
+                    {label: 'Name'}, {label: 'Shipped Date'},
+                    {label: 'Shipped Amount', num: true},
                     {label: 'Shipper Type'}], rows.map(function (row) {
                         row.box = el('input', {type: 'checkbox',
                             'aria-label': 'Post'});
@@ -2368,12 +4351,7 @@
                             invoiceTabs.show(1);
                         };
                         return {ondblclick: open, oncontextmenu: function (e) {
-                            UI.contextMenu(e, [{label: 'Open', onclick:
-                                open}].concat(can.write ? [{label:
-                                'Invoice (post and print)', onclick:
-                                function () {
-                                    post([row.id]);
-                                }}] : []));
+                            activityMenu(e, row, open);
                         }, cells: [row.box, row.shippers.map(function (s) {
                             return s.number;
                         }).join(', '), row.sales.map(function (s) {
@@ -2381,8 +4359,8 @@
                         }).join(', '), row.party,
                             row.shippers.map(function (s) {
                                 return UI.date(s.date);
-                            }).join(', '), row.reference,
-                            UI.money(row.total_amount), row.type]};
+                            }).join(', '), UI.money(row.total_amount),
+                            row.type]};
                     }), 'No invoice waiting.'));
             }, UI.showError);
         }
@@ -2392,93 +4370,99 @@
                 UI.showError);
         }
 
-        function renderInvoice() {
-            UI.clear(invoicePane);
-            invoicePane.appendChild(el('div.grid-form', el('div', {style:
-                {gridColumn: 'span 2'}}, el('label.field',
-                'Find an invoice'), finder.node)));
-            if (!invoice) {
-                invoicePane.appendChild(el('p.muted', 'Double-click an ' +
-                    'invoice on the Invoicing Activity tab, or find one.'));
-                return;
+        function addressText(a) {
+            if (!a) {
+                return '';
             }
-            var data = invoice;
+            return [a.name, a.street, [a.city, a.state, a.postal_code]
+                .filter(Boolean).join(' '), a.country].filter(Boolean)
+                .join('\n');
+        }
+
+        /* Printed: Jobshop's Invoice Printed Date */
+        function markPrinted(ids) {
+            Rpc.desk('sales_invoice_printed', [ids]).then(function () {
+                if (invoice && ids.indexOf(invoice.id) >= 0) {
+                    head.controls.js_printed_date.set(UI.today());
+                }
+            }, function () {});
+        }
+
+        function printInvoice(id) {
+            Rpc.report('account.invoice', [id]).then(function (r) {
+                UI.openReport(r, 'Invoice');
+                markPrinted([id]);
+            }, UI.showError);
+        }
+
+        function showInvoice(data) {
+            invoice = data;
             var draft = data.state === 'draft' && can.write;
+            finder.set(data.id, data.number || '(draft)');
             reference.value = data.reference || '';
             reference.disabled = !draft;
-            invoicePane.appendChild(el('div.grid-form',
-                el('div', el('label.field', 'Invoice ID'),
-                    el('strong', data.number || '(when posted)'), ' ',
-                    el('span.badge' + (data.state === 'draft' ? '.open' :
-                        '.paid'), data.state)),
-                el('div', el('label.field', 'Shipper ID'),
-                    data.shippers.map(function (s) {
-                        return s.number;
-                    }).join(', ')),
-                el('div', el('label.field', 'Sales Order ID'),
-                    data.sales.map(function (s) {
-                        return el('a', {href: '#', onclick: function (e) {
-                            e.preventDefault();
-                            openOrder(s.id, s.number);
-                        }}, s.number + ' ');
-                    })),
-                el('div', el('label.field', 'Customer ID'),
-                    name(data.party)),
-                el('div', el('label.field', 'Shipped Date'),
-                    data.shippers.map(function (s) {
-                        return UI.date(s.date);
-                    }).join(', ')),
-                el('div', el('label.field', 'Purchase Order Number'),
-                    reference),
-                el('div', el('label.field', 'Invoice Status'),
-                    data.state === 'draft' ? 'Unapproved' : 'Approved')));
-            lineInputs = [];
-            invoicePane.appendChild(table([{label: 'Line No'},
-                {label: 'Part ID'}, {label: 'Description'},
-                {label: 'Order'}, {label: 'Ship Qty', num: true},
-                {label: 'U/M'}, {label: 'Unit Price', num: true},
-                {label: 'Disc %', num: true}, {label: 'Extension',
-                    num: true}], data.lines.map(function (line) {
-                    var qty = el('input.js-qty', {type: 'text', value:
-                        num(line.quantity), 'aria-label': 'Ship Qty'});
-                    var price = UI.moneyInput({'aria-label': 'Unit Price'});
-                    price.value = UI.money(line.unit_price);
-                    qty.disabled = price.disabled = !draft;
-                    lineInputs.push({id: line.id, qty: qty, price: price});
-                    return {cells: [String(line.line_no), name(line.product),
-                        line.description, line.sale, qty, line.unit, price,
-                        num(line.trade_discount), UI.money(line.amount)]};
-                })));
-            invoicePane.appendChild(el('div.js-totals',
-                el('div', el('div.muted', 'Lines'),
-                    UI.money(data.untaxed_amount - data.charges_amount)),
-                el('div', el('div.muted', 'Charge'),
-                    UI.money(data.charges_amount)),
-                el('div', el('div.muted', 'Tax'), UI.money(data.tax_amount)),
-                el('div', el('div.muted', 'Total'),
-                    el('strong', UI.money(data.total_amount, true)))));
-            var buttons = el('div.toolbar');
-            if (draft) {
-                buttons.appendChild(el('button', {type: 'button', onclick:
-                    saveInvoice}, 'Save'));
-                buttons.appendChild(el('button.primary', {type: 'button',
-                    onclick: function () {
-                        saveInvoice().then(function () {
-                            post([data.id]);
-                        });
-                    }}, 'Invoice'));
+            head.set(Object.assign({}, data, {
+                shipper_text: data.shippers.map(function (s) {
+                    return s.number;
+                }).join(', '),
+                sales_text: data.sales.map(function (s) {
+                    return s.number;
+                }).join(', '),
+                customer_code: data.customer_code || name(data.party),
+                shipped_text: data.shippers.map(function (s) {
+                    return UI.date(s.date);
+                }).join(', '),
+                js_shipper_status: data.js_shipper_status ||
+                    (data.state === 'draft' ? 'unapproved' : 'approved'),
+                bill_to_text: addressText(data.bill_to),
+                ship_to_text: addressText(data.ship_to)}));
+            head.lock(draft);
+            typeLabel.textContent = data.type || '';
+            var custInput = main.querySelector(
+                'input[aria-label="Customer ID"]');
+            if (custInput) {
+                custInput.title = name(data.party);
             }
-            buttons.appendChild(el('button', {type: 'button', onclick:
+            /* Jobshop's SHIPPER_LINE grid of the Invoicing window: the
+             * quantities and prices come from the shipper (read-only; Set
+             * Shipper Line Unit Price prices the unpriced lines) */
+            lineInputs = [];
+            UI.clear(linesPane);
+            linesPane.appendChild(table([{label: 'Line No'},
+                {label: 'PO Line No'}, {label: 'Part ID'},
+                {label: 'Description'},
+                {label: 'Ship Qty (stock U/M)', num: true},
+                {label: 'Stock U/M'}, {label: 'Selling U/M'},
+                {label: 'Unit Price', num: true},
+                {label: 'Trade Disc%', num: true},
+                {label: 'Shipped Amount', num: true},
+                {label: 'Applied Billed Amount', num: true},
+                {label: 'Extension', num: true}, {label: 'Transacted'}],
+                data.lines.map(function (line) {
+                    return {cells: [String(line.line_no), line.po_line || '',
+                        el('span', {title: name(line.product)},
+                            UI.shortName('product.product',
+                                name(line.product))),
+                        clip(line.description), num(line.stock_quantity ===
+                            undefined ? line.quantity : line.stock_quantity),
+                        line.stock_unit || line.unit, line.unit,
+                        UI.money(line.unit_price), num(line.trade_discount),
+                        UI.money(line.amount), UI.money(0),
+                        UI.money(line.amount), check(line.transacted)]};
+                }), 'No invoice line.', true));
+            UI.clear(buttonsPane);
+            if (draft) {
+                buttonsPane.appendChild(el('button', {type: 'button',
+                    onclick: saveInvoice}, 'Save'));
+            }
+            buttonsPane.appendChild(el('button', {type: 'button', onclick:
                 function () {
-                    Rpc.report('account.invoice', [data.id]).then(
-                        function (r) {
-                            UI.openReport(r, 'Invoice');
-                        }, UI.showError);
+                    printInvoice(data.id);
                 }}, 'Print'));
             if (data.state !== 'draft' && data.state !== 'cancelled' &&
                     can.create) {
-                buttons.appendChild(el('button', {type: 'button', onclick:
-                    function () {
+                buttonsPane.appendChild(el('button', {type: 'button',
+                    onclick: function () {
                         UI.confirm('Credit Memo', 'Issue a credit memo for ' +
                             'invoice ' + data.number + '?').then(
                             function (ok) {
@@ -2495,39 +4479,45 @@
                             });
                     }}, 'Credit Memo'));
             }
-            buttons.appendChild(el('button', {type: 'button', onclick:
-                function () {
-                    UI.openRecord('account.invoice', data.id, data.number);
-                }}, 'Open in Tryton'));
-            invoicePane.appendChild(buttons);
-        }
-
-        function showInvoice(data) {
-            invoice = data;
-            var draft = data.state === 'draft' && can.write;
-            renderInvoice();
-            addressPane(billToPane, data.bill_to);
+            addressPane(billToPane, data.bill_to, null, data.customer_mobile);
             addressPane(shipToPane, data.ship_to);
-            details.set(Object.assign({}, data, {order_date: data.sales
-                .length ? data.sales[0].sale_date : null}));
+            UI.clear(notesPane);
+            UI.notesTab(notesPane, 'account.invoice', data.id, can.write);
+            details.set(Object.assign({}, data, {
+                receivable: codeOf(data.receivable),
+                receivable_descr: descOf(data.receivable),
+                payment_term_descr: data.payment_term_descr ||
+                    name(data.payment_term),
+                lines_total: UI.money(data.untaxed_amount -
+                    data.charges_amount),
+                charges_total: UI.money(data.charges_amount),
+                tax_total: UI.money(data.tax_amount),
+                total: UI.money(data.total_amount)}));
             details.lock(draft);
             specs.value = data.comment || '';
             specs.disabled = !draft;
             charges.set(data.charges, draft);
-            UI.clear(taxesPane).appendChild(table([{label: 'Description'},
+            UI.clear(taxesPane).appendChild(table([{label: 'Tax Group ID'},
+                {label: 'Tax Name'}, {label: 'Description'},
                 {label: 'Account ID'}, {label: 'Tax Percent', num: true},
-                {label: 'Taxable', num: true}, {label: 'Tax Amount',
-                    num: true}], data.taxes.map(function (t) {
-                    return {cells: [t.description, t.account, num(t.percent),
-                        UI.money(t.base), UI.money(t.amount)]};
+                {label: 'Tax Amount', num: true},
+                {label: 'Taxable', num: true}], data.taxes.map(function (t) {
+                    return {cells: [name(data.tax_group).split(' - ')[0],
+                        t.description, t.description, t.account,
+                        num(t.percent), UI.money(t.amount),
+                        UI.money(t.base)]};
                 }), 'No tax.'));
-            UI.setTitle('Invoice ' + (data.number || data.id));
+            UI.setTitle('Invoice :: ' + (data.number || data.id));
         }
 
         function saveInvoice() {
+            if (!invoice) {
+                return Promise.resolve();
+            }
             var d = details.get();
+            var h = head.get();
             return UI.service('sales_invoice_save', {id: invoice.id,
-                invoice_date: d.invoice_date, payment_term: d.payment_term,
+                invoice_date: h.invoice_date, payment_term: d.payment_term,
                 reference: reference.value || null,
                 comment: specs.value || null,
                 lines: lineInputs.map(function (l) {
@@ -2550,6 +4540,7 @@
                 UI.toast(ids.length + ' invoice(s) posted', 'ok');
                 Rpc.report('account.invoice', ids).then(function (r) {
                     UI.openReport(r, 'Invoices');
+                    markPrinted(ids);
                 }, function () {});
                 loadActivity();
                 if (invoice && ids.indexOf(invoice.id) >= 0) {
@@ -2565,10 +4556,91 @@
                 return r.id;
             });
             if (!ids.length) {
-                UI.showError('Tick the invoices to post.');
+                UI.toast('Tick the invoices to post.', 'ok');
                 return;
             }
             post(ids);
+        }
+
+        /* N-Line's Set Shipper Line Unit Price window */
+        function unpricedDialog() {
+            desk('sales_unpriced_lines', []).then(function (rows) {
+                var inputs = [];
+                var cells = rows.map(function (r) {
+                    var price = UI.moneyInput({'aria-label': 'Unit Price'});
+                    price.value = UI.money(r.unit_price);
+                    price.disabled = !can.write;
+                    inputs.push({id: r.id, input: price});
+                    return {cells: [UI.date(r.shipped_date), r.customer,
+                        r.sale.number, r.sales_line_no, r.shipper,
+                        r.line_no, r.reference, r.po_line, num(r.quantity),
+                        price]};
+                });
+                UI.modal('Set Shipper Line Unit Price', [el('div.js-sales',
+                    table([{label: 'Shipped Date'}, {label: 'Customer ID'},
+                        {label: 'Sales ID'}, {label: 'Sales Line No'},
+                        {label: 'Shipper ID'}, {label: 'Line No'},
+                        {label: 'Customer PO'},
+                        {label: 'Customer PO Line No'},
+                        {label: 'Shipped Qty', num: true},
+                        {label: 'Unit Price', num: true}], cells,
+                        'No shipped line without a price.'))],
+                    can.write && rows.length ? [{label: 'Cancel'},
+                        {label: 'Save', primary: true, onclick: function () {
+                            desk('sales_unpriced_save', [inputs.filter(
+                                function (i) {
+                                    return i.input.value !== '';
+                                }).map(function (i) {
+                                    return {id: i.id, unit_price: String(
+                                        UI.parseMoney(i.input.value))};
+                                })]).then(function (n) {
+                                    UI.toast(n + ' line(s) priced', 'ok');
+                                    loadActivity();
+                                    if (invoice) {
+                                        loadInvoice(invoice.id);
+                                    }
+                                }, failed);
+                        }}] : [{label: 'Close', primary: true}]);
+            }, failed);
+        }
+
+        function browse() {
+            var search = el('input', {type: 'text', placeholder: 'Search',
+                'aria-label': 'Search'});
+            var holder = el('div');
+            function run() {
+                desk('sales_invoice_browse', [search.value.trim() || null])
+                    .then(function (rows) {
+                        UI.clear(holder).appendChild(table([
+                            {label: 'Invoice ID'}, {label: 'Shipper ID'},
+                            {label: 'Sales Order ID'},
+                            {label: 'Customer Name'},
+                            {label: 'Shipper Status'},
+                            {label: 'Shipper Type'}, {label: 'Posted'}],
+                            rows.map(function (r) {
+                                return {ondblclick: function () {
+                                    loadInvoice(r.id);
+                                    invoiceTabs.show(1);
+                                }, cells: [r.number, r.shippers.map(
+                                    function (s) {
+                                        return s.number;
+                                    }).join(', '), r.sales.map(function (s) {
+                                        return s.number;
+                                    }).join(', '), r.party, label(
+                                    SHIPPER_STATUS, r.status), r.type,
+                                    r.posted ? '✔' : '']};
+                            }), 'No invoice.'));
+                    }, failed);
+            }
+            var timer;
+            search.addEventListener('input', function () {
+                global.clearTimeout(timer);
+                timer = global.setTimeout(run, 250);
+            });
+            UI.clear(browsePane).appendChild(el('div.toolbar', el('div',
+                {style: {width: '320px'}}, search)));
+            browsePane.appendChild(holder);
+            run();
         }
 
         global.document.addEventListener('keydown', function onKey(event) {

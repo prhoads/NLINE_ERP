@@ -65,6 +65,12 @@ this repository contains the full copyright notices and license terms. -->
         <record model="ir.message" id="msg_schedule_past">
             <field name="text">The schedule can not be run as of a date before today.</field>
         </record>
+        <record model="ir.message" id="msg_schedule_unknown">
+            <field name="text">Schedule "%(schedule)s" does not exist.</field>
+        </record>
+        <record model="ir.message" id="msg_schedule_standard">
+            <field name="text">The STANDARD schedule can not be deleted.</field>
+        </record>
         <record model="ir.message" id="msg_not_schedulable">
             <field name="text">Work order "%(production)s" is not Firm or Released: it can not be scheduled.</field>
         </record>

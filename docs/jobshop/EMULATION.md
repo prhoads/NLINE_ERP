@@ -105,8 +105,33 @@ QuickBooks emulation (Customers, Vendors, Banking, Company folders).
   route.
 - The maintenance windows use `UI.master` (frame.js): ID with lookup, tabs
   (`fields`, `lines`, `render`, `{picture: true}`, `{notes: true}`), the
-  Browse tab (`browse: [columns]`), First / Previous / Next / Last, Save,
-  Clear, Copy, Delete, `print: '<report>'`; rights from `get_access`.
+  Browse tab (`browse: [columns]`), Save, Clear, Copy (Save As: asks the
+  new ID when `idField` is set), Delete, `print: '<report>'`; rights from
+  `get_access`. No First / Previous / Next / Last (the owner's choice).
+- Jobshop's own window layouts (decoded from `Layouts\*.vml`, kept outside
+  the repo in `C:\NLINE_ERP_dev\jobshop_analysis\layouts`): a field placed
+  with `at: [l, t, r, b]` in Jobshop's units and `split` (label width),
+  `tab.frames`, `tab.buttons`; the ID as the first field (`idAt`,
+  `idSplit`, `idField`). See `UI.placedForm` in frame.js.
+- The "..." lookup (and F9) is Jobshop's lookup window (`UI.browse`): the
+  table's Browse columns in a grid (header click sorts, drag sizes, the
+  Browse right-click filters, Export), Search with Find and Refresh, OK /
+  Cancel, the current record selected, what was typed searched. The
+  columns per table are in frame.js `LOOKUPS` (`UI.lookups.register` adds
+  one); a window without one shows its own Browse columns, any other table
+  the ID and Description. Search text as Jobshop's: `AB` begins with AB,
+  `*AB` contains it, `?` any one character.
+- A customer / supplier field shows the party's ID (its code; the name in
+  the tooltip), as Jobshop. Migration step `js_parties` replaces the
+  duplicate parties earlier steps made for a Jobshop ID (numbered) by the
+  party of that ID (Tryton's Replace Party).
+- Frame keys: Ctrl+S save and stay, F5 reload, Ctrl+P print, Del delete,
+  Ctrl+B Browse Filter, Shift+F5 refresh Browse; right-click menus may
+  have submenus, ticks, greyed items and shortcuts.
+- Testing: the click-through battery (outside the repo,
+  `C:\NLINE_ERP_dev\jobshop_analysis\tools\run_battery.py`, headless
+  Chrome) opens every route and clicks every tab, ribbon button, menu and
+  right-click item, recording errors; `summarize.py` writes the report.
 - Server code for a screen: the area module extends `nline.desk`
   (`class Desk(metaclass=PoolMeta)`, RPCs in `__setup__`), checks rights
   with `cls._check_read / _check_create / _check_write`.

@@ -290,6 +290,23 @@ Executive Information::
     ...     'Accounts Receivable']
     Decimal('500.00')
 
+Jobshop's Executive Information lines (status / dates and the value)::
+
+    >>> lines = Desk.jsadmin_exec_values('sales', {}, config.context)
+    >>> [l['key'] for l in lines]
+    ['quotes', 'orders', 'backlog', 'late', 'hold']
+    >>> {l['key']: l['value'] for l in lines}['backlog']
+    Decimal('600.00')
+    >>> lines = Desk.jsadmin_exec_values('sales', {'orders': {
+    ...     'status': 'Closed'}}, config.context)
+    >>> {l['key']: l['value'] for l in lines}['orders']
+    Decimal('0')
+    >>> for kind in ['purchasing', 'production', 'financials']:
+    ...     _ = Desk.jsadmin_exec_values(kind, {}, config.context)
+    >>> [l['key'] for l in Desk.jsadmin_exec_values('purchasing', {},
+    ...     config.context)]
+    ['orders', 'late', 'uncommitted']
+
 A work order with labor and an issued material (the shopfloor
 reports)::
 
@@ -346,12 +363,12 @@ The reports: every group bar lists its reports, each runs::
 
     >>> reports = Desk.jsadmin_report_list(None, config.context)
     >>> len(reports)
-    98
+    107
     >>> groups = {}
     >>> for r in reports:
     ...     groups[r['group']] = groups.get(r['group'], 0) + 1
-    >>> groups == {'inventory': 13, 'engineering': 5, 'estimating': 6,
-    ...     'sales': 19, 'purchasing': 12, 'planning': 2, 'shopfloor': 27,
+    >>> groups == {'inventory': 16, 'engineering': 6, 'estimating': 6,
+    ...     'sales': 21, 'purchasing': 13, 'planning': 2, 'shopfloor': 29,
     ...     'accounting': 5, 'common': 9}
     True
     >>> failed = []
@@ -437,3 +454,50 @@ The WIP value of the work order: the issued bodies and the labor::
     >>> sorted(r['v'][keys.index('kind')] for r in where['rows']
     ...     if r['k'] == 'row')
     ['Master', 'Work Order']
+
+Jobshop's dialogs: the captions and order of its selection fields, the
+"For" radio groups, a selection Tryton has no data for is not applied::
+
+    >>> parts = [r for r in reports if r['id'] == 'part_list_simple'][0]
+    >>> [(f['type'], f['label']) for f in parts['filters']]
+    [('range', 'Part ID'), ('radio', 'For'), ('range', 'Product Code ID'), ('radio', 'For'), ('range', 'Commodity Code ID')]
+    >>> active = Desk.jsadmin_report_run('part_list_simple', {},
+    ...     config.context)
+    >>> both = Desk.jsadmin_report_run('part_list_simple', {
+    ...     'active': 'both'}, config.context)
+    >>> both['count'] >= active['count'] > 0
+    True
+    >>> inactive = Desk.jsadmin_report_run('part_list_simple', {
+    ...     'active': 'no'}, config.context)
+    >>> inactive['count']
+    0
+    >>> invoices = Desk.jsadmin_report_run('invoice', {
+    ...     'shipper_from': 'A'}, config.context)
+    >>> invoices['count'] > 0, any('Shipper ID' in g for g in invoices['gaps'])
+    (True, True)
+    >>> rolled = Desk.jsadmin_report_run('journal_batch_detail', {
+    ...     'expanded': False}, config.context)
+    >>> rolled['count'] <= Desk.jsadmin_report_run('journal_batch_detail',
+    ...     {}, config.context)['count']
+    True
+    >>> [r for r in reports if r['id'] == 'terms_list'][0]['rpt']
+    'TermsRuleList.rpt'
+
+The reports of N-Line's installed Jobshop the help does not list::
+
+    >>> backlog = Desk.jsadmin_report_run('po_line_backlog', {},
+    ...     config.context)
+    >>> total, = [r for r in backlog['rows'] if r['k'] == 'total']
+    >>> keys = [c['key'] for c in backlog['columns']]
+    >>> total['v'][keys.index('backlog')] > 0
+    True
+    >>> status = Desk.jsadmin_report_run('work_order_status', {},
+    ...     config.context)
+    >>> status['count']
+    1
+    >>> bom = Desk.jsadmin_report_run('engineering_master_bom', {
+    ...     'depth': '1'}, config.context)
+    >>> materials = Desk.jsadmin_report_run('engineering_material_list', {},
+    ...     config.context)
+    >>> bom['count'] >= materials['count']
+    True

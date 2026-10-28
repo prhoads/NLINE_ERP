@@ -146,6 +146,7 @@ def material_values(m, row):
         'fixed_cost': dec(row.get('FIXED_COST')).quantize(Decimal('0.0001'))
         if row.get('FIXED_COST') else None,
         'supplier': supplier,
+        'reference': one_line(row.get('REFERENCE'), 64) or None,
         }
 
 
@@ -165,6 +166,10 @@ def header_values(row, codes):
         'global_rank': row.get('GLOBAL_RANK') or 50,
         'forward_schedule': bool(row.get('FORWARD_SCHEDULE')),
         'specifications': _text(row.get('SPECIFICATIONS')),
+        # USER_0 / USER_1: the released drawing and its revision (N-Line's
+        # sign-off fills them; the other user fields are unused)
+        'user_0': one_line(row.get('USER_0'), 200) or None,
+        'user_1': one_line(row.get('USER_1'), 80) or None,
         }
 
 
@@ -180,6 +185,7 @@ def run(m):
     masters(m, codes)
     quote_masters(m, codes)
     quotes(m, codes)
+    work_orders(m, codes)
 
 
 # ---- Operation templates ----------------------------------------------------
@@ -522,3 +528,73 @@ def quotes(m, codes):
         done.add(head['ID'])
         m.count('quotes')
     log("quotes: %s" % m.counts['quotes'])
+
+
+# ---- Work orders ------------------------------------------------------------
+
+def split_number(number):
+    "The Jobshop WORK_ID, LOT_ID, SPLIT_ID of a work order number"
+    work, lot, split = number or '', '1', '0'
+    if '.' in work.rsplit('/', 1)[-1]:
+        work, split = work.rsplit('.', 1)
+    if '/' in work:
+        work, lot = work.rsplit('/', 1)
+    return work, lot or '1', split or '0'
+
+
+def work_orders(m, codes):
+    """The Work Order tab of the work orders imported by the step workorders
+    (matched by Work/Lot/Split ID): description, Project/Ref/Other, the
+    header fields, Treat Release Date as Hard, the schedule dates, the user
+    fields and the materials' Reference (of the order and its legs)"""
+    Production = m.get('production')
+    Card = m.get('production.material_card')
+    done = 0
+    for production in Production.find([('parent', '=', None),
+                ('number', '!=', None)]):
+        work, lot, split = split_number(production.number)
+        heads = m.js.rows("select * from SHOPFLOOR_WORK_ORDER where "
+            "WORK_ID = ? and LOT_ID = ? and SPLIT_ID = ? and SUB_ID = '0'",
+            work, lot, split)
+        if not heads:
+            continue
+        head = heads[0]
+        values = header_values(head, codes)
+        del values['desired_quantity']
+        values.update({
+                'drawing_number': one_line(head.get('DRAWING_ID'), 20)
+                or None,
+                'drawing_revision': one_line(head.get('DRAWING_REV_NO'), 10)
+                or None,
+                'other_info': one_line(head.get('OTHER_INFO'), 128) or None,
+                'archived': bool(head.get('ARCHIVED')),
+                'hard_release_date': bool(head.get('HARD_RLS_DATE')),
+                'schedule_start_date': head.get('SCHED_START_DATE'),
+                'schedule_finish_date': head.get('SCHED_FINISH_DATE'),
+                })
+        if not values['description']:
+            del values['description']
+        Production.write([production.id], values, m.context)
+        # The materials' Reference (e.g. "JOB 8751"), main order and legs
+        legs = {'0': production.id}
+        for leg in Production.find([
+                    ('parent', 'child_of', [production.id], 'parent'),
+                    ('id', '!=', production.id)]):
+            legs[str(leg.leg_index)] = leg.id
+        rows = m.js.rows("select SUB_ID, SEQ_NO, PIECE_NO, REFERENCE from "
+            "SHOPFLOOR_MATERIAL where WORK_ID = ? and LOT_ID = ? and "
+            "SPLIT_ID = ? and REFERENCE is not null and REFERENCE <> ''",
+            work, lot, split)
+        for row in rows:
+            target = legs.get(str(row['SUB_ID']))
+            if not target:
+                continue
+            cards = Card.find([('production', '=', target),
+                    ('operation', '=', row['SEQ_NO']),
+                    ('piece', '=', row['PIECE_NO'])])
+            if cards and cards[0].reference != row['REFERENCE']:
+                Card.write([cards[0].id], {
+                        'reference': one_line(row['REFERENCE'], 64)},
+                    m.context)
+        done += 1
+    log("work orders: Jobshop header fields of %s" % done)

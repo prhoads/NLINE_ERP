@@ -46,6 +46,8 @@
                     return value.year + '-' + pad(value.month) + '-' +
                         pad(value.day) + ' ' + pad(value.hour) + ':' +
                         pad(value.minute);
+                case 'time':
+                    return pad(value.hour) + ':' + pad(value.minute);
                 case 'Decimal':
                     return parseFloat(value.decimal);
                 case 'bytes':
@@ -83,6 +85,13 @@
         }
         var url = BASE + '/' + (database ? encodeURIComponent(database) + '/' :
             '');
+        /* Calls in flight (window.NLINE_PENDING): a screen has loaded when
+         * it is back to 0 (the test battery waits on it) */
+        global.NLINE_PENDING = (global.NLINE_PENDING || 0) + 1;
+        var done = function (value) {
+            global.NLINE_PENDING -= 1;
+            return value;
+        };
         return global.fetch(url, {
             method: 'POST',
             headers: headers,
@@ -114,6 +123,9 @@
                 throw new RpcError('server', String(error));
             }
             return data.result;
+        }).then(done, function (error) {
+            done();
+            throw error;
         });
     }
 

@@ -39,13 +39,14 @@ READS = [
     'sf_material_lines', 'sf_part_quantities', 'sf_part_transactions',
     'sf_receipt_lines', 'sf_resource_where_used', 'sf_employees',
     'sf_work_order_operations', 'sf_labor_tickets', 'sf_dc_employee',
-    'sf_dc_tickets', 'sf_operation_lookup',
+    'sf_dc_tickets', 'sf_operation_lookup', 'sf_attendance', 'sf_who_is_in',
     ]
 WRITES = [
     'sf_material_save', 'sf_receipt_save', 'sf_resource_setup',
     'sf_reset_operation_costs', 'sf_employees_save', 'sf_labor_post',
     'sf_labor_reverse', 'sf_dc_start', 'sf_dc_post', 'sf_dc_resume',
     'sf_dc_edit', 'sf_dc_delete', 'sf_dc_save', 'sf_clock',
+    'sf_attendance_save', 'sf_attendance_approve',
     ]
 
 
@@ -55,6 +56,11 @@ def flt(value):
 
 def dec(value):
     return Decimal(str(value or 0))
+
+
+def iso(value):
+    "A date (or datetime) as the screens' 'YYYY-MM-DD'"
+    return value.isoformat()[:10] if value else None
 
 
 class DeskShopfloor(metaclass=PoolMeta):
@@ -202,6 +208,13 @@ class DeskShopfloor(metaclass=PoolMeta):
                     'tracked': bool(getattr(move.product, 'lot_is_required',
                             None) and False),
                     'linked': False,
+                    # Issue Details / Eng Master Revision
+                    'revision': getattr(card, 'component_revision', None)
+                    or '',
+                    'required_date': iso(getattr(card, 'required_date',
+                            None) or move.planned_date),
+                    'reference': getattr(card, 'reference', None) or '',
+                    'calc_qty': 0.0,
                     }
                 by_product.setdefault(move.product.id, []).append(key)
             return rows[key]
@@ -213,6 +226,7 @@ class DeskShopfloor(metaclass=PoolMeta):
             if move.state == 'cancelled' or move.receipt_return:
                 continue
             row = row_for(move)
+            row['calc_qty'] += move.quantity
             if move.state == 'done':
                 row['issued'] += move.quantity
             else:
@@ -239,6 +253,10 @@ class DeskShopfloor(metaclass=PoolMeta):
         quantities = cls._quantities(locations, products)
         warehouse = production.warehouse.id if production.warehouse else None
         totals = cls._quantities([warehouse] if warehouse else [], products)
+        # Qty Available: on hand less what is already assigned elsewhere
+        with Transaction().set_context(stock_assign=True):
+            free = cls._quantities([warehouse] if warehouse else [],
+                products)
         result = []
         for row in rows.values():
             if not row['location'] and storage:
@@ -247,6 +265,8 @@ class DeskShopfloor(metaclass=PoolMeta):
             row['location_qty'] = quantities.get(
                 (row['location'], row['product']), 0)
             row['on_hand'] = totals.get((warehouse, row['product']), 0)
+            row['qty_available'] = free.get((warehouse, row['product']), 0)
+            row['calc_qty'] = round(row['calc_qty'], 4)
             row['available'] = row['location_qty'] >= row['due'] > 0 or (
                 row['due'] <= 0)
             row['status'] = 'Released' if row['due'] > 0 else 'Closed'
@@ -273,6 +293,7 @@ class DeskShopfloor(metaclass=PoolMeta):
             'open': production.state in OPEN_STATES,
             'operations': sorted({w.sequence for w in production.works
                     if w.sequence is not None}),
+            'sub': cls._sub(production),
             'rows': result,
             }
 
@@ -475,7 +496,8 @@ class DeskShopfloor(metaclass=PoolMeta):
     def sf_receipt_lines(cls, options=None):
         """The work orders to receive (open) or to return to the shop floor
         (previously received)
-        options: mode (open|received), exclude_linked, exclude_incomplete"""
+        options: mode (open|received), exclude_linked, exclude_incomplete,
+        created_after (date)"""
         cls._check_read('production', 'stock.move')
         Production = Pool().get('production')
         options = options or {}
@@ -485,6 +507,9 @@ class DeskShopfloor(metaclass=PoolMeta):
                 ('outputs.state', '=', 'done')]
         else:
             domain = [('state', 'in', list(OPEN_STATES))]
+        if options.get('created_after'):
+            domain.append(('create_date', '>=', dt.datetime.combine(
+                        cls._date(options['created_after']), dt.time())))
         productions = Production.search(domain,
             order=[('planned_date', 'ASC'), ('id', 'ASC')], limit=500)
         rows, locations, products = [], set(), set()
@@ -512,6 +537,7 @@ class DeskShopfloor(metaclass=PoolMeta):
             location = outputs[0].to_location if outputs else (
                 production.warehouse.storage_location)
             remaining = max((production.quantity or 0) - received, 0)
+            bom = production.bom
             rows.append({
                     'id': production.id,
                     'number': production.number or str(production.id),
@@ -535,6 +561,18 @@ class DeskShopfloor(metaclass=PoolMeta):
                     and received > 0,
                     'tracked': False,
                     'origin': origin.rec_name if origin else '',
+                    'want_date': iso(getattr(production,
+                            'desired_want_date', None)
+                        or production.planned_date),
+                    'finish_date': iso(getattr(production,
+                            'scheduled_finish', None)
+                        or production.planned_date),
+                    'linked_received': min(linked, received)
+                    if linked else 0.0,
+                    'return_available': received
+                    if production.state == 'running' else 0.0,
+                    'revision': (getattr(bom, 'revision', None) or '')
+                    if bom else '',
                     })
             locations.add(location.id)
             products.add(production.product.id)
@@ -772,6 +810,38 @@ class DeskShopfloor(metaclass=PoolMeta):
             return 'quote'
         return 'engineering'
 
+    @staticmethod
+    def _operation_columns(record):
+        "The Where Used columns of an operation (master step or work)"
+        def get(name):
+            return getattr(record, name, None)
+
+        def hours(name):
+            value = get(name)
+            return round(value.total_seconds() / 3600, 4)                 if isinstance(value, dt.timedelta) else value
+        setup = hours('setup_duration')
+        if setup is None:
+            setup = get('setup_hours')
+        return {
+            'preserved': bool(get('preserved')),
+            'setup_hours': setup,
+            'run': get('run') if get('run') is not None
+            else hours('run_duration'),
+            'run_type': get('run_type') or '',
+            'load_size': get('load_size'),
+            'move_hours': get('move_hours'),
+            'minimum_move_qty': get('minimum_move_qty'),
+            'scrap_percent': get('scrap_percent'),
+            'scrap_yield': get('scrap_yield') or '',
+            'fixed_scrap': get('fixed_scrap'),
+            'drawing_id': get('drawing_number') or '',
+            'drawing_rev': get('drawing_revision') or '',
+            'drawing_page': get('drawing_page') or '',
+            'drawing_file': get('drawing_file') or '',
+            'description': get('description') or (record.operation.rec_name
+                if get('operation') else ''),
+            }
+
     @classmethod
     def sf_resource_where_used(cls, center, options=None):
         """The quote masters, engineering masters and work orders that use a
@@ -789,19 +859,27 @@ class DeskShopfloor(metaclass=PoolMeta):
             if not options.get('quotes' if kind == 'quote' else 'masters',
                     True):
                 continue
-            rows.append({
+            boms = list(step.routing.boms)
+            row = cls._operation_columns(step)
+            row.update({
                     'type': 'Quote Master' if kind == 'quote'
                     else 'Engineering Master',
                     'id': step.routing.id,
                     'model': 'production.routing',
                     'document': ', '.join(b.rec_name
-                        for b in step.routing.boms) or step.routing.rec_name,
+                        for b in boms) or step.routing.rec_name,
                     'part': ', '.join(o.product.rec_name
-                        for b in step.routing.boms for o in b.outputs),
+                        for b in boms for o in b.outputs),
+                    'created': iso(step.routing.create_date),
+                    'engineered': iso(getattr(boms[0], 'engineered_date',
+                            None)) if boms else None,
+                    'sub': 0,
                     'seq': step.sequence,
                     'operation': step.operation.rec_name,
                     'status': '',
+                    'op_status': '',
                     })
+            rows.append(row)
         if options.get('work_orders', True):
             for work in Work.search([
                         ('work_center', '=', center.id),
@@ -809,19 +887,28 @@ class DeskShopfloor(metaclass=PoolMeta):
                         ], order=[('production', 'DESC'),
                         ('sequence', 'ASC')], limit=500):
                 production = work.production
-                rows.append({
+                row = cls._operation_columns(work)
+                row.update({
                         'type': 'Work Order',
                         'id': production.id,
                         'model': 'production',
                         'document': production.number or str(production.id),
                         'part': production.product.rec_name
                         if production.product else '',
+                        'created': iso(production.create_date),
+                        'engineered': iso(getattr(production,
+                                'engineered_date', None)),
+                        'sub': cls._sub(production),
                         'seq': work.sequence,
                         'operation': work.rec_name,
                         'status': WO_STATUS.get(production.state,
                             production.state),
+                        'op_status': 'Closed' if work.operation_closed
+                        else WO_STATUS.get(production.state, ''),
                         })
-        return {'resource': center.name, 'rows': rows}
+                rows.append(row)
+        return {'resource': center.name,
+            'description': center.description or '', 'rows': rows}
 
     # The resource's costs -> the operation card's (engineering area)
     OPERATION_COSTS = {
@@ -837,10 +924,14 @@ class DeskShopfloor(metaclass=PoolMeta):
         }
 
     @classmethod
-    def _reset_costs(cls, Model, records, center_of):
-        "Copy the resource's costs to the operations; the number changed"
+    def _reset_costs(cls, Model, records, center_of, costs=True,
+            description=False):
+        """Copy the resource's costs (and description) to the operations;
+        the number changed"""
         fields_ = {k: v for k, v in cls.OPERATION_COSTS.items()
-            if v in Model._fields}
+            if v in Model._fields} if costs else {}
+        if description and 'description' in Model._fields:
+            fields_['description'] = 'description'
         changed = []
         for record in records:
             center = center_of(record)
@@ -857,7 +948,7 @@ class DeskShopfloor(metaclass=PoolMeta):
             if dirty:
                 changed.append(record)
         Model.save(changed)
-        if hasattr(Model, 'reset_operation_costs'):
+        if costs and hasattr(Model, 'reset_operation_costs'):
             Model.reset_operation_costs(records)
         return len(changed) if fields_ else len(records)
 
@@ -867,9 +958,11 @@ class DeskShopfloor(metaclass=PoolMeta):
         (quote masters, engineering masters, work orders, by status, by
         creation date) take the resource's current costs, and the Tryton
         rate of the resource is its run cost plus run burden an hour
-        values: resource (none: all), quotes, masters, work_orders,
-        statuses (unreleased, firm, released, closed, cancelled),
-        from_date, to_date"""
+        values: resource (none: all), costs (default true), description,
+        quotes, masters, templates, work_orders, statuses (unreleased,
+        firm, released, closed, cancelled, all), from_date, to_date,
+        template (an operation template: only the operations made from
+        it)"""
         cls._check_write('production.work.center')
         pool = Pool()
         WorkCenter = pool.get('production.work.center')
@@ -897,13 +990,29 @@ class DeskShopfloor(metaclass=PoolMeta):
         if values.get('to_date'):
             to_date = dt.datetime.combine(cls._date(values['to_date'])
                 + dt.timedelta(days=1), dt.time())
-        works = steps = 0
+        works = steps = templates = 0
+        flags = {'costs': values.get('costs', True),
+            'description': bool(values.get('description'))}
+        template = values.get('template')
+        try:
+            Template = pool.get('nline.engineering.operation_template')
+        except KeyError:
+            # (the engineering area's module is not installed)
+            Template = None
+        if values.get('templates') and Template:
+            domain = [('resource', 'in', ids)]
+            if template:
+                domain.append(('id', '=', template))
+            templates = cls._reset_costs(Template, Template.search(domain),
+                lambda t: t.resource, **flags)
         if values.get('work_orders', True):
             domain = [('work_center', 'in', ids)]
             states = set()
             for status in values.get('statuses') or []:
                 states |= JS_STATUS.get(status, set())
-            if states:
+            if 'all' in (values.get('statuses') or []):
+                pass
+            elif states:
                 domain.append(('production.state', 'in', list(states)))
             else:
                 # A closed work order keeps the costs it was made with
@@ -913,9 +1022,11 @@ class DeskShopfloor(metaclass=PoolMeta):
                 domain.append(('production.create_date', '>=', from_date))
             if to_date:
                 domain.append(('production.create_date', '<', to_date))
+            if template and 'template' in Work._fields:
+                domain.append(('template', '=', template))
             records = Work.search(domain)
             works = cls._reset_costs(Work, records,
-                lambda w: w.work_center)
+                lambda w: w.work_center, **flags)
         kinds = set()
         if values.get('masters', True):
             kinds.add('engineering')
@@ -926,7 +1037,9 @@ class DeskShopfloor(metaclass=PoolMeta):
             records = [s for s in cls._master_steps(centers)
                 if cls._master_type(s) in kinds
                 and (not from_date or s.routing.create_date >= from_date)
-                and (not to_date or s.routing.create_date < to_date)]
+                and (not to_date or s.routing.create_date < to_date)
+                and (not template or getattr(getattr(s, 'template', None),
+                        'id', None) == template)]
 
             def center_of(step):
                 resource = getattr(step, 'resource', None)
@@ -934,8 +1047,9 @@ class DeskShopfloor(metaclass=PoolMeta):
                     return resource
                 category = step.operation.work_center_category
                 return by_category.get(category.id) if category else None
-            steps = cls._reset_costs(Step, records, center_of)
-        return {'resources': updated, 'work_orders': works, 'masters': steps}
+            steps = cls._reset_costs(Step, records, center_of, **flags)
+        return {'resources': updated, 'work_orders': works, 'masters': steps,
+            'templates': templates}
 
     # ---- Employees ----------------------------------------------------------
 
@@ -967,7 +1081,7 @@ class DeskShopfloor(metaclass=PoolMeta):
         rows = []
         for employee in employees:
             row = {'id': employee.id, 'name': employee.party.name,
-                'party': employee.party.id,
+                'party': employee.party.id, 'phone': employee.phone,
                 'has_labor': employee.id in with_labor}
             for name in cls.EMPLOYEE_FIELDS:
                 row[name] = getattr(employee, name)
@@ -1072,9 +1186,20 @@ class DeskShopfloor(metaclass=PoolMeta):
             'works': works,
             }
 
+    @staticmethod
+    def _estimated_hours(work):
+        "The operation's estimated hours: setup + run per unit x quantity"
+        def hours(value):
+            return value.total_seconds() / 3600                 if isinstance(value, dt.timedelta) else 0
+        setup = hours(getattr(work, 'setup_duration', None))
+        run = hours(getattr(work, 'run_duration', None)) * (
+            work.operation_quantity or 0)
+        return round(setup + run, 2) if setup or run else None
+
     @classmethod
     def _ticket_row(cls, ticket):
         production = ticket.production
+        work = ticket.work
         return {
             'id': ticket.id,
             'state': ticket.state,
@@ -1083,7 +1208,13 @@ class DeskShopfloor(metaclass=PoolMeta):
             'name': ticket.employee.party.name if ticket.employee else '',
             'shift_no': ticket.shift_no,
             'shift_type': ticket.shift_type,
+            'pay_rate': ticket.pay_rate,
             'type': ticket.type,
+            'est_hours': cls._estimated_hours(work) if work else None,
+            'total_hours': round((work.setup_hours or 0)
+                + (work.run_hours or 0), 2) if work else None,
+            'instructions': work.work_center.special_instructions
+            if work and work.work_center else None,
             'production': production.id if production else None,
             'number': (production.number or str(production.id))
             if production else '',
@@ -1145,6 +1276,8 @@ class DeskShopfloor(metaclass=PoolMeta):
         for name in ['shift_type', 'type']:
             if values.get(name):
                 setattr(ticket, name, values[name])
+        if 'pay_rate' in values:
+            ticket.pay_rate = values['pay_rate'] or None
         if values.get('shift_no') not in (None, ''):
             ticket.shift_no = int(values['shift_no'])
         if 'resource' in values:
@@ -1513,3 +1646,202 @@ class DeskShopfloor(metaclass=PoolMeta):
         return {'id': time.id, 'clock_in': cls._local(time.clock_in),
             'clock_out': cls._local(time.clock_out),
             'hours': time.hours_worked}
+
+    # ---- Time and Attendance -------------------------------------------------
+
+    @classmethod
+    def _shift_times(cls, employee, shift_no, day):
+        """Jobshop's Shift Start / Shift End of an employee's day: from the
+        employee's weekly calendar, else the shop's"""
+        Week = Pool().get('nline.js.calendar.week')
+        if not day:
+            return None, None
+        # Jobshop's DAY_OF_WEEK: 0 = Saturday; Python's weekday: 0 = Monday
+        js_day = str((day.weekday() + 2) % 7)
+        rows = Week.search([
+                ('employee', '=', employee.id),
+                ('day_of_week', '=', js_day),
+                ], limit=1) or Week.search([
+                ('employee', '=', None),
+                ('resource', '=', None),
+                ('day_of_week', '=', js_day),
+                ], limit=1)
+        if not rows or not rows[0].start_of_day:
+            return None, None
+        row = rows[0]
+        shift = shift_no if shift_no in (1, 2, 3) else 1
+        start = dt.datetime.combine(day, row.start_of_day)
+        for i in range(1, shift):
+            start += dt.timedelta(hours=getattr(row, 'shift_%d' % i) or 0)
+        hours = getattr(row, 'shift_%d' % shift) or 0
+        if not hours:
+            return None, None
+        end = start + dt.timedelta(hours=hours)
+        return start.strftime('%H:%M'), end.strftime('%H:%M')
+
+    @classmethod
+    def _attendance_row(cls, time, labor=None):
+        employee = time.employee
+        local_in = cls._local(time.clock_in)
+        day = dt.date.fromisoformat(local_in[:10]) if local_in else None
+        start, end = cls._shift_times(employee, time.shift_no, day)
+        return {
+            'id': time.id,
+            'employee': employee.id,
+            'clock_no': employee.clock_no or '',
+            'name': employee.party.name,
+            'title': employee.title or '',
+            'shift_no': time.shift_no,
+            'shift_start': start,
+            'shift_end': end,
+            'clock_in': local_in,
+            'clock_out': cls._local(time.clock_out),
+            'transaction_date': iso(time.transaction_date),
+            'in_reason_code': time.in_reason_code.id
+            if time.in_reason_code else None,
+            'in_reason': time.in_reason_code.rec_name
+            if time.in_reason_code else '',
+            'out_reason_code': time.out_reason_code.id
+            if time.out_reason_code else None,
+            'out_reason': time.out_reason_code.rec_name
+            if time.out_reason_code else '',
+            'hours': time.hours_worked,
+            'labor_hours': labor,
+            'approved': bool(time.approved),
+            'approved_by': time.approved_by.rec_name
+            if time.approved_by else '',
+            'approved_date': cls._local(time.approved_date),
+            'exported': bool(time.exported),
+            'exported_date': iso(time.exported_date),
+            'notes': time.notes or '',
+            'has_notes': bool(time.notes),
+            }
+
+    @classmethod
+    def sf_attendance(cls, options=None):
+        """Time and Attendance (and an employee's Attendance History): the
+        clock in / clock out tickets
+        options: show (30, 60, 90, 120, 180 days | not_approved | all),
+        employee, labor_hours (add the labor reported in the ticket)"""
+        cls._check_read('nline.js.employee_time')
+        pool = Pool()
+        Time = pool.get('nline.js.employee_time')
+        Ticket = pool.get('nline.js.labor_ticket')
+        options = options or {}
+        domain = [('employee.company', '=',
+                Transaction().context.get('company'))]
+        show = str(options.get('show') or '30')
+        if show == 'not_approved':
+            domain += [('approved', '=', False), ('clock_out', '!=', None)]
+        elif show.isdigit():
+            domain.append(('clock_in', '>=', dt.datetime.now()
+                    - dt.timedelta(days=int(show))))
+        if options.get('employee'):
+            domain.append(('employee', '=', options['employee']))
+        rows = []
+        for time in Time.search(domain, limit=options.get('limit') or 1000):
+            labor = None
+            if options.get('labor_hours') and time.clock_out:
+                labor = round(sum(t.hours_worked or 0 for t in Ticket.search([
+                                ('employee', '=', time.employee.id),
+                                ('state', '=', 'saved'),
+                                ('clock_in', '<', time.clock_out),
+                                ('clock_out', '>', time.clock_in),
+                                ])), 2)
+            rows.append(cls._attendance_row(time, labor))
+        return rows
+
+    @classmethod
+    def sf_attendance_save(cls, values):
+        """Employee Clock In/Clock Out (File menu) and Tools > Edit Ticket:
+        a new ticket (no id) or a changed one
+        values: id, employee, shift_no, clock_in, clock_out, in_reason_code,
+        out_reason_code, approved, exported, notes"""
+        pool = Pool()
+        Time = pool.get('nline.js.employee_time')
+        Employee = pool.get('company.employee')
+        Reason = pool.get('nline.reason_code')
+        if values.get('id'):
+            cls._check_write('nline.js.employee_time')
+            time = Time(values['id'])
+        else:
+            cls._check_create('nline.js.employee_time')
+            time = Time(employee=Employee(values['employee']))
+        if values.get('employee'):
+            time.employee = Employee(values['employee'])
+        if 'shift_no' in values:
+            time.shift_no = int(values['shift_no']) \
+                if values['shift_no'] not in (None, '') else \
+                time.employee.shift_no
+        for name in ['clock_in', 'clock_out']:
+            if name in values:
+                setattr(time, name, cls._to_utc(values[name]))
+        if not getattr(time, 'clock_in', None):
+            time.clock_in = dt.datetime.now()
+        for name in ['in_reason_code', 'out_reason_code']:
+            if name in values:
+                setattr(time, name, Reason(values[name])
+                    if values[name] else None)
+        if 'notes' in values:
+            time.notes = values['notes'] or None
+        if 'exported' in values:
+            exported = bool(values['exported'])
+            if exported and not getattr(time, 'exported', False):
+                time.exported_date = pool.get('ir.date').today()
+            elif not exported:
+                time.exported_date = None
+            time.exported = exported
+        time.save()
+        if values.get('approved') and not time.approved:
+            Time.approve([time])
+        elif 'approved' in values and not values['approved'] \
+                and time.approved:
+            Time.write([time], {'approved': False, 'approved_by': None,
+                    'approved_date': None})
+        return cls._attendance_row(Time(time.id))
+
+    @classmethod
+    def sf_attendance_approve(cls, ids):
+        "Tools > Approve Ticket(s): the complete tickets among ids"
+        cls._check_write('nline.js.employee_time')
+        Time = Pool().get('nline.js.employee_time')
+        Time.approve(Time.browse(ids or []))
+        return [cls._attendance_row(t) for t in Time.browse(ids or [])]
+
+    @classmethod
+    def sf_who_is_in(cls):
+        """Tools > Who is In/Out: every active employee, In when clocked in
+        and not out, with today's ticket"""
+        cls._check_read('company.employee', 'nline.js.employee_time')
+        pool = Pool()
+        Employee = pool.get('company.employee')
+        Time = pool.get('nline.js.employee_time')
+        company = Transaction().context.get('company')
+        today = pool.get('ir.date').today()
+        rows = []
+        for employee in Employee.search([
+                    ('company', '=', company),
+                    ('inactive', '=', False),
+                    ], order=[('clock_no', 'ASC NULLS LAST'), ('id', 'ASC')]):
+            times = Time.search([('employee', '=', employee.id)],
+                order=[('clock_in', 'DESC')], limit=1)
+            time = times[0] if times else None
+            local_in = cls._local(time.clock_in) if time else None
+            if time and time.clock_out and \
+                    local_in[:10] != today.isoformat():
+                # Out since an earlier day: no ticket today
+                time = local_in = None
+            start, _ = cls._shift_times(employee, employee.shift_no, today)
+            rows.append({
+                    'employee': employee.id,
+                    'status': 'In' if time and not time.clock_out else 'Out',
+                    'absence': time.in_reason_code.rec_name
+                    if time and time.in_reason_code else '',
+                    'clock_no': employee.clock_no or '',
+                    'name': employee.party.name,
+                    'shift_no': employee.shift_no,
+                    'shift_start': start,
+                    'clock_in': local_in,
+                    'clock_out': cls._local(time.clock_out) if time else None,
+                    })
+        return rows

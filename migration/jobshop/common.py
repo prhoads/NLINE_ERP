@@ -216,9 +216,9 @@ def states(m, subdivisions):
 
 def postal_codes(m, by_code, subdivisions):
     PostalCode = m.get('country.postal_code')
-    existing = {(p.postal_code, (p.city or '').upper(), p.country.id)
+    existing = {(p.postal_code, (p.city or '').upper(), p.country.id): p
         for p in PostalCode.find([])}
-    made, skipped = [], 0
+    made, skipped, filled = [], 0, []
     for row in m.js.rows('select * from SHARED_POSTAL_CODE order by ID'):
         code = one_line(row['ID'])
         name = one_line(row.get('COUNTRY')).upper()
@@ -230,18 +230,26 @@ def postal_codes(m, by_code, subdivisions):
             continue
         city = one_line(row.get('CITY')) or None
         key = (code, (city or '').upper(), country.id)
-        if key in existing:
-            continue
-        existing.add(key)
         subdivision = find_subdivision(subdivisions, row.get('STATE'),
             [iso])
+        if key in existing:
+            # (made before the subdivisions were in the ERP: their State
+            # was left blank; fill it in now)
+            p = existing[key]
+            if p is not None and subdivision and not p.subdivision:
+                p.subdivision = subdivision
+                filled.append(p)
+            continue
+        existing[key] = None
         made.append(PostalCode(postal_code=code, city=city, country=country,
                 subdivision=subdivision))
     if made:
         PostalCode.save(made)
+    if filled:
+        PostalCode.save(filled)
     m.count('postal codes', len(made))
-    log("postal codes: %s made, %s without a known country" % (
-            len(made), skipped))
+    log("postal codes: %s made, %s states filled in, %s without a known "
+        "country" % (len(made), len(filled), skipped))
 
 
 def currencies(m):

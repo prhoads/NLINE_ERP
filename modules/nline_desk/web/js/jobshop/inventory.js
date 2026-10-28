@@ -32,6 +32,9 @@
         }
         document.head.appendChild(el('style', {id: 'nl-js-inventory-css'},
             '.nl-inv-wide.modal { max-width: 1100px; }' +
+            'td.nl-inv-nowrap { white-space: nowrap; }' +
+            '.nl-inv-browse td:first-child, .nl-inv-browse td:nth-child(8)' +
+            ' { white-space: nowrap; }' +
             '.nl-inv-wide .modal-body { max-height: 70vh; overflow: auto; }' +
             '.nl-inv-grid td.marker { width: 22px; text-align: center;' +
             ' color: var(--muted); cursor: pointer; user-select: none; }' +
@@ -96,6 +99,12 @@
     /* A read-only table: columns [{key, label, num, money, date, bool,
      * render(row)}], rows; options {ondblclick(row), oncontextmenu(event,
      * row), empty, total: [keys]} */
+    /* An ID column (Work ID, Part ID, Drawing ID, Tracking No...): kept on
+     * one line, as Jobshop's grids do */
+    function idColumn(c) {
+        return c.nowrap || /(^|\s)(ID|No|Number)$/.test(c.label || '');
+    }
+
     function dataTable(columns, rows, options) {
         options = options || {};
         var body = el('tbody');
@@ -113,7 +122,8 @@
                 if (v && v.nodeType) {
                     return el('td', v);
                 }
-                return el('td' + (c.num || c.money ? '.num' : ''),
+                return el('td' + (c.num || c.money ? '.num' : '') +
+                    (idColumn(c) ? '.nl-inv-nowrap' : ''),
                     c.money ? (v === null || v === undefined ? '' :
                         UI.money(v)) : c.date ? UI.date(v) : c.bool ?
                         (v ? '✔' : '') : c.num ? num(v) : text(v));
@@ -264,9 +274,13 @@
         } else if (kind === 'purchase') {
             UI.openScreen('purchase-orders/' + id, 'PO ' + number);
         } else if (kind === 'production') {
-            UI.openScreen('workorders/' + id, 'WO ' + number);
+            UI.openScreen('work-orders/' + id, 'WO ' + number);
         } else if (kind === 'production.bom') {
             UI.openScreen('masters/' + id, number);
+        } else if (kind === 'quote') {
+            UI.openScreen('quotes/' + id, 'Quote ' + number);
+        } else if (kind === 'rfq') {
+            UI.openScreen('rfqs/' + id, 'RFQ ' + number);
         }
     }
 
@@ -275,48 +289,78 @@
     function screens() {
         if (!screensPrm) {
             screensPrm = Promise.all(['orders', 'purchase-orders',
-                'workorders', 'masters', 'parts'].map(UI.screenAllowed))
-                .then(function (r) {
+                'work-orders', 'masters', 'parts', 'quotes', 'rfqs',
+                'customer-window', 'supplier-window'].map(function (r) {
+                    return Promise.resolve(UI.screenAllowed(r)).catch(
+                        function () {
+                            return false;
+                        });
+                })).then(function (r) {
                     return {sale: r[0], purchase: r[1], production: r[2],
-                        'production.bom': r[3], parts: r[4]};
+                        'production.bom': r[3], masters: r[3], parts: r[4],
+                        quote: r[5], rfq: r[6], customer: r[7],
+                        supplier: r[8]};
                 });
         }
         return screensPrm;
     }
 
-    /* View > Where Used: the masters and work orders using the part */
+    /* View > Where Used (PartWhereUsed.txt): the masters and work
+     * orders using the part, Include Document Type check boxes */
     function whereUsed(templateId) {
         partDialog('Part Where Used', templateId, function (pane, id) {
-            var masters = el('input', {type: 'checkbox', checked: true,
-                id: 'nl-wu-m'});
-            var orders = el('input', {type: 'checkbox', checked: true,
-                id: 'nl-wu-w'});
+            function box(label, checked) {
+                var input = el('input', {type: 'checkbox'});
+                input.checked = checked;
+                return el('label', input, ' ' + label);
+            }
+            var masters = box('Engineering Master', true);
+            var orders = box('Work Order', true);
+            var quotes = box('Quote Master', false);
             var result = el('div');
             function load() {
                 Promise.all([Rpc.desk('part_where_used', [id,
-                    masters.checked, orders.checked]), screens()]).then(
+                    masters.firstChild.checked, orders.firstChild.checked,
+                    quotes.firstChild.checked]), screens()]).then(
                     function (r) {
                         UI.clear(result).appendChild(dataTable([
-                            {key: 'type', label: 'Doc Type'},
+                            {key: 'inactive', label: 'Inactive', bool: true},
+                            {key: 'preserved', label: 'Preserved',
+                                bool: true},
+                            {key: 'created', label: 'Doc Creation Date',
+                                date: true},
+                            {key: 'type', label: 'Document Type'},
                             {key: 'document', label: 'Document ID'},
-                            {key: 'part', label: 'Part'},
-                            {key: 'revision', label: 'Rev'},
+                            {key: 'status', label: 'Document Status'},
+                            {key: 'part', label: 'Document Part ID'},
+                            {key: 'description', label:
+                                'Document Description'},
+                            {key: 'sub_id', label: 'Sub ID'},
                             {key: 'operation', label: 'Seq No', num: true},
                             {key: 'piece', label: 'Piece No', num: true},
+                            {key: 'material_status', label: 'Mat Status'},
+                            {key: 'revision', label: 'Eng Rev'},
+                            {key: 'material_description', label:
+                                'Material Description'},
                             {key: 'quantity', label: 'Qty Per', num: true},
                             {key: 'unit', label: 'Usage U/M'},
-                            {key: 'status', label: 'Status'}], r[0], {
-                                ondblclick: function (row) {
-                                    openDocument(row.model, row.id,
-                                        row.document, r[1][row.model]);
-                                }}));
+                            {key: 'mfg_part_id', label: 'Mfg Part Id'},
+                            {key: 'mfg_name', label: 'Mfg Name'},
+                            {key: 'drawing', label: 'Drawing ID'},
+                            {key: 'drawing_rev', label: 'Drawing Rev'},
+                            {key: 'drawing_file', label: 'Drawing File'}],
+                            r[0], {ondblclick: function (row) {
+                                openDocument(row.model, row.id,
+                                    row.document, r[1][row.model]);
+                            }, empty: 'The part is not used.'}));
                     }, failed);
             }
-            masters.addEventListener('change', load);
-            orders.addEventListener('change', load);
-            pane.appendChild(el('div.toolbar', masters, el('label',
-                {for: 'nl-wu-m'}, 'Eng Masters'), orders, el('label',
-                {for: 'nl-wu-w'}, 'Work Orders')));
+            [masters, orders, quotes].forEach(function (b) {
+                b.firstChild.addEventListener('change', load);
+            });
+            pane.appendChild(el('fieldset', el('legend',
+                'Include Document Type'), masters, ' ', orders, ' ',
+                quotes));
             pane.appendChild(result);
             load();
         });
@@ -375,8 +419,28 @@
         });
     }
 
-    /* View > Supply & Demand: sales orders, work orders, purchase orders */
+    /* View > Supply & Demand: Planning's dialog (the one kept, built on
+     * Jobshop's layout; it takes the part's variant), else this one */
     function supplyDemand(templateId) {
+        var planning = global.JobshopPlanning;
+        if (planning && planning.supplyDemand) {
+            if (!templateId) {
+                planning.supplyDemand(null);
+                return;
+            }
+            Rpc.model('product.template', 'read', [[templateId],
+                ['products']]).then(function (rows) {
+                    var products = rows[0] ? rows[0].products : [];
+                    planning.supplyDemand(products.length ? products[0] :
+                        null);
+                }, failed);
+            return;
+        }
+        ownSupplyDemand(templateId);
+    }
+
+    /* The fallback when the planning screens are not loaded */
+    function ownSupplyDemand(templateId) {
         partDialog('Supply & Demand', templateId, function (pane, id) {
             Promise.all([Rpc.desk('part_supply_demand', [id]), screens()])
                 .then(function (r) {
@@ -517,7 +581,73 @@
             }}]);
     }
 
+    /* Material Availability of a work order (N-LineAvailability.txt,
+     * N-Line's own layout of Jobshop's dialog): Release Date, Refresh,
+     * the materials of the order and its legs (Level No) */
+    function workOrderAvailability(productionId) {
+        var release = el('input', {type: 'date', 'aria-label':
+            'Release Date'});
+        var box = el('div');
+        var title = el('span');
+        function load() {
+            Rpc.desk('wo_material_availability', [productionId,
+                release.value || null, true]).then(function (data) {
+                    if (!release.value && data.release_date) {
+                        release.value = String(data.release_date).slice(0, 10);
+                    }
+                    title.textContent = 'Material Availability for ' +
+                        data.work_order + ' ' + data.part;
+                    UI.clear(box).appendChild(dataTable([
+                        {key: 'level', label: 'Level No', num: true},
+                        {key: 'part_code', label: 'Part ID'},
+                        {key: 'sub_id', label: 'Sub ID'},
+                        {key: 'operation', label: 'Seq No', num: true},
+                        {key: 'piece', label: 'Piece No', num: true},
+                        {key: 'eng_master', label: 'Eng Master Revision'},
+                        {key: 'description', label: 'Description'},
+                        {key: 'status', label: 'Material Status'},
+                        {key: 'required_date', label: 'Schedule Req\'d Date',
+                            date: true},
+                        {key: 'order_plan', label: 'Order Plan'},
+                        {key: 'work_order', label: 'Work Order'},
+                        {key: 'required', label: 'Qty Req\'d', num: true},
+                        {key: 'issued', label: 'Qty Issued', num: true},
+                        {key: 'due', label: 'Qty Due', num: true},
+                        {key: 'projected', label: 'Projected Available',
+                            num: true},
+                        {key: 'short', label: '(Proj - Qty Due)', render:
+                            function (row) {
+                                return el('span' + (row.short < 0 ?
+                                    '.nl-inv-bad' : ''), num(row.short));
+                            }},
+                        {key: 'lead_time', label: 'Lead Time', num: true},
+                        {key: 'product_code', label: 'Product Code'},
+                        {key: 'commodity_code', label: 'Commodity Code'},
+                        {key: 'supplier', label: 'Pref Supplier ID'}],
+                        data.rows, {empty: 'No materials.',
+                            oncontextmenu: function (event, row) {
+                                UI.contextMenu(event, [
+                                    {label: 'Open Supply and Demand...',
+                                        onclick: function () {
+                                            supplyDemand(row.template);
+                                        }},
+                                    {label: 'Open Part...', onclick:
+                                        function () {
+                                            UI.openScreen('parts/' +
+                                                row.template, row.part_code);
+                                        }}]);
+                            }}));
+                }, failed);
+        }
+        wideModal('Material Availability', [el('h3', title),
+            el('div.toolbar', el('label', 'Release Date ', release),
+                el('button', {type: 'button', onclick: load}, 'Refresh')),
+            box]);
+        load();
+    }
+
     global.JobshopInventory = {
+        workOrderAvailability: workOrderAvailability,
         whereUsed: whereUsed,
         inventoryTxs: inventoryTxs,
         inventoryPieces: inventoryPieces,
@@ -528,110 +658,332 @@
 
     /* ---- Parts window ---------------------------------------------------- */
 
-    var STATUS_CHOICES = {
-        sale: [['unreleased', 'Unreleased'], ['firm', 'Firm'],
-            ['released', 'Released'], ['closed', 'Closed'],
-            ['cancelled', 'Cancelled']],
-        purchase: [['unreleased', 'Unreleased'], ['firm', 'Firm'],
-            ['released', 'Released'], ['closed', 'Closed'],
-            ['cancelled', 'Cancelled']],
-        production: [['unreleased', 'Unreleased'], ['released', 'Released'],
-            ['closed', 'Closed'], ['cancelled', 'Cancelled']]
-    };
-
-    var ORDER_COLUMNS = {
+    /* The columns of the Part window's document tabs (PartSubTabs.txt) */
+    var LINE_COLUMNS = {
+        quote: [
+            {key: 'number', label: 'Quote ID'},
+            {key: 'party', label: 'Customer ID', title: 'party_name'},
+            {key: 'date', label: 'Quote Date', date: true},
+            {key: 'status', label: 'Quote Status'},
+            {key: 'sales_rep', label: 'Sales Rep ID'},
+            {key: 'sequence', label: 'Line No', num: true},
+            {key: 'quantity', label: 'Quoted Qty', num: true},
+            {key: 'unit', label: 'U/M'},
+            {key: 'unit_price', label: 'Unit Price', money: true},
+            {key: 'discount', label: 'Discount Percent', num: true},
+            {key: 'multiple', label: 'Multiple Qtys', bool: true},
+            {key: 'customer_part', label: 'Customer Part ID'},
+            {key: 'product_code', label: 'Product Code'},
+            {key: 'commodity_code', label: 'Commodity Code'},
+            {key: 'drawing', label: 'Drawing ID'},
+            {key: 'drawing_rev', label: 'Rev'},
+            {key: 'eng_master', label: 'Eng Master Revision'}],
         sale: [
             {key: 'linked', label: 'Linked', bool: true},
             {key: 'number', label: 'Sales ID'},
-            {key: 'party', label: 'Customer ID'},
+            {key: 'party', label: 'Customer ID', title: 'party_name'},
+            {key: 'date', label: 'Order Date', date: true},
             {key: 'status', label: 'Order Status'},
+            {key: 'sales_rep', label: 'Sales Rep ID'},
+            {key: 'reference', label: 'Customer PO Number'},
+            {key: 'po_line', label: 'PO Line No'},
             {key: 'sequence', label: 'Line No', num: true},
             {key: 'line_status', label: 'Line Status'},
+            {key: 'desired_date', label: 'Desired Ship Date', date: true},
             {key: 'quantity', label: 'Order Qty', num: true},
             {key: 'shipped', label: 'Shipped Qty', num: true},
             {key: 'unit', label: 'U/M'},
             {key: 'unit_price', label: 'Unit Price', money: true},
+            {key: 'discount', label: 'Discount Percent', num: true},
             {key: 'amount', label: 'Order Amount', money: true},
             {key: 'shipped_amount', label: 'Shipped Amount', money: true},
-            {key: 'date', label: 'Ship Date', date: true},
-            {key: 'reference', label: 'Customer PO'}],
+            {key: 'last_shipped', label: 'Last Shipped Date', date: true},
+            {key: 'customer_part', label: 'Customer Part ID'},
+            {key: 'product_code', label: 'Product Code'},
+            {key: 'commodity_code', label: 'Commodity Code'},
+            {key: 'drawing', label: 'Drawing ID'},
+            {key: 'drawing_rev', label: 'Rev'},
+            {key: 'eng_master', label: 'Eng Master Revision'}],
+        rfq: [
+            {key: 'number', label: 'RFQ ID'},
+            {key: 'date', label: 'RFQ Date', date: true},
+            {key: 'status', label: 'RFQ Status'},
+            {key: 'sequence', label: 'Line No', num: true},
+            {key: 'quantity', label: 'Quote Qty', num: true},
+            {key: 'unit', label: 'Purchase U/M'}].concat([1, 2, 3].map(
+            function (n) {
+                return [
+                    {key: 'supplier_' + n, label: 'Supplier ID (' + n + ')'},
+                    {key: 'unit_price_' + n, label: 'Unit Price (' + n + ')',
+                        money: true},
+                    {key: 'trade_discount_' + n, label: 'Disc Percent (' + n +
+                        ')', num: true},
+                    {key: 'delivery_date_' + n, label: 'Delivery Date (' + n +
+                        ')', date: true},
+                    {key: 'lead_time_' + n, label: 'Lead Time (days) (' + n +
+                        ')', num: true}];
+            }).reduce(function (a, b) {
+                return a.concat(b);
+            }, [])).concat([
+            {key: 'multiple', label: 'Multiple Qtys', bool: true},
+            {key: 'product_code', label: 'Product Code'},
+            {key: 'commodity_code', label: 'Commodity Code'}]),
         purchase: [
             {key: 'linked', label: 'Linked', bool: true},
             {key: 'number', label: 'Purchase ID'},
-            {key: 'party', label: 'Supplier ID'},
+            {key: 'party', label: 'Supplier ID', title: 'party_name'},
+            {key: 'date', label: 'Order Date', date: true},
             {key: 'status', label: 'Order Status'},
             {key: 'buyer', label: 'Buyer'},
             {key: 'sequence', label: 'Line No', num: true},
+            {key: 'line_status', label: 'Line Status'},
+            {key: 'desired_date', label: 'Desired Receive Date', date: true},
             {key: 'quantity', label: 'Order Qty', num: true},
             {key: 'received', label: 'Received Qty', num: true},
             {key: 'unit', label: 'U/M'},
             {key: 'unit_price', label: 'Unit Price', money: true},
+            {key: 'discount', label: 'Discount Percent', num: true},
+            {key: 'fixed_charge', label: 'Fixed Charge', money: true},
             {key: 'amount', label: 'Order Amount', money: true},
-            {key: 'received_amount', label: 'Received Amount',
-                money: true},
-            {key: 'last_received', label: 'Last Received Date', date: true},
-            {key: 'date', label: 'Promise Date', date: true}],
+            {key: 'received_amount', label: 'Received Amount', money: true},
+            {key: 'last_received', label: 'Last Recv Date', date: true},
+            {key: 'promise_date', label: 'Promise Date', date: true},
+            {key: 'drawing', label: 'Drawing ID'},
+            {key: 'drawing_rev', label: 'Rev'},
+            {key: 'supplier_part', label: 'Supplier Part ID'},
+            {key: 'mfg_name', label: 'Mfg Name'},
+            {key: 'mfg_part_id', label: 'Mfg Part ID'},
+            {key: 'product_code', label: 'Product Code'},
+            {key: 'commodity_code', label: 'Commodity Code'}],
         production: [
             {key: 'number', label: 'Work ID'},
+            {key: 'lot', label: 'Lot ID'},
+            {key: 'split', label: 'Split ID'},
             {key: 'description', label: 'Description'},
+            {key: 'date', label: 'Desired Want Date', date: true},
+            {key: 'release_date', label: 'Desired Release Date', date: true},
             {key: 'status', label: 'Order Status'},
             {key: 'quantity', label: 'Desired Qty', num: true},
             {key: 'received', label: 'Received Qty', num: true},
-            {key: 'unit_cost', label: 'Projected Unit Cost', money: true},
-            {key: 'date', label: 'Desired Want Date', date: true},
+            {key: 'unit_cost', label: 'Total Unit Cost', money: true},
             {key: 'start', label: 'Schedule Start Date', date: true},
-            {key: 'finish', label: 'Schedule Finish Date', date: true}]
+            {key: 'finish', label: 'Schedule Finish Date', date: true},
+            {key: 'drawing', label: 'Drawing ID'},
+            {key: 'drawing_rev', label: 'Rev'},
+            {key: 'eng_master', label: 'Eng Master Revision'}]
     };
 
-    /* A tab of the part's orders; right-click changes the statuses shown
-     * (Released by default, as in Jobshop) */
-    function ordersTab(kind, allowed) {
-        var statuses = ['released'];
+    /* Jobshop's statuses of each document (the tabs' status menus) and
+     * the ones shown when the window opens */
+    var DOC_SETUP = {
+        quote: {statuses: [['active', 'Active'], ['ready', 'Ready'],
+            ['won', 'Won'], ['lost', 'Lost'], ['cancelled', 'Cancelled']],
+            default: ['active'], model: 'nline.quote.line'},
+        sale: {statuses: [['unreleased', 'Unreleased'], ['firm', 'Firm'],
+            ['released', 'Released'], ['closed', 'Closed'], ['hold', 'Hold'],
+            ['cancelled', 'Cancelled']], default: ['released'],
+            model: 'sale.line'},
+        rfq: {statuses: [['unreleased', 'Unreleased'], ['active', 'Active'],
+            ['closed', 'Closed'], ['cancelled', 'Cancelled']],
+            default: ['unreleased', 'active'], model: 'nline.rfq.line'},
+        purchase: {statuses: [['unreleased', 'Unreleased'],
+            ['unapproved', 'Unapproved'], ['firm', 'Firm'],
+            ['released', 'Released'], ['closed', 'Closed'], ['hold', 'Hold'],
+            ['cancelled', 'Cancelled']], default: ['released'],
+            model: 'purchase.line'},
+        production: {statuses: [['unreleased', 'Unreleased'],
+            ['firm', 'Firm'], ['released', 'Released'], ['closed', 'Closed'],
+            ['hold', 'Hold'], ['cancelled', 'Cancelled']],
+            default: ['released'], model: 'production'}
+    };
+
+    /* The right-click "View All ... by Status of" of each tab (Jobshop's
+     * popups) and the Tools item that opens the document */
+    var LINE_MENUS = {
+        quote: {view: 'View All Quote Lines for Part by Quote Status of',
+            open: 'Open Quote...', screen: 'quote'},
+        sale: {view: 'View All Order Lines for Part by Order Status of',
+            open: 'Open Sales Order...', screen: 'sale'},
+        rfq: {view: 'View All RFQ Lines for Part by RFQ Status of',
+            open: 'Open Request For Quote...', screen: 'rfq'},
+        purchase: {view: 'View All PO Lines for Part by Order Status of',
+            open: 'Open Purchase Order...', screen: 'purchase'},
+        production: {view: 'Work Orders by Status of',
+            open: 'Open Work Order...', screen: 'production'}
+    };
+
+    /* A tab of the part's documents: Jobshop's grid, the right-click menu
+     * choosing the status shown (one status or All) and opening the
+     * document; double-click opens it too */
+    function linesTab(kind, setup, allowed) {
+        var statuses = setup.default.slice();
+        var menu = LINE_MENUS[kind];
         return function render(pane, record) {
-            var label = STATUS_CHOICES[kind].filter(function (s) {
-                return statuses.indexOf(s[0]) >= 0;
-            }).map(function (s) {
-                return s[1];
-            }).join(', ');
-            function menu(event) {
-                UI.contextMenu(event, STATUS_CHOICES[kind].map(function (s) {
-                    var on = statuses.indexOf(s[0]) >= 0;
-                    return {label: (on ? '✔ ' : '    ') + s[1], onclick:
-                        function () {
-                            if (on) {
-                                statuses.splice(statuses.indexOf(s[0]), 1);
-                            } else {
-                                statuses.push(s[0]);
-                            }
-                            render(UI.clear(pane), record);
-                        }};
-                }).concat(['-', {label: 'All', onclick: function () {
-                    statuses = STATUS_CHOICES[kind].map(function (s) {
-                        return s[0];
-                    });
-                    render(UI.clear(pane), record);
-                }}]));
+            var shown = el('span.muted');
+            var selected = null;
+            function open(row) {
+                if (row && allowed[menu.screen]) {
+                    openDocument(menu.screen, row.id, row.number, true);
+                }
             }
-            pane.appendChild(el('div.toolbar', el('span.muted',
-                'Showing: ' + (label || 'nothing')), el('button', {type:
-                    'button', onclick: function (event) {
-                        menu(event);
-                    }}, 'Status...')));
-            Rpc.desk('part_orders', [record.id, kind, statuses]).then(
-                function (rows) {
-                    pane.appendChild(dataTable(ORDER_COLUMNS[kind], rows, {
-                        ondblclick: allowed ? function (row) {
-                            openDocument(kind, row.id, row.number, true);
-                        } : null,
-                        oncontextmenu: menu}));
-                    pane.lastChild.addEventListener('contextmenu',
-                        function (event) {
-                            if (!event.defaultPrevented) {
-                                menu(event);
+            function contextMenu(event, row) {
+                if (row) {
+                    selected = row;
+                }
+                var items = [{label: menu.view, items: [{label: 'All',
+                    checked: statuses[0] === 'all', onclick: function () {
+                        statuses = ['all'];
+                        load();
+                    }}].concat(setup.statuses.map(function (s) {
+                        return {label: s[1], checked: statuses.indexOf(
+                            s[0]) >= 0, onclick: function () {
+                                statuses = [s[0]];
+                                load();
+                            }};
+                    }))}];
+                if (allowed[menu.screen]) {
+                    items.push('-', {label: menu.open, disabled: !selected,
+                        onclick: function () {
+                            open(selected);
+                        }});
+                }
+                UI.contextMenu(event, items);
+            }
+            var box = el('div');
+            function load() {
+                shown.textContent = 'Showing: ' + (statuses[0] === 'all' ?
+                    'All' : setup.statuses.filter(function (s) {
+                        return statuses.indexOf(s[0]) >= 0;
+                    }).map(function (s) {
+                        return s[1];
+                    }).join(', ')) + ' (right-click to change)';
+                Rpc.desk('part_orders', [record.id, kind, statuses]).then(
+                    function (rows) {
+                        var table = dataTable(LINE_COLUMNS[kind], rows, {
+                            ondblclick: allowed[menu.screen] ? open : null,
+                            oncontextmenu: contextMenu,
+                            empty: 'No lines in this status.'});
+                        Array.prototype.forEach.call(table.querySelectorAll(
+                            'tbody tr'), function (tr, i) {
+                                tr.addEventListener('click', function () {
+                                    selected = rows[i];
+                                    Array.prototype.forEach.call(
+                                        tr.parentNode.children, function (t) {
+                                            t.classList.toggle('selected',
+                                                t === tr);
+                                        });
+                                });
+                            });
+                        table.addEventListener('contextmenu', function (e) {
+                            if (!e.defaultPrevented) {
+                                contextMenu(e, null);
                             }
                         });
-                }, failed);
+                        UI.clear(box).appendChild(table);
+                    }, failed);
+            }
+            pane.appendChild(el('div.toolbar', shown));
+            pane.appendChild(box);
+            load();
         };
+    }
+
+    function breakColumns(head) {
+        var columns = head.slice();
+        for (var i = 1; i <= 10; i++) {
+            columns.push({key: 'qty_' + i, label: 'Quantity Break ' + i,
+                num: true}, {key: 'price_' + i, label: 'Unit Price ' + i,
+                    money: true});
+        }
+        columns.push({key: 'default_price', label: 'Default Unit Price',
+            money: true});
+        return columns;
+    }
+
+    var PRICE_COLUMNS = {
+        supplier: breakColumns([
+            {key: 'party', label: 'Supplier ID'},
+            {key: 'party_name', label: 'Name'},
+            {key: 'code', label: 'Supplier Part ID'},
+            {key: 'mfg_name', label: 'Mfg Name'},
+            {key: 'mfg_part_id', label: 'Mfg Part ID'},
+            {key: 'unit', label: 'Purchase UM'},
+            {key: 'quote_type', label: 'Quote Type'},
+            {key: 'quote_date', label: 'Quote Date', date: true},
+            {key: 'expires', label: 'Quote Expires', date: true}]),
+        service: breakColumns([
+            {key: 'party', label: 'Supplier ID'},
+            {key: 'party_name', label: 'Name'},
+            {key: 'service', label: 'Service ID'},
+            {key: 'code', label: 'Supplier Service ID'},
+            {key: 'quote_type', label: 'Quote Type'},
+            {key: 'quote_date', label: 'Quote Date', date: true},
+            {key: 'expires', label: 'Quote Expires', date: true}]),
+        customer: breakColumns([
+            {key: 'party', label: 'Customer ID'},
+            {key: 'party_name', label: 'Name'},
+            {key: 'customer_part', label: 'Customer Part ID'},
+            {key: 'unit', label: 'Selling UM'},
+            {key: 'eng_master', label: 'Eng Master Revision'},
+            {key: 'quote_type', label: 'Quote Type'},
+            {key: 'quote_date', label: 'Quote Date', date: true},
+            {key: 'expires', label: 'Quote Expires', date: true}]),
+        discount: breakColumns([
+            {key: 'party', label: 'Discount Class ID'},
+            {key: 'party_name', label: 'Description'},
+            {key: 'unit', label: 'Selling UM'},
+            {key: 'quote_type', label: 'Quote Type'},
+            {key: 'expires', label: 'Quote Expires', date: true}])
+    };
+
+    /* A pricing tab; right-click: Open Supplier... / Open Customer...
+     * (PopupInventoryPartPrices) */
+    function pricesTab(kind, allowed) {
+        return function (pane, record) {
+            Rpc.desk('part_prices', [record.id, kind]).then(function (rows) {
+                var screen = kind === 'customer' ? 'customer' : kind ===
+                    'discount' ? null : 'supplier';
+                function open(row) {
+                    if (screen && allowed[screen]) {
+                        UI.openScreen((screen === 'customer' ?
+                            'customer-window/' : 'supplier-window/') +
+                            row.party_id, row.party_name);
+                    }
+                }
+                pane.appendChild(dataTable(PRICE_COLUMNS[kind], rows, {
+                    ondblclick: screen && allowed[screen] ? open : null,
+                    oncontextmenu: screen && allowed[screen] ? function (
+                            event, row) {
+                        UI.contextMenu(event, [{label: screen === 'customer' ?
+                            'Open Customer...' : 'Open Supplier...',
+                            onclick: function () {
+                                open(row);
+                            }}]);
+                    } : null,
+                    empty: 'No prices for this part.'}));
+            }, failed);
+        };
+    }
+
+    /* Tracking Info: the tracking numbers on hand by location */
+    function trackingTab(pane, record) {
+        var all = el('input', {type: 'checkbox', 'aria-label': 'Show All'});
+        var box = el('div');
+        function load() {
+            Rpc.desk('part_tracking', [record.id, all.checked]).then(
+                function (rows) {
+                    UI.clear(box).appendChild(dataTable([
+                        {key: 'location', label: 'Location ID'},
+                        {key: 'lot', label: 'Tracking No'},
+                        {key: 'date', label: 'Tracking Date', date: true},
+                        {key: 'quantity', label: 'Qty On Hand', num: true}],
+                        rows, {empty: 'No tracking numbers on hand.'}));
+                }, failed);
+        }
+        all.addEventListener('change', load);
+        pane.appendChild(el('div.toolbar', el('label', all, ' Show All')));
+        pane.appendChild(box);
+        load();
     }
 
     /* A read-only list tab (the user may not change the lines) */
@@ -659,33 +1011,326 @@
     }
 
     var LOCATION_FIELDS = [
+        {name: 'inactive', label: 'Inactive', type: 'boolean'},
         {name: 'location', label: 'Location ID', type: 'many2one',
             model: 'stock.location', domain: [['type', '=', 'storage']]},
         {name: 'location_name', label: 'Description', type: 'char',
             readonly: true},
-        {name: 'hold', label: 'Hold', type: 'boolean'},
         {name: 'quantity', label: 'Qty On Hand', type: 'float',
             readonly: true},
         {name: 'primary', label: 'Primary', type: 'boolean',
             readonly: true},
         {name: 'issue_from', label: 'Issue From', type: 'boolean',
             readonly: true},
-        {name: 'last_counted', label: 'Last Counted', type: 'date',
+        {name: 'hold', label: 'Hold', type: 'boolean'},
+        {name: 'last_counted', label: 'Last Counted On', type: 'date',
             readonly: true}];
 
     var CONVERSION_FIELDS = [
         {name: 'from_uom', label: 'From Unit ID', type: 'many2one',
             model: 'product.uom'},
-        {name: 'from_name', label: 'From Description', type: 'char',
+        {name: 'from_name', label: 'From Unit Description', type: 'char',
             readonly: true},
         {name: 'to_uom', label: 'To Unit ID', type: 'many2one',
             model: 'product.uom'},
-        {name: 'to_name', label: 'To Description', type: 'char',
+        {name: 'to_name', label: 'To Unit Description', type: 'char',
             readonly: true},
-        {name: 'factor', label: 'Conversion', type: 'float'},
-        {name: 'sentence', label: 'Means', type: 'char', readonly: true}];
+        {name: 'factor', label: 'Conversion', type: 'float'}];
 
     var STORAGE = [['type', '=', 'storage']];
+
+    /* Jobshop's "!" button: open the file or link a field holds */
+    function openLink(path) {
+        path = (path || '').trim();
+        if (!path) {
+            UI.toast('No file to open.');
+            return;
+        }
+        var link = /^[a-z]+:\/\//i.test(path) ? path : 'file:///' +
+            path.replace(/\\/g, '/');
+        UI.modal('Open File', [el('p', el('a', {href: link, target: '_blank',
+            rel: 'noopener'}, path)), el('p.nl-inv-hint', 'A browser opens ' +
+            'files of the network drives only when allowed; copy the path ' +
+            'to open it in Explorer otherwise.')]);
+    }
+
+    /* The Part tab (Part.txt): the part's header, shown above the sub tabs
+     * as in Jobshop */
+    function partHeader(access) {
+        return {title: 'Part', frames: [
+            {label: 'Settings', at: [497, 0, 623, 183]},
+            {label: 'Unit Costs (Stk UM)', at: [628, 0, 847, 183]}],
+            fields: [
+                {name: 'inactive', label: 'Inactive', type: 'boolean',
+                    default: false, at: [423, 6, 495, 26]},
+                {name: 'name', label: 'Description', type: 'char',
+                    at: [6, 28, 489, 48], split: 135},
+                {name: 'default_uom', label: 'Stock U/M', type: 'many2one',
+                    model: 'product.uom', at: [6, 50, 259, 70], split: 135},
+                {name: 'primary_location', label: 'Primary Loc ID',
+                    type: 'many2one', model: 'stock.location', domain:
+                    STORAGE, at: [6, 72, 259, 92], split: 135},
+                {name: 'issue_from_location', label: 'Issue From Loc ID',
+                    type: 'many2one', model: 'stock.location', domain:
+                    STORAGE, at: [6, 94, 259, 114], split: 135},
+                {name: 'sale_uom', label: 'Selling U/M', type: 'many2one',
+                    model: 'product.uom', at: [274, 50, 488, 70],
+                    split: 100},
+                {name: 'purchase_uom', label: 'Purchase U/M',
+                    type: 'many2one', model: 'product.uom',
+                    at: [274, 72, 488, 92], split: 100},
+                {name: 'usage_uom', label: 'Usage U/M', type: 'many2one',
+                    model: 'product.uom', at: [274, 94, 488, 114],
+                    split: 100},
+                {name: 'engineering_revision', label: 'Eng Master Revision',
+                    type: 'char', at: [6, 120, 275, 140], split: 135},
+                {name: 'account_category', label: 'Account Set ID',
+                    type: 'many2one', model: 'product.category',
+                    domain: [['accounting', '=', true]],
+                    readonly: !can(access, 'product.template', 'write'),
+                    at: [6, 147, 275, 167], split: 135},
+                {name: 'account_set_description', label: '', type: 'char',
+                    readonly: true, at: [277, 147, 485, 167], split: 0},
+                {name: 'expense_account_code', label: 'Expense Acct ID',
+                    type: 'char', readonly: true, at: [6, 169, 275, 189],
+                    split: 135},
+                {name: 'expense_account_description', label: '',
+                    type: 'char', readonly: true, at: [277, 169, 486, 189],
+                    split: 0},
+                {name: 'quantity_on_hand', label: 'Quantity on Hand',
+                    type: 'float', readonly: true, at: [6, 191, 275, 211],
+                    split: 135},
+                {name: 'quantity_on_hold', label: 'Quantity on Hold',
+                    type: 'float', readonly: true, at: [283, 191, 488, 211],
+                    split: 91},
+                {name: 'producible', label: 'Fabricated', type: 'boolean',
+                    at: [507, 15, 608, 33]},
+                {name: 'purchasable', label: 'Purchased', type: 'boolean',
+                    at: [507, 34, 608, 52]},
+                {name: 'stocked', label: 'Stocked', type: 'boolean',
+                    at: [507, 52, 608, 70]},
+                {name: 'tool_or_fixture', label: 'Tool/Fixture',
+                    type: 'boolean', at: [507, 72, 608, 90]},
+                {name: 'lot_tracked', label: 'Lot/Serial Tracked',
+                    type: 'boolean', at: [507, 91, 616, 109]},
+                {name: 'date_tracked', label: 'Date Tracked',
+                    type: 'boolean', at: [522, 108, 611, 126]},
+                {name: 'auto_issue', label: 'Auto Issue', type: 'boolean',
+                    at: [507, 126, 608, 144]},
+                {name: 'consumable', label: 'R+D/Consumable',
+                    type: 'boolean', at: [507, 147, 613, 165]},
+                {name: 'commissionable', label: 'Commissionable',
+                    type: 'boolean', default: true, at: [507, 165, 608, 183]},
+                {name: 'unit_material_cost', label: 'Material',
+                    type: 'money', at: [633, 15, 826, 35], split: 100},
+                {name: 'unit_labor_cost', label: 'Labor', type: 'money',
+                    at: [633, 37, 826, 57], split: 100},
+                {name: 'unit_burden_cost', label: 'Burden', type: 'money',
+                    at: [633, 59, 826, 79], split: 100},
+                {name: 'unit_service_cost', label: 'Service', type: 'money',
+                    at: [633, 81, 826, 101], split: 100},
+                {name: 'fixed_cost', label: 'Fixed Cost', type: 'money',
+                    at: [633, 103, 826, 123], split: 100},
+                {name: 'unit_cost', label: 'Unit Cost', type: 'money',
+                    readonly: true, at: [633, 125, 826, 145], split: 100},
+                {name: 'preserve_unit_costs', label: 'Preserve Unit Costs',
+                    type: 'boolean', at: [633, 147, 745, 163]},
+                {name: 'update_costs_from_po', label: 'Update on Receipt',
+                    type: 'selection', options: [['system',
+                        'System Setting'], ['always', 'Always'],
+                        ['ask', 'Ask'], ['never', 'Never']],
+                    default: 'system', at: [634, 165, 843, 185], split: 100},
+                {name: 'preserve_unit_price', label: 'Preserve Unit Price',
+                    type: 'boolean', at: [507, 191, 626, 211]},
+                {name: 'list_price', label: 'Unit Price (Stk UM)',
+                    type: 'money', at: [634, 191, 841, 211], split: 100}],
+            buttons: []};
+    }
+
+    /* The General tab (PartSubTabs.txt GENERAL); the fields Tryton needs
+     * that Jobshop has not follow below the layout */
+    function generalTab(access) {
+        var suppliers = [];
+        var writeSuppliers = can(access, 'purchase.product_supplier',
+            'create');
+        [1, 2, 3, 4, 5].forEach(function (n) {
+            var left = n <= 3 ? 21 : 421;
+            var top = 282 + 22 * ((n - 1) % 3);
+            suppliers.push({name: n === 1 ? 'preferred_supplier' :
+                'preferred_supplier_' + n, label: 'Supplier ID ' + n,
+                type: 'many2one', model: 'party.party', readonly:
+                !writeSuppliers, at: [left, top, left + 220, top + 20],
+                split: 111}, {name: 'supplier_name_' + n, label: '',
+                type: 'char', readonly: true, split: 0, at: [left + 222,
+                    top, left + (n <= 3 ? 390 : 392), top + 20]});
+        });
+        return {title: 'General', frames: [
+            {label: 'Planning (All Quantities in Stock UM)',
+                at: [9, 142, 820, 206]},
+            {label: 'Piece Tracking', at: [10, 210, 821, 254]},
+            {label: 'Preferred Suppliers', at: [10, 262, 821, 355]}],
+            fields: [
+                {name: 'record_created', label: 'Created by', type: 'char',
+                    readonly: true, at: [11, 5, 358, 25]},
+                {name: 'record_modified', label: 'Last Modified by',
+                    type: 'char', readonly: true, at: [386, 5, 801, 25]},
+                {name: 'drawing_number', label: 'Drawing ID/Rev',
+                    type: 'char', at: [11, 27, 272, 46]},
+                {name: 'drawing_revision', label: '/', type: 'char',
+                    at: [278, 26, 357, 46], split: 10},
+                {name: 'drawing_file', label: 'Drawing File', type: 'char',
+                    at: [386, 27, 801, 47]},
+                {name: 'mfg_name', label: 'Manufacturer', type: 'char',
+                    at: [11, 48, 357, 68]},
+                {name: 'mfg_part_id', label: 'Manufacturer\'s Part ID',
+                    type: 'char', at: [386, 49, 801, 69]},
+                {name: 'product_code', label: 'Product Code ID',
+                    type: 'many2one', model: 'nline.product_code',
+                    at: [11, 70, 357, 90]},
+                {name: 'commodity_code', label: 'Commodity Code ID',
+                    type: 'many2one', model: 'nline.commodity_code',
+                    at: [386, 71, 801, 91]},
+                {name: 'weight_uom', label: 'Weight U/M', type: 'many2one',
+                    model: 'product.uom', at: [11, 92, 272, 112]},
+                {name: 'weight', label: 'Net Weight', type: 'float',
+                    at: [280, 92, 478, 112], split: 84},
+                {name: 'ship_dimensions', label: 'Ship Dimensions',
+                    type: 'char', at: [11, 114, 800, 134]},
+                {name: 'lead_time_days', label: 'Leadtime (days)',
+                    type: 'integer', at: [21, 160, 150, 180], split: 87},
+                {name: 'safety_stock', label: 'Safety Stock Qty',
+                    type: 'float', default: 0, at: [164, 160, 361, 180],
+                    split: 106},
+                {name: 'order_point', label: 'Order Point Qty',
+                    type: 'float', at: [370, 160, 569, 180], split: 113},
+                {name: 'maximum_stock_qty', label: 'Restocking Level',
+                    type: 'float', at: [577, 160, 801, 180], split: 115},
+                {name: 'minimum_order_qty', label: 'Minimum Order Qty',
+                    type: 'float', default: 1, at: [164, 182, 361, 202],
+                    split: 106},
+                {name: 'multiple_order_qty', label: 'Order In Multiples Of',
+                    type: 'float', default: 1, at: [370, 182, 569, 202],
+                    split: 113},
+                {name: 'maximum_order_qty', label: 'Maximum Order Qty',
+                    type: 'float', at: [577, 182, 801, 202], split: 115},
+                {name: 'piece_tracked', label: 'Part is Piece Tracked',
+                    type: 'boolean', at: [22, 229, 154, 247]},
+                {name: 'length_required', label: 'Length', type: 'boolean',
+                    at: [156, 229, 232, 249]},
+                {name: 'width_required', label: 'Width', type: 'boolean',
+                    at: [234, 229, 310, 249]},
+                {name: 'height_required', label: 'Height', type: 'boolean',
+                    at: [312, 229, 382, 249]},
+                {name: 'dimensions_uom', label: 'Dimensions U/M',
+                    type: 'many2one', model: 'product.uom',
+                    at: [386, 229, 606, 249]},
+                {name: 'dimensions_uom_description', label: '',
+                    type: 'char', readonly: true, split: 0,
+                    at: [609, 229, 810, 249]}
+            ].concat(suppliers).concat([
+                /* Not in Jobshop: what Tryton needs of a part */
+                {name: 'type', label: 'Type (ERP)', type: 'selection',
+                    options: [['goods', 'Goods (stocked)'],
+                        ['assets', 'Assets'], ['service', 'Service']],
+                    default: 'goods'},
+                {name: 'salable', label: 'Sold (ERP)', type: 'boolean'},
+                {name: 'cost_price_method', label: 'Cost Method (ERP)',
+                    type: 'selection', options: [['fixed', 'Fixed'],
+                        ['average', 'Average'], ['fifo', 'FIFO']],
+                    default: 'average'},
+                {name: 'cost_price', label: 'Inventory Cost (average)',
+                    type: 'money', readonly: true}]),
+            buttons: [{label: '!', at: [801, 26, 821, 47], onclick:
+                function () {
+                    var input = document.querySelector(
+                        'input[aria-label="Drawing File"]');
+                    openLink(input && input.value);
+                }}]};
+    }
+
+    /* The Other tab: Jobshop's user fields; those without a label in the
+     * System Settings are disabled, as in Jobshop */
+    function otherTab(count) {
+        var fields = [], buttons = [];
+        for (var n = 0; n < count; n++) {
+            otherField(fields, buttons, n);
+        }
+        return {title: 'Other', fields: fields, buttons: buttons};
+    }
+
+    /* (labels: applyUserLabels once the System Settings are read) */
+    function otherField(fields, buttons, n) {
+        var label = 'User ' + n;
+        var top = 1 + 21 * n;
+        fields.push({name: 'user_' + n, label: label, type: 'char',
+            readonly: true, at: [18, top, 387, top + 20], split: 130});
+            buttons.push({label: '!', at: [387, top, 407, top + 20],
+                onclick: function () {
+                    var input = document.querySelector('input[aria-label="' +
+                        label.replace(/"/g, '\\"') + '"]');
+                    openLink(input && input.value);
+                }});
+    }
+
+    /* Jobshop's user field captions (System Settings); a field without
+     * one stays disabled, as in Jobshop */
+    function applyUserLabels(main, tab, labels) {
+        tab.fields.forEach(function (f) {
+            var n = parseInt(f.name.slice(5), 10);
+            var label = labels[n] || f.label;
+            f.readonly = /^User \d+$/.test(label);
+            var input = main.querySelector('input[aria-label="' + f.label +
+                '"]');
+            var caption = input && input.parentNode.querySelector(
+                '.js-label');
+            if (caption) {
+                caption.textContent = label;
+            }
+            if (input) {
+                /* (editable like the window's other fields) */
+                var other = main.querySelector(
+                    'input[aria-label="Description"]');
+                input.disabled = f.readonly || Boolean(other &&
+                    other.disabled);
+                input.readOnly = f.readonly;
+            }
+        });
+    }
+
+    function instructionsTab() {
+        var boxes = [
+            ['quote_instructions', 'Estimating Quotes', 3, 5],
+            ['sales_instructions', 'Sales Orders', 3, 87],
+            ['shipping_instructions', 'Shipping', 3, 168],
+            ['material_instructions', 'Material Cards', 3, 249],
+            ['rfq_instructions', 'Request For Quotes', 416, 5],
+            ['purchasing_instructions', 'Purchase Orders', 416, 87],
+            ['receiving_instructions', 'Receiving', 416, 168]];
+        return {title: 'Spec Instr.', frames: boxes.map(function (b) {
+            return {label: b[1], at: [b[2], b[3], b[2] + 395, b[3] + 81]};
+        }), fields: boxes.map(function (b) {
+            return {name: b[0], label: b[1], type: 'text', split: 0,
+                at: [b[2] + (b[2] > 3 ? 12 : 15), b[3] + 18, b[2] + 393,
+                    b[3] + 74]};
+        })};
+    }
+
+    /* Only the fields the server has (a module not yet updated) */
+    function existingFields(tabs, names) {
+        tabs.forEach(function (tab) {
+            if (tab.fields) {
+                tab.fields = tab.fields.filter(function (f) {
+                    return names[f.name];
+                });
+            }
+            if (tab.lines) {
+                tab.lines.fields = tab.lines.fields.filter(function (f) {
+                    return !tab.lines.known || tab.lines.known[f.name];
+                });
+            }
+        });
+        return tabs;
+    }
 
     Screens.parts = function (main, params) {
         injectStyle();
@@ -693,16 +1338,20 @@
         var models = ['product.template', 'stock.move', 'sale.line',
             'purchase.line', 'production', 'production.bom',
             'nline.js.part_location', 'nline.js.unit_conversion',
-            'purchase.product_supplier'];
-        Promise.all([UI.access(models), Rpc.desk('inventory_setup', [])
-            .catch(function () {
-                return null;
-            }), screens()]).then(function (r) {
-                build(r[0], r[1], r[2]);
+            'purchase.product_supplier', 'nline.quote.line',
+            'nline.rfq.line', 'nline.sale_price'];
+        /* (the System Settings' labels come after: the window shows
+         * first) */
+        Promise.all([UI.access(models), null, screens(), null,
+            Rpc.model('product.template', 'fields_get', [[]]),
+            Rpc.model('nline.js.part_location', 'fields_get', [[]])
+                .catch(function () {
+                    return {};
+                })]).then(function (r) {
+                build(r[0], r[1], r[2], r[3], r[4], r[5]);
             }, failed);
 
-        function build(access, setup, allowed) {
-            var labels = setup ? setup.user_labels : [];
+        function build(access, setup, allowed, lines, known, knownLoc) {
             var win = null;
 
             function current() {
@@ -710,32 +1359,40 @@
                 return record ? record.id : null;
             }
 
-            /* View: Jobshop's View menu of the Part window */
+            /* View / Tools: Jobshop's menus of the Part window */
             function viewItems() {
                 var items = [];
+                if (can(access, 'stock.move', 'read')) {
+                    items.push({label: 'Inventory Txs', onclick: function () {
+                        inventoryTxs(current());
+                    }});
+                }
                 if (can(access, 'production.bom', 'read') ||
                         can(access, 'production', 'read')) {
-                    items.push({label: 'Where Used', onclick: function () {
+                    items.push({label: 'Where Used...', onclick: function () {
                         whereUsed(current());
                     }});
                 }
                 if (can(access, 'stock.move', 'read')) {
-                    items.push({label: 'Inventory Txs', onclick: function () {
-                        inventoryTxs(current());
-                    }}, {label: 'Inventory Pieces', onclick: function () {
-                        inventoryPieces(current());
-                    }}, '-', {label: 'Material Availability', onclick:
+                    items.push({label: 'Supply and Demand...', onclick:
+                        function () {
+                            supplyDemand(current());
+                        }}, {label: 'Material Availability...', onclick:
                         function () {
                             materialAvailability(current());
-                        }}, {label: 'Supply & Demand', onclick: function () {
-                        supplyDemand(current());
-                    }});
+                        }});
                 }
                 return items;
             }
 
             function toolItems() {
                 var items = [];
+                if (can(access, 'stock.move', 'read')) {
+                    items.push({label: 'Inventory Pieces...', onclick:
+                        function () {
+                            inventoryPieces(current());
+                        }});
+                }
                 if (can(access, 'stock.move', 'write') &&
                         can(access, 'production', 'write')) {
                     items.push({label: 'Reset Material Costs...', onclick:
@@ -743,12 +1400,43 @@
                             resetMaterialCosts(current());
                         }});
                 }
+                if (allowed.masters) {
+                    items.push({label: 'Open Eng Master for Part...',
+                        onclick: editMaster});
+                }
                 return items;
+            }
+
+            /* Edit Master: the part's engineering master (its Eng Master
+             * Revision, else the latest) */
+            function editMaster() {
+                var id = current();
+                if (!id) {
+                    UI.toast('No current part has been selected.', 'error');
+                    return;
+                }
+                Rpc.searchRead('production.bom', [['outputs.product.template',
+                    '=', id]], ['rec_name'], {order: [['id', 'DESC']],
+                    limit: 20}).then(function (boms) {
+                        var record = win.record() || {};
+                        var rev = record.engineering_revision;
+                        var bom = boms.filter(function (b) {
+                            return rev && b.rec_name.indexOf('Rev ' +
+                                rev) >= 0;
+                        })[0] || boms[0];
+                        if (bom) {
+                            UI.openScreen('masters/' + bom.id, bom.rec_name);
+                        } else if (allowed.masters) {
+                            UI.openScreen('masters', 'Engineering Master');
+                            UI.toast('The part has no engineering master: ' +
+                                'create one.');
+                        }
+                    }, failed);
             }
 
             function copyPart(record, load) {
                 if (!record) {
-                    UI.showError('Choose the part to copy first.');
+                    UI.toast('No current part has been selected.');
                     return;
                 }
                 var code = el('input', {type: 'text', 'aria-label':
@@ -782,7 +1470,7 @@
                         }
                         Rpc.desk('part_delete', [record.id]).then(function () {
                             UI.toast('Part deleted', 'ok');
-                            global.location.hash = '#/parts?' + Date.now();
+                            win.clear();
                         }, failed);
                     });
             }
@@ -790,204 +1478,127 @@
             var extra = [];
             var view = viewItems(), tools = toolItems();
             if (view.length) {
-                extra.push({label: 'View', onclick: function () {
+                extra.push({label: 'View ▾', onclick: function () {
                     dropMenu(view);
                 }});
             }
             if (tools.length) {
-                extra.push({label: 'Tools', onclick: function () {
+                extra.push({label: 'Tools ▾', onclick: function () {
                     dropMenu(tools);
                 }});
             }
             /* Copy / Delete: shown by the window per the user's rights */
-            extra.push({label: 'Copy', onclick: copyPart},
-                {label: 'Delete', onclick: deletePart});
-
-            var userFields = [];
-            for (var i = 0; i < 10; i++) {
-                userFields.push({name: 'user_' + i, label: labels[i] ||
-                    'User Defined ' + (i + 1), type: 'char'});
+            if (can(access, 'product.template', 'create')) {
+                extra.push({label: 'Copy', onclick: copyPart});
+            }
+            if (can(access, 'product.template', 'delete')) {
+                extra.push({label: 'Delete', onclick: deletePart});
             }
 
-            var tabs = [
-                {title: 'Part', fields: [
-                    {name: 'code', label: 'Part ID', type: 'char'},
-                    {name: 'inactive', label: 'Inactive', type: 'boolean',
-                        default: false},
-                    {name: 'name', label: 'Description', type: 'char',
-                        span: 2},
-                    {name: 'default_uom', label: 'Stock U/M',
-                        type: 'many2one', model: 'product.uom'},
-                    {name: 'engineering_revision', label: 'Engineering Master',
-                        type: 'char'},
-                    {name: 'commodity_code', label: 'Commodity Code ID',
-                        type: 'many2one', model: 'nline.commodity_code'},
-                    {name: 'product_code', label: 'Product Code ID',
-                        type: 'many2one', model: 'nline.product_code'},
-                    {name: 'weight_uom', label: 'Weight U/M',
-                        type: 'many2one', model: 'product.uom'},
-                    {name: 'weight', label: 'Net Weight', type: 'float'},
-                    {name: 'ship_dimensions', label: 'Ship Dimensions',
-                        type: 'char'},
-                    {name: 'drawing_number', label: 'Drawing ID',
-                        type: 'char'},
-                    {name: 'drawing_revision', label: 'Rev', type: 'char'},
-                    {name: 'drawing_file', label: 'Drawing File', type: 'char',
-                        span: 2},
-                    {name: 'mfg_name', label: 'Manufacturer', type: 'char'},
-                    {name: 'mfg_part_id', label: 'Manufacturer Part ID',
-                        type: 'char'},
-                    {name: 'type', label: 'Type', type: 'selection',
-                        options: [['goods', 'Goods (stocked)'],
-                            ['assets', 'Assets'], ['service', 'Service']],
-                        default: 'goods'},
-                    {name: 'producible', label: 'Fabricated',
-                        type: 'boolean'},
-                    {name: 'purchasable', label: 'Purchased',
-                        type: 'boolean'},
-                    {name: 'salable', label: 'Sold', type: 'boolean'},
-                    {name: 'stocked', label: 'Stocked', type: 'boolean'},
-                    {name: 'tool_or_fixture', label: 'Tool/Fixture',
-                        type: 'boolean'},
-                    {name: 'auto_issue', label: 'Auto Issue',
-                        type: 'boolean'},
-                    {name: 'consumable', label: 'Consumable',
-                        type: 'boolean'},
-                    {name: 'lot_tracked', label: 'Lot Tracked',
-                        type: 'boolean'}]},
-                {title: 'General', fields: [
-                    {name: 'primary_location', label: 'Primary Location ID',
-                        type: 'many2one', model: 'stock.location',
-                        domain: STORAGE},
-                    {name: 'issue_from_location',
-                        label: 'Issue From Location ID', type: 'many2one',
-                        model: 'stock.location', domain: STORAGE},
-                    {name: 'preferred_supplier', label: 'Preferred Supplier ID',
-                        type: 'many2one', model: 'party.party',
-                        readonly: !can(access, 'purchase.product_supplier',
-                            'create')},
-                    {name: 'lead_time_days', label: 'Leadtime (days)',
-                        type: 'integer'},
-                    {name: 'order_point', label: 'Order Point',
-                        type: 'float'},
-                    {name: 'safety_stock', label: 'Safety Stock Qty',
-                        type: 'float', default: 0},
-                    {name: 'minimum_order_qty', label: 'Minimum Order Qty',
-                        type: 'float', default: 1},
-                    {name: 'maximum_order_qty', label: 'Maximum Order Qty',
-                        type: 'float'},
-                    {name: 'multiple_order_qty', label: 'Order in Multiples Of',
-                        type: 'float', default: 1},
-                    {name: 'maximum_stock_qty', label: 'Maximum Stock Qty',
-                        type: 'float'},
-                    {name: 'purchase_uom', label: 'Purchase U/M',
-                        type: 'many2one', model: 'product.uom'},
-                    {name: 'sale_uom', label: 'Selling U/M',
-                        type: 'many2one', model: 'product.uom'},
-                    {name: 'usage_uom', label: 'Usage U/M',
-                        type: 'many2one', model: 'product.uom'},
-                    {name: 'piece_tracked', label: 'Part is Piece Tracked',
-                        type: 'boolean'},
-                    {name: 'length_required', label: 'Length',
-                        type: 'boolean'},
-                    {name: 'width_required', label: 'Width',
-                        type: 'boolean'},
-                    {name: 'height_required', label: 'Height',
-                        type: 'boolean'},
-                    {name: 'dimensions_uom', label: 'Dimensions U/M',
-                        type: 'many2one', model: 'product.uom'}
-                ].concat(userFields)},
-                {title: 'Costing', fields: [
-                    {name: 'unit_material_cost', label: 'Material',
-                        type: 'money'},
-                    {name: 'unit_labor_cost', label: 'Labor', type: 'money'},
-                    {name: 'unit_burden_cost', label: 'Burden',
-                        type: 'money'},
-                    {name: 'unit_service_cost', label: 'Service',
-                        type: 'money'},
-                    {name: 'fixed_cost', label: 'Fixed Cost', type: 'money'},
-                    {name: 'unit_cost', label: 'Unit Cost', type: 'money',
-                        readonly: true},
-                    {name: 'list_price', label: 'Unit Price', type: 'money'},
-                    {name: 'cost_price', label: 'Inventory Cost (average)',
-                        type: 'money', readonly: true},
-                    {name: 'cost_price_method', label: 'Cost Method',
-                        type: 'selection', options: [['fixed', 'Fixed'],
-                            ['average', 'Average'], ['fifo', 'FIFO']],
-                        default: 'average'},
-                    {name: 'account_category', label: 'Account Set ID',
-                        type: 'many2one', model: 'product.category',
-                        domain: [['accounting', '=', true]]}]},
+            var header = partHeader(access);
+            var other = otherTab(12);
+            if (allowed.masters) {
+                /* (Jobshop's button is 277,116-351,142, taller than its
+                 * row; here the height of the Eng Master Revision field
+                 * so the row reads as one line) */
+                header.buttons.push({label: 'Edit Master',
+                    at: [277, 120, 351, 140], onclick: editMaster});
+            }
+            var writeLoc = can(access, 'nline.js.part_location', 'write') &&
+                can(access, 'product.template', 'write');
+            var writeConv = can(access, 'nline.js.unit_conversion',
+                'write') && can(access, 'product.template', 'write');
+            var locationFields = LOCATION_FIELDS.filter(function (f) {
+                return knownLoc[f.name] || !Object.keys(knownLoc).length;
+            });
+            var tabs = [header, generalTab(access),
+                other, {picture: true},
                 {title: 'Specs', fields: [
                     {name: 'specifications', label: 'Specifications',
-                        type: 'text', rows: 16, span: 6}]},
-                {picture: true},
+                        type: 'text', rows: 18, span: 6}]},
                 {notes: true},
-                can(access, 'nline.js.part_location', 'write') &&
-                    can(access, 'product.template', 'write') ?
-                    {title: 'Locations', lines: {name: 'part_locations',
-                        model: 'nline.js.part_location', inverse: 'template',
-                        fields: LOCATION_FIELDS}} :
+                writeConv ? {title: 'Unit Conv', lines: {
+                    name: 'unit_conversions',
+                    model: 'nline.js.unit_conversion',
+                    inverse: 'template', fields: CONVERSION_FIELDS}} :
+                    {title: 'Unit Conv', render: readLinesTab(
+                        'nline.js.unit_conversion', 'template',
+                        CONVERSION_FIELDS)},
+                writeLoc ? {title: 'Locations', lines: {
+                    name: 'part_locations', model: 'nline.js.part_location',
+                    inverse: 'template', fields: locationFields}} :
                     {title: 'Locations', render: readLinesTab(
                         'nline.js.part_location', 'template',
-                        LOCATION_FIELDS)},
-                can(access, 'nline.js.unit_conversion', 'write') &&
-                    can(access, 'product.template', 'write') ?
-                    {title: 'Unit Conversions', lines: {
-                        name: 'unit_conversions',
-                        model: 'nline.js.unit_conversion',
-                        inverse: 'template', fields: CONVERSION_FIELDS}} :
-                    {title: 'Unit Conversions', render: readLinesTab(
-                        'nline.js.unit_conversion', 'template',
-                        CONVERSION_FIELDS)}];
-            if (can(access, 'sale.line', 'read')) {
-                tabs.push({title: 'Sales Order Lines', render: ordersTab(
-                    'sale', allowed.sale)});
+                        locationFields)}];
+            if (can(access, 'stock.move', 'read')) {
+                tabs.push({title: 'Tracking Info', render: trackingTab});
             }
-            if (can(access, 'purchase.line', 'read')) {
-                tabs.push({title: 'Purchase Order Lines', render: ordersTab(
-                    'purchase', allowed.purchase)});
+            tabs.push(instructionsTab());
+            var docs = [['quote', 'Quote Lines'], ['sale', 'SO Lines'],
+                ['rfq', 'RFQ Lines'], ['purchase', 'PO Lines'],
+                ['production', 'Work Orders']];
+            /* (strict: a model of a module not installed is not shown) */
+            function readable(model) {
+                return Boolean(access[model] && access[model].read);
             }
-            if (can(access, 'production', 'read')) {
-                tabs.push({title: 'Work Orders', render: ordersTab(
-                    'production', allowed.production)});
-            }
+            docs.forEach(function (d) {
+                if (readable(DOC_SETUP[d[0]].model)) {
+                    tabs.push({title: d[1], render: linesTab(d[0],
+                        DOC_SETUP[d[0]], allowed)});
+                }
+            });
+            var prices = [['supplier', 'Supplier Part Prices'],
+                ['service', 'Supplier Service Pricing'],
+                ['customer', 'Customer Part Pricing'],
+                ['discount', 'Discount Class Part Pricing']];
+            prices.forEach(function (p) {
+                if (readable(p[0] === 'supplier' || p[0] === 'service' ?
+                        'purchase.product_supplier' : 'nline.sale_price')) {
+                    tabs.push({title: p[1], render: pricesTab(p[0],
+                        allowed)});
+                }
+            });
+            existingFields(tabs, known);
 
             win = UI.master(main, {
                 title: 'Parts',
                 model: 'product.template',
                 open: openId,
                 label: 'Part ID',
+                idAt: [6, 6, 417, 26],
+                idSplit: 135,
+                idField: 'code',
                 order: [['code', 'ASC'], ['name', 'ASC']],
-                /* Inactive parts too (Jobshop's Show All) */
-                domain: [['active', 'in', [true, false]]],
+                /* Browse: Jobshop's Show All shows the inactive parts */
+                browseShowAll: true,
                 single: true,
                 defaults: {type: 'goods'},
                 extra: extra,
                 tabs: tabs,
                 browse: [
-                    {name: 'inactive', label: 'Inactive', type: 'boolean'},
-                    {name: 'code', label: 'Part ID'},
+                    {name: 'code', label: 'Part ID', nowrap: true},
                     {name: 'name', label: 'Description'},
-                    {name: 'producible', label: 'Fabricated',
-                        type: 'boolean'},
-                    {name: 'purchasable', label: 'Purchased',
-                        type: 'boolean'},
+                    {name: 'producible', label: 'Fab\'d', type: 'boolean'},
+                    {name: 'purchasable', label: 'Pur\'d', type: 'boolean'},
                     {name: 'stocked', label: 'Stocked', type: 'boolean'},
-                    {name: 'tool_or_fixture', label: 'Tool or Fixture',
+                    {name: 'tool_or_fixture', label: 'Tool/Fixture',
                         type: 'boolean'},
-                    {name: 'default_uom', label: 'Stock UM',
+                    {name: 'default_uom', label: 'Stock U/M',
                         type: 'many2one'},
-                    {name: 'drawing_number', label: 'Drawing ID'},
-                    {name: 'product_code', label: 'Product Code',
-                        type: 'many2one'},
-                    {name: 'commodity_code', label: 'Commodity Code',
-                        type: 'many2one'},
+                    {name: 'drawing_number', label: 'Drawing ID',
+                        nowrap: true},
+                    /* (Jobshop's Browse: the codes' IDs only) */
+                    {name: 'product_code.code', label: 'Product Code'},
+                    {name: 'commodity_code.code', label: 'Commodity Code'},
                     {name: 'mfg_name', label: 'Mfg Name'},
                     {name: 'mfg_part_id', label: 'Mfg Part ID'},
-                    {name: 'list_price', label: 'Unit Price',
-                        type: 'money'}],
-                beforeSave: function (values) {
+                    {name: 'inactive', label: 'Inactive', type: 'boolean'}],
+                beforeSave: function (values, record) {
+                    /* An unchanged Stock U/M is not written (Tryton
+                     * refuses any write of it once the part has moves) */
+                    if (record && values.default_uom === record.default_uom) {
+                        delete values.default_uom;
+                    }
                     /* Tryton needs the purchase and selling units of a
                      * purchased / sold part: the stock unit by default */
                     if (values.purchasable && !values.purchase_uom) {
@@ -999,10 +1610,80 @@
                     return values;
                 },
                 onload: function (record) {
-                    UI.setTitle('Part ' + (record.code || record.rec_name));
+                    UI.setTitle('Parts :: ' + (record.code ||
+                        record.rec_name));
                     costingState(record);
+                    filterLocations();
                 }
             });
+
+            Rpc.desk('inventory_setup', []).then(function (setup) {
+                applyUserLabels(main, other, setup.user_labels || []);
+            }, function () {});
+
+            /* The Browse grid (the last tab): IDs on one line (the frame
+             * has no per-column option yet; its columns carry nowrap) */
+            var browseTables = main.querySelectorAll('.tab-pane table.data');
+            if (browseTables.length) {
+                browseTables[browseTables.length - 1].classList.add(
+                    'nl-inv-browse');
+            }
+
+            /* Jobshop draws the Part tab above the sub tabs: the header
+             * stays while the sub tabs change; the Browse tab hides it */
+            var tabBar = main.querySelector('.tabs');
+            var panes = main.querySelector('.tab-panes');
+            var headerPane = panes && panes.firstChild;
+            var headerBox = headerPane && headerPane.querySelector(
+                '.js-layout');
+            if (tabBar && headerBox) {
+                var pinned = el('div.panel.nl-inv-header', headerBox);
+                tabBar.parentNode.insertBefore(pinned, tabBar);
+                tabBar.firstChild.hidden = true;
+                Array.prototype.forEach.call(tabBar.children, function (b) {
+                    b.addEventListener('click', function () {
+                        pinned.hidden = b.textContent === 'Browse';
+                    });
+                });
+                var showGeneral = function () {
+                    if (!headerPane.hidden) {
+                        tabBar.children[1].click();
+                    }
+                };
+                new MutationObserver(showGeneral).observe(headerPane,
+                    {attributes: true, attributeFilter: ['hidden']});
+                showGeneral();
+            }
+
+            /* Locations: Show All (the inactive part locations too) */
+            var locPane = null;
+            Array.prototype.forEach.call(tabBar ? tabBar.children : [],
+                function (b, i) {
+                    if (b.textContent === 'Locations') {
+                        locPane = panes.children[i];
+                    }
+                });
+            var showAll = el('input', {type: 'checkbox', 'aria-label':
+                'Show All'});
+            function filterLocations() {
+                global.setTimeout(function () {
+                    if (!locPane) {
+                        return;
+                    }
+                    Array.prototype.forEach.call(locPane.querySelectorAll(
+                        'tbody tr'), function (tr) {
+                            var box = tr.querySelector(
+                                'input[aria-label="Inactive"]');
+                            tr.hidden = Boolean(box && box.checked &&
+                                !showAll.checked);
+                        });
+                }, 400);
+            }
+            if (locPane) {
+                showAll.addEventListener('change', filterLocations);
+                locPane.insertBefore(el('div.toolbar', el('label', showAll,
+                    ' Show All')), locPane.firstChild);
+            }
 
             /* Costing: a purchased only part has no labor, burden or
              * service; a fabricated only part no fixed cost */
@@ -1023,15 +1704,15 @@
                     });
             }
 
-            /* Right-click in the window: the View menu */
+            /* Right-click in the window: the View and Tools menus */
             main.addEventListener('contextmenu', function (event) {
-                if (event.defaultPrevented || !current() || !view.length ||
+                if (event.defaultPrevented || !current() ||
                         /^(INPUT|TEXTAREA|SELECT)$/.test(
                             event.target.tagName)) {
                     return;
                 }
-                UI.contextMenu(event, view.concat(tools.length ? ['-'] : [],
-                    tools));
+                UI.contextMenu(event, view.concat(tools.length && view.length ?
+                    ['-'] : [], tools));
             });
 
             ctrlS(main, function () {
@@ -1456,10 +2137,6 @@
                 columns: [
                     {key: 'code', label: 'Location ID', type: 'char'},
                     {key: 'name', label: 'Description', type: 'char'},
-                    {key: 'warehouse', label: 'Warehouse', type: 'show',
-                        value: function (row) {
-                            return row.data.warehouse || '';
-                        }},
                     {key: 'inactive', label: 'Inactive', type: 'bool'}],
                 load: function () {
                     return Rpc.desk('locations_list', []);
@@ -1474,7 +2151,7 @@
     /* The inventory transactions of a location */
     function locationTxs(locationId) {
         if (!locationId) {
-            UI.showError('Select a location first.');
+            UI.toast('Select a location first.');
             return;
         }
         Rpc.desk('inventory_transactions', [null, locationId, 500]).then(
@@ -1577,11 +2254,19 @@
         var quantity = el('input.money', {type: 'text', inputmode: 'decimal',
             'aria-label': transfer ? 'Transfer Qty' : 'Quantity'});
         var unit = el('span.muted', '');
-        var onHand = el('strong', '');
+        /* (Jobshop's read-only box, ADJ_AVAIL_QTY / TRANS_QTY_AVAIL) */
+        var onHand = el('input.money', {type: 'text', readOnly: true,
+            tabIndex: -1, 'aria-label': transfer ?
+                'Qty. Avail. to Transfer' : 'Qty Available to Adjust'});
         var available = el('strong', '');
         var lot = el('input', {type: 'text', 'aria-label': 'Tracking No',
             list: 'nl-inv-lots-' + kind});
         var lots = el('datalist', {id: 'nl-inv-lots-' + kind});
+        var lastCounted = el('input', {type: 'checkbox', 'aria-label':
+            'Set Last Counted Date'});
+        var note = el('textarea', {rows: 2, maxlength: 250, 'aria-label':
+            'Transaction Note'});
+        var partDescr = el('span.muted', '');
         var reason = UI.picker('nline.reason_code', {label: 'Reason Code',
             placeholder: 'Reason Code'});
         var account = can(access, 'account.account', 'read') ?
@@ -1620,6 +2305,8 @@
                 'unit_labor_cost', 'unit_burden_cost', 'unit_service_cost',
                 'lot_tracked', 'products']]).then(function (rows) {
                     part = rows[0];
+                    partDescr.textContent = (part.rec_name || '').replace(
+                        /^\[[^\]]*\]\s*/, '');
                     unit.textContent = (part['default_uom.'] || {}).symbol ||
                         '';
                     if (!keep) {
@@ -1652,12 +2339,13 @@
                 var here = r.filter(function (s) {
                     return s.location === loc;
                 });
-                onHand.textContent = num(here.reduce(function (s, x) {
+                onHand.value = num(here.reduce(function (s, x) {
                     return s + x.quantity;
                 }, 0)) + ' ' + unit.textContent;
-                available.textContent = num(r.reduce(function (s, x) {
-                    return s + x.quantity;
-                }, 0)) + ' ' + unit.textContent;
+                available.title = 'In all locations: ' + num(r.reduce(
+                    function (s, x) {
+                        return s + x.quantity;
+                    }, 0)) + ' ' + unit.textContent;
                 UI.clear(lots);
                 here.forEach(function (s) {
                     if (s.lot) {
@@ -1672,6 +2360,8 @@
             editing = null;
             quantity.value = '';
             lot.value = '';
+            note.value = '';
+            lastCounted.checked = false;
             reason.set(null, '');
             if (account) {
                 account.set(null, '');
@@ -1683,7 +2373,8 @@
         function entry() {
             var qty = UI.parseMoney(quantity.value);
             if (!part) {
-                UI.showError('Choose the part.');
+                UI.showError('You must enter an adjustment before ' +
+                    'adding a row.');
                 return null;
             }
             if (!qty || qty <= 0) {
@@ -1713,7 +2404,9 @@
                 reasonName: (reason.record() || {}).rec_name || '',
                 account: account ? account.value() : null,
                 accountName: account ? (account.record() || {}).rec_name ||
-                    '' : ''
+                    '' : '',
+                note: note.value.trim() || null,
+                last_counted: transfer ? false : lastCounted.checked
             };
             if (transfer) {
                 line.to_location = toLocation.value();
@@ -1752,6 +2445,8 @@
             quantity.value = String(line.quantity);
             location.set(line.location, line.locationName);
             lot.value = line.lot || '';
+            note.value = line.note || '';
+            lastCounted.checked = Boolean(line.last_counted);
             reason.set(line.reason_code, line.reasonName);
             if (account) {
                 account.set(line.account, line.accountName);
@@ -1764,26 +2459,45 @@
         }
 
         function renderTable() {
-            var columns = [
-                {key: 'marker', label: '', render: function (row) {
+            var marker = {key: 'marker', label: 'Entry No', render:
+                function (row) {
                     return el('span', {title: 'Not saved'},
                         pending.indexOf(row) === editing ? '✎' : '+');
-                }},
+                }};
+            var part = {key: 'partName', label: 'Part ID', render:
+                function (row) {
+                    return UI.shortName('product.template', row.partName);
+                }};
+            var descr = {key: 'partDescr', label: 'Part Description',
+                render: function (row) {
+                    return (row.partName || '').replace(/^\[[^\]]*\]\s*/,
+                        '');
+                }};
+            var columns = transfer ? [marker,
+                {key: 'date', label: 'Date', date: true}, part, descr,
+                {key: 'quantity', label: 'Quantity', num: true},
+                {key: 'unit', label: 'U/M'},
+                {key: 'reasonName', label: 'Reason Code'},
+                {key: 'locationName', label: 'From Location'},
+                {key: 'toName', label: 'To Location'},
+                {key: 'lot', label: 'Tracking Number'},
+                {key: 'note', label: 'Description'}] : [marker,
                 {key: 'date', label: 'Date', date: true},
                 {key: 'type', label: 'Type', render: function (row) {
-                    return {in: 'Adjust In', out: 'Adjust Out',
-                        transfer: 'Transfer'}[row.type];
-                }},
-                {key: 'partName', label: 'Part ID'},
+                    return {in: 'Adjust In', out: 'Adjust Out'}[row.type];
+                }}, part, descr,
                 {key: 'quantity', label: 'Quantity', num: true},
-                {key: 'unit', label: 'U/M'}].concat(transfer ? [
-                    {key: 'locationName', label: 'From Location'},
-                    {key: 'toName', label: 'To Location'}] : [
-                    {key: 'locationName', label: 'Location ID'}]).concat([
+                {key: 'unit', label: 'U/M'},
+                {key: 'locationName', label: 'Location ID'},
                 {key: 'reasonName', label: 'Reason Code'},
-                {key: 'lot', label: 'Tracking Number'}]).concat(transfer ?
-                    [] : [{key: 'accountName', label: 'Account'},
-                        {key: 'material', label: 'Material', money: true}]);
+                {key: 'accountName', label: 'Account'},
+                {key: 'material', label: 'Material Cost', money: true},
+                {key: 'labor', label: 'Labor Cost', money: true},
+                {key: 'burden', label: 'Burden Cost', money: true},
+                {key: 'service', label: 'Service Cost', money: true},
+                {key: 'lot', label: 'Tracking No'},
+                {key: 'last_counted', label: 'Set Last Counted', bool: true},
+                {key: 'note', label: 'Description'}];
             var tableNode = dataTable(columns, pending, {
                 empty: 'Enter a line above and click ' + (transfer ?
                     'New Transfer.' : 'New Adjustment.'),
@@ -1838,7 +2552,8 @@
                             {key: 'account', label: 'Account'},
                             {key: 'cost', label: 'Unit Cost', money: true}])
                         .concat([{key: 'reason', label: 'Reason Code'},
-                            {key: 'lot', label: 'Tracking Number'}]), rows, {
+                            {key: 'lot', label: 'Tracking Number'},
+                            {key: 'note', label: 'Description'}]), rows, {
                                 ondblclick: function (row) {
                                     UI.openRecord('stock.move', row.entry,
                                         row.part);
@@ -1879,20 +2594,26 @@
         var form = el('div.grid-form',
             transfer ? null : field('Type', type),
             field('Date', date),
+            transfer ? null : el('div', el('label.field', ' '), el('label',
+                lastCounted, ' Set Last Counted Date')),
             el('div', {style: {gridColumn: 'span 2'}}, el('label.field',
-                'Part ID'), partPick.node),
-            field(transfer ? 'Location ID (from)' : 'Location ID', location),
-            field('On Hand (location)', onHand),
-            field(transfer ? 'Qty. Avail. to Transfer (all locations)' :
-                'Available (all locations)', available),
+                'Part ID'), partPick.node, partDescr),
+            field('Location ID', location),
+            field(transfer ? 'Qty. Avail. to Transfer' :
+                'Qty Available to Adjust', onHand),
             field(transfer ? 'Transfer Qty' : 'Quantity', el('span',
                 quantity, ' ', unit)),
             field('Tracking No', el('span', lot, lots)),
             field('Reason Code', reason),
-            transfer ? field('Transfer To: Location ID', toLocation) :
-                (account ? field('Adj Account ID', account) : null));
+            transfer ? null : (account ? field('Adj Acct ID', account) :
+                null),
+            el('div', {style: {gridColumn: 'span 2'}}, el('label.field',
+                'Transaction Note'), note),
+            transfer ? el('fieldset', {style: {gridColumn: 'span 3'}},
+                el('legend', 'Transfer To'), field('Location ID',
+                    toLocation)) : null);
         var costBox = transfer ? null : el('fieldset', el('legend',
-            'Unit Cost (Adjust In)'), el('div.grid-form',
+            'Unit Cost per Quantity UM'), el('div.grid-form',
             field('Material', costs.material), field('Labor', costs.labor),
             field('Burden', costs.burden), field('Service', costs.service)));
         type.addEventListener('change', function () {
@@ -1903,6 +2624,9 @@
         var node = el('div', form, costBox, el('div.toolbar',
             el('button', {type: 'button', onclick: add}, transfer ?
                 'New Transfer' : 'New Adjustment'),
+            el('button', {type: 'button', onclick: function () {
+                save();
+            }}, transfer ? 'Transfer' : 'Adjust'),
             el('button', {type: 'button', onclick: clearEntry}, 'Clear')),
             tableBox, historyBox);
         renderTable();

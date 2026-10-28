@@ -51,7 +51,9 @@
                 'var(--line); border-radius: 6px; padding: 10px 12px; }',
             '.jsa-chart h3 { margin: 0 0 6px; font-size: 14px; }',
             '.jsa-chart svg { width: 100%; height: auto; display: block; }',
-            '.jsa-chart svg text { fill: var(--muted); font-size: 10px; }',
+            '.jsa-chart svg text { fill: var(--muted); font-size: 13px; }',
+            '.jsa-chart svg text.ink { fill: var(--ink); }',
+            '.jsa-chart p.muted { margin: 30px 0; text-align: center; }',
             '.jsa-chart .legend { font-size: 12px; color: var(--muted); }',
             '.jsa-chart .legend i { display: inline-block; width: 10px; ' +
                 'height: 10px; margin: 0 4px 0 10px; border-radius: 2px; }',
@@ -72,6 +74,17 @@
             '.jsa-filters { display: grid; grid-template-columns: ' +
                 'max-content 1fr 1fr; gap: 6px 10px; align-items: center; }',
             '.jsa-filters label { color: var(--muted); font-size: 13px; }',
+            '.jsa-dialog { display: flex; flex-wrap: wrap; gap: 8px 12px; ' +
+                'align-items: flex-start; }',
+            'fieldset.jsa-dlg-frame { border: 1px solid var(--line); ' +
+                'border-radius: 4px; margin: 0; padding: 4px 10px 8px; ' +
+                'min-width: 250px; }',
+            'fieldset.jsa-dlg-frame legend { font-size: 13px; padding: ' +
+                '0 4px; }',
+            'fieldset.jsa-dlg-frame > div { margin-top: 4px; }',
+            'fieldset.jsa-dlg-frame label { display: inline-flex; gap: ' +
+                '6px; align-items: center; }',
+            '.jsa-dlg-line { flex-basis: 100%; }',
             '.jsa-adv table td { padding: 2px 4px; }',
             'table.jsa-report td, table.jsa-report th { border-bottom: ' +
                 'none; padding: 3px 6px; font-size: 13px; }',
@@ -109,6 +122,36 @@
                 'border-radius: 6px; margin: 0 0 12px; padding: 8px 12px; }',
             'fieldset.jsa-box legend { color: var(--accent); ' +
                 'font-weight: 600; padding: 0 4px; }',
+            '.jsa-frame { grid-column: 1 / -1; margin: 8px 0 0; ' +
+                'color: var(--accent); border-bottom: 1px solid ' +
+                'var(--line); padding-bottom: 2px; }',
+            'p.jsa-frame { color: var(--muted); border: none; }',
+            '.jsa-tabs-pane[hidden] { display: none; }',
+            /* One fixed column set for every line, so the dates and the
+             * values line up from row to row */
+            '.jsa-exec-row { display: grid; grid-template-columns: ' +
+                'minmax(0, 1fr) 150px 20px 150px 140px 150px; gap: 6px ' +
+                '10px; align-items: center; padding: 4px 0; ' +
+                'border-bottom: 1px solid var(--line-soft); }',
+            '.jsa-exec-row .lbl { display: flex; flex-wrap: wrap; gap: ' +
+                '4px 6px; align-items: center; }',
+            '.jsa-exec-row .lbl select { width: auto; min-width: 120px; ' +
+                'max-width: 220px; }',
+            '.jsa-exec-row input[type=date] { width: 100%; margin: 0; }',
+            '.jsa-exec-row .to { color: var(--muted); text-align: center; }',
+            '.jsa-exec-row .num { text-align: right; font-weight: 700; }',
+            '.jsa-exec-row .act { display: flex; gap: 8px; align-items: ' +
+                'center; justify-content: flex-end; white-space: nowrap; }',
+            '.jsa-exec-row .act label { display: inline-flex; gap: 4px; ' +
+                'align-items: center; margin: 0; }',
+            '.jsa-table th.num, .jsa-table td.num { text-align: right; }',
+            '.jsa-box .ribbon-field { white-space: nowrap; }',
+            /* Authority Manager: the Authority column at the same place
+             * in every group's table */
+            '.jsa-auth table.data { table-layout: fixed; width: 100%; }',
+            '.jsa-auth table.data th:first-child { width: 65%; }',
+            '.jsa-table th.num + th:not(.num), .jsa-table td.num + ' +
+                'td:not(.num) { padding-left: 20px; }',
             '@media print { .jsa-noprint, #topbar, .ribbon { display: ' +
                 'none !important; } .jsa-split { display: block; } ' +
                 '.report-page { border: none; } }'
@@ -185,7 +228,7 @@
             body.appendChild(el('tr', el('td.muted', {colspan:
                 columns.length}, 'None.')));
         }
-        return el('div.table-wrap', el('table.data', el('thead', el('tr',
+        return el('div.table-wrap.jsa-table', el('table.data', el('thead', el('tr',
             columns.map(function (c) {
                 return el('th' + (numeric(c.type) ? '.num' : ''), c.label);
             }))), body));
@@ -279,30 +322,45 @@
         });
         var max = Math.max.apply(null, all.concat([0]));
         var min = Math.min.apply(null, all.concat([0]));
+        if (max === 0 && min === 0) {
+            /* All zero: no empty 0-1 axis */
+            box.appendChild(el('p.muted', 'None in this period.'));
+            return box;
+        }
         var range = (max - min) || 1;
         var node;
+        /* The text is 13 units high in a viewBox close to the chart's
+         * width on screen, so it stays readable */
+        function fit(text, chars) {
+            text = String(text);
+            return text.length > chars ? text.slice(0, chars - 1) + '…' :
+                text;
+        }
         if (spec.kind === 'hbar') {
-            var rowH = 20, left = 150, width = 460;
-            var height = labels.length * rowH + 10;
-            node = svg('svg', {viewBox: '0 0 ' + (left + width + 70) + ' ' +
+            var rowH = 24, left = 175, width = 280;
+            var height = labels.length * rowH + 8;
+            node = svg('svg', {viewBox: '0 0 ' + (left + width + 60) + ' ' +
                 height, role: 'img', 'aria-label': spec.title});
             labels.forEach(function (label, i) {
                 var v = Number(series[0].values[i]) || 0;
                 var w = Math.max(1, width * Math.abs(v) / (Math.max(Math.abs(
                     max), Math.abs(min)) || 1));
                 var y = i * rowH + 4;
-                node.appendChild(svgText(left - 6, y + 12, String(label)
-                    .slice(0, 26), 'end'));
+                var name = svgText(left - 6, y + 13, fit(label, 23), 'end');
+                name.setAttribute('class', 'ink');
+                name.appendChild(svg('title'));
+                name.lastChild.textContent = label;
+                node.appendChild(name);
                 node.appendChild(svg('rect', {x: left, y: y, width: w,
-                    height: rowH - 6, rx: 2, fill: v < 0 ? 'var(--bad)' :
+                    height: rowH - 8, rx: 2, fill: v < 0 ? 'var(--bad)' :
                         COLORS[0]}, [svg('title', {}, [])]));
                 node.lastChild.firstChild.textContent = label + ': ' +
                     (spec.money ? UI.money(v, true) : v);
-                node.appendChild(svgText(left + w + 4, y + 12, short(v,
+                node.appendChild(svgText(left + w + 4, y + 13, short(v,
                     spec.money), 'start'));
             });
         } else {
-            var W = 600, H = 220, padL = 52, padB = 34, padT = 10;
+            var W = 520, H = 230, padL = 56, padB = 34, padT = 10;
             var plotW = W - padL - 10, plotH = H - padB - padT;
             var y0 = padT + plotH * max / range;
             node = svg('svg', {viewBox: '0 0 ' + W + ' ' + H, role: 'img',
@@ -312,16 +370,21 @@
                 var y = padT + plotH * (1 - f);
                 node.appendChild(svg('line', {x1: padL, x2: W - 10, y1: y,
                     y2: y, stroke: 'var(--line-soft)'}));
-                node.appendChild(svgText(padL - 4, y + 3, short(value,
+                node.appendChild(svgText(padL - 4, y + 4, short(value,
                     spec.money), 'end'));
             });
             node.appendChild(svg('line', {x1: padL, x2: W - 10, y1: y0,
                 y2: y0, stroke: 'var(--line)'}));
             var step = plotW / labels.length;
+            /* Every n-th label, so they do not run into each other */
+            var widest = labels.reduce(function (m, l) {
+                return Math.max(m, Math.min(String(l).length, 12));
+            }, 1) * 7.5 + 6;
+            var every = Math.max(1, Math.ceil(widest / step));
             labels.forEach(function (label, i) {
-                if (labels.length <= 14 || i % 2 === 0) {
-                    node.appendChild(svgText(padL + step * (i + 0.5), H - 18,
-                        String(label).slice(0, 12)));
+                if (i % every === 0) {
+                    node.appendChild(svgText(padL + step * (i + 0.5), H - 14,
+                        fit(label, 12)));
                 }
             });
             series.forEach(function (s, si) {
@@ -371,91 +434,106 @@
 
     /* ---- Account Sets --------------------------------------------------- */
 
+    /* Jobshop's Account Sets window (VAccounting/AccountSet): one tab, the
+     * accounts in their frames, placed as Jobshop draws them:
+     * [Jobshop code, caption, [left, top, right, bottom]] */
+    var ACCOUNT_SET_LAYOUT = [
+        ['EXP', 'Purchase Expense', [13, 73, 275, 93]],
+        ['POA', 'Purchase Accrual', [13, 95, 275, 115]],
+        ['PAYB', 'Payables', [13, 117, 275, 137]],
+        ['REV', 'Sales Revenue', [298, 73, 560, 93]],
+        ['RECV', 'Receivables', [298, 95, 560, 115]],
+        ['AFL', 'Applied Factory Lab', [13, 167, 275, 187]],
+        ['AFB', 'Applied Factory Bur', [13, 189, 275, 209]],
+        ['IND', 'Indirect Factory Lab', [298, 167, 560, 187]],
+        ['ADJ', 'Inventory Adjustment', [12, 240, 274, 260]],
+        ['INV_MAT', 'Material', [12, 262, 274, 282]],
+        ['INV_LAB', 'Labor', [12, 284, 274, 304]],
+        ['INV_BUR', 'Burden', [297, 262, 559, 282]],
+        ['INV_SER', 'Service', [297, 284, 559, 304]],
+        ['WIP_MAT', 'Material', [12, 335, 274, 355]],
+        ['WIP_LAB', 'Labor', [12, 357, 274, 377]],
+        ['WIP_BUR', 'Burden', [297, 335, 559, 355]],
+        ['WIP_SER', 'Service', [297, 357, 559, 377]],
+        ['CGS_MAT', 'Material', [12, 408, 274, 428]],
+        ['CGS_LAB', 'Labor', [12, 430, 274, 450]],
+        ['CGS_BUR', 'Burden', [297, 408, 559, 428]],
+        ['CGS_SER', 'Service', [297, 430, 559, 450]]];
+    var ACCOUNT_SET_FRAMES = [
+        {label: 'Purchasing', at: [5, 53, 284, 142]},
+        {label: 'Sales', at: [290, 53, 569, 144]},
+        {label: 'Labor and Burden', at: [5, 147, 566, 215]},
+        {label: 'Inventory', at: [5, 220, 566, 313]},
+        {label: 'WIP', at: [5, 315, 566, 384]},
+        {label: 'Cost Of Goods Sold', at: [5, 388, 566, 452]}];
+
     Screens.jsAccountSets = function (main, params) {
         style();
         Rpc.desk('jsadmin_account_set_fields', []).then(function (accounts) {
             var domain = [['type', '!=', null], ['closed', '!=', true]];
-            function fieldsOf(prefixes) {
-                return accounts.filter(function (a) {
-                    return prefixes.some(function (p) {
-                        return a.jobshop.indexOf(p) === 0;
-                    });
-                }).map(function (a) {
-                    return {name: a.name, label: a.label + ' G/L Account ID' +
-                        (a.tryton ? ' *' : ''), type: 'many2one',
-                        model: 'account.account', domain: domain, span: 2};
-                });
-            }
-            var note = {title: 'Notes', render: function (pane) {
-                pane.appendChild(el('p.jsa-note', 'The accounts marked * ' +
-                    'are the ones Tryton posts to for the parts of this ' +
-                    'account set (Inventory Material: stock, CGS ' +
-                    'Material: stock out, Purchase Order Accrual: stock ' +
-                    'in, Purchase Expense, Sales Revenue). The others ' +
-                    'are kept for Jobshop\'s reports; the work in process ' +
-                    'is posted to the WIP account of the accounting ' +
-                    'configuration.'));
-            }};
+            var byCode = {};
+            accounts.forEach(function (a) {
+                byCode[a.jobshop] = a;
+            });
+            var fields = [
+                {name: 'js_description', label: 'Description', type: 'char',
+                    at: [12, 27, 559, 47], split: 150}];
+            ACCOUNT_SET_LAYOUT.forEach(function (item) {
+                var a = byCode[item[0]];
+                if (a) {
+                    fields.push({name: a.name, label: item[1] + (a.tryton ?
+                        ' *' : ''), type: 'many2one', model:
+                        'account.account', domain: domain, at: item[2],
+                        split: 150, help: a.label});
+                }
+            });
             UI.master(main, {
                 title: 'Account Sets',
                 model: 'product.category',
                 label: 'Account Set ID',
+                idAt: [12, 5, 294, 25],
+                idSplit: 150,
+                idField: 'name',
+                idLength: 15,
                 domain: [['accounting', '=', true]],
                 order: [['name', 'ASC']],
                 open: params && params[0] ? parseInt(params[0], 10) : null,
                 defaults: {accounting: true},
-                tabs: [
-                    {title: 'Account Set', fields: [
-                        {name: 'name', label: 'Account Set ID',
-                            type: 'char'},
-                        {name: 'js_description', label: 'Description',
-                            type: 'char', span: 2}]},
-                    {title: 'Inventory', fields: fieldsOf(['INV_', 'ADJ'])},
-                    {title: 'WIP', fields: fieldsOf(['WIP_'])},
-                    {title: 'Cost of Goods Sold', fields: fieldsOf(
-                        ['CGS_'])},
-                    {title: 'Purchasing / Sales', fields: fieldsOf(['EXP',
-                        'REV', 'POA', 'RECV', 'PAYB'])},
-                    {title: 'Labor', fields: fieldsOf(['AFL', 'AFB',
-                        'IND'])},
-                    note
-                ],
-                browse: [{name: 'name', label: 'Account Set ID'},
-                    {name: 'js_description', label: 'Description'},
-                    {name: 'account_revenue', label: 'Sales Revenue',
-                        type: 'many2one'},
-                    {name: 'account_expense', label: 'Purchase Expense',
-                        type: 'many2one'}],
+                tabs: [{title: 'Account Sets', fields: fields,
+                    frames: ACCOUNT_SET_FRAMES}],
+                browse: [{name: 'name', label: 'ID'},
+                    {name: 'js_description', label: 'Description'}],
                 extra: [{label: 'Account Set List', onclick: function () {
                     UI.openScreen('js-reports/accounting/account_set_list',
                         'Account Set List');
                 }}]
             });
+            var pane = main.querySelector('.tab-pane');
+            if (pane) {
+                pane.appendChild(el('p.jsa-note', '* The accounts Tryton ' +
+                    'posts to for the parts of this set (Inventory ' +
+                    'Material: stock, CGS Material: stock out, Purchase ' +
+                    'Accrual: stock in, Purchase Expense, Sales Revenue); ' +
+                    'the others are kept for the reports. The work in ' +
+                    'process posts to the WIP account of the accounting ' +
+                    'configuration.'));
+            }
         }, UI.showError);
     };
 
-    /* ---- Accounting Calendar ------------------------------------------ */
-
     var STATE = {open: 'Open', closed: 'Closed', locked: 'Locked'};
 
+    /* Jobshop's Accounting Calendar (VAccounting/AccountingCalendar): the
+     * Automatic Accounting Period Generation frame (Monthly / Quarterly,
+     * Fiscal Year, End Date, Auto Gen Periods) over the Accounting Periods
+     * grid (Fiscal Year, Period, End Date, Posted) of all the years */
     Screens.jsAccountingCalendar = function (main) {
         style();
         var body = el('div');
         var access = {};
         var years = [];
-        var chosen = null;
-        var yearSelect = el('select', {'aria-label': 'Fiscal Year',
-            onchange: function () {
-                chosen = parseInt(yearSelect.value, 10);
-                render();
-            }});
-        var newYear = button('New Fiscal Year', addYear, false,
-            'Create the next fiscal year with its periods');
-        newYear.hidden = true;
         ribbon(main, 'Accounting Calendar', [
-            el('label.ribbon-field', 'Fiscal Year ', yearSelect),
             button('Refresh', load, false, 'F5'),
-            newYear,
             button('Print', function () {
                 UI.openScreen('js-reports/accounting/accounting_calendar',
                     'Accounting Calendar');
@@ -477,78 +555,158 @@
             });
         }
 
+        function can(model, what) {
+            return Boolean(access[model] && access[model][what]);
+        }
+
+        function generation() {
+            var last = years[0];
+            var nextYear = last ? String(parseInt(last.end_date.slice(0, 4),
+                10) + 1) : String(new Date().getFullYear());
+            var type = 'monthly';
+            var radios = [['monthly', 'Monthly'], ['quarterly', 'Quarterly']]
+                .map(function (o) {
+                    return el('label', {style: {marginRight: '12px'}},
+                        el('input', {type: 'radio', name: 'jsa-period-type',
+                            value: o[0], checked: o[0] === type,
+                            onchange: function () {
+                                type = o[0];
+                            }}), ' ' + o[1]);
+                });
+            var end = el('input', {type: 'date', 'aria-label': 'End Date',
+                value: last ? nextYear + last.end_date.slice(4) : ''});
+            var fiscal = el('input', {type: 'text', value: nextYear,
+                readonly: true, size: 6, 'aria-label': 'Fiscal Year',
+                title: 'The fiscal year after the latest one'});
+            end.addEventListener('change', function () {
+                if (end.value) {
+                    fiscal.value = end.value.slice(0, 4);
+                }
+            });
+            return el('fieldset.jsa-box', el('legend',
+                'Automatic Accounting Period Generation'),
+                el('div.toolbar', el('span', radios),
+                    el('label.ribbon-field', 'Fiscal Year ', fiscal),
+                    el('label.ribbon-field', 'End Date ', end),
+                    button('Auto Gen Periods', function () {
+                        if (!end.value) {
+                            return;
+                        }
+                        Rpc.desk('jsadmin_fiscalyear_create', [{end_date:
+                            Rpc.date(end.value), period_type: type}]).then(
+                            function () {
+                                UI.toast('Fiscal year created', 'ok');
+                                load();
+                            }, UI.showError);
+                    }, true, 'Create the fiscal year ending on the date ' +
+                        'with its periods (made from the latest one)')));
+        }
+
+        function periodAction(r, rows) {
+            var p = r.period;
+            if (p.state === 'open') {
+                return button('Close', function () {
+                    /* Jobshop closes the period with the open ones before
+                     * it */
+                    var ids = rows.filter(function (q) {
+                        return q.period.state === 'open' &&
+                            q.period.end_date <= p.end_date;
+                    }).map(function (q) {
+                        return q.period.id;
+                    });
+                    act('period-close', ids, 'Close ' + p.name +
+                        (ids.length > 1 ? ' and the ' + (ids.length - 1) +
+                            ' open periods before it' : '') + '? No entry ' +
+                        'can be posted in a closed period.');
+                });
+            }
+            if (p.state === 'closed') {
+                return [button('Reopen', function () {
+                    act('period-reopen', [p.id], 'Reopen ' + p.name + '?');
+                }), ' ', button('Lock', function () {
+                    act('period-lock', [p.id], 'Lock ' + p.name +
+                        '? A locked period cannot be reopened.');
+                })];
+            }
+            return '';
+        }
+
+        function yearAction(y) {
+            if (y.state === 'open') {
+                return button('Close Fiscal Year', function () {
+                    act('year-close', [y.id], 'Close the fiscal year ' +
+                        y.name + '? All its periods must be closed.');
+                });
+            }
+            if (y.state === 'closed') {
+                return button('Reopen Fiscal Year', function () {
+                    act('year-reopen', [y.id], 'Reopen the fiscal year ' +
+                        y.name + '?');
+                });
+            }
+            return '';
+        }
+
         function render() {
             UI.clear(body);
-            var year = years.filter(function (y) {
-                return y.id === chosen;
-            })[0] || years[0];
-            if (!year) {
+            if (can('account.fiscalyear', 'create')) {
+                body.appendChild(generation());
+            }
+            if (!years.length) {
                 body.appendChild(el('p.muted', 'No fiscal year yet.'));
                 return;
             }
-            chosen = year.id;
-            yearSelect.value = String(year.id);
-            var periodWrite = access['account.period'] &&
-                access['account.period'].write;
-            var yearWrite = access['account.fiscalyear'] &&
-                access['account.fiscalyear'].write;
+            var rows = [];
+            years.slice().reverse().forEach(function (y) {
+                y.periods.forEach(function (p, i) {
+                    rows.push({year: y, period: p, number: i + 1});
+                });
+            });
             var columns = [
-                {key: 'number', label: 'Period', type: 'int'},
-                {key: 'name', label: 'Name'},
-                {key: 'start_date', label: 'Start Date', type: 'date'},
-                {key: 'end_date', label: 'Last Day', type: 'date'},
-                {key: 'state', label: 'Status', render: function (p) {
-                    return STATE[p.state] || p.state;
+                {key: 'year', label: 'Fiscal Year', render: function (r) {
+                    return r.year.name;
                 }},
-                {key: 'drafts', label: 'Unposted Moves', type: 'int'}];
-            if (periodWrite) {
-                columns.push({key: 'action', label: '', render: function (p) {
-                    if (p.state === 'open') {
-                        return button('Close', function () {
-                            /* Jobshop closes the period with the open ones
-                             * before it */
-                            var ids = year.periods.filter(function (q) {
-                                return q.state === 'open' &&
-                                    q.end_date <= p.end_date;
-                            }).map(function (q) {
-                                return q.id;
-                            });
-                            act('period-close', ids, 'Close ' + p.name +
-                                (ids.length > 1 ? ' and the ' + (ids.length -
-                                    1) + ' open periods before it' : '') +
-                                '? No entry can be posted in a closed ' +
-                                'period.');
-                        });
-                    }
-                    if (p.state === 'closed') {
-                        return [button('Reopen', function () {
-                            act('period-reopen', [p.id], 'Reopen ' +
-                                p.name + '?');
-                        }), ' ', button('Lock', function () {
-                            act('period-lock', [p.id], 'Lock ' + p.name +
-                                '? A locked period cannot be reopened.');
-                        })];
-                    }
-                    return '';
+                {key: 'number', label: 'Period', type: 'int', render:
+                    function (r) {
+                        return String(r.number);
+                    }},
+                {key: 'end_date', label: 'End Date', render: function (r) {
+                    return UI.date(r.period.end_date);
+                }},
+                {key: 'posted', label: 'Posted', render: function (r) {
+                    return r.period.state !== 'open' ? '✔' : '';
+                }},
+                {key: 'name', label: 'Name', render: function (r) {
+                    return r.period.name;
+                }},
+                {key: 'state', label: 'Status', render: function (r) {
+                    return STATE[r.period.state] || r.period.state;
+                }},
+                {key: 'drafts', label: 'Unposted Moves', type: 'int',
+                    render: function (r) {
+                        return r.period.drafts ? String(r.period.drafts) :
+                            '';
+                    }}];
+            if (can('account.period', 'write')) {
+                columns.push({key: 'action', label: '', render: function (r) {
+                    return periodAction(r, rows);
                 }});
             }
-            body.appendChild(el('div.panel', el('div.toolbar',
-                el('strong', year.name + ' (' + UI.date(year.start_date) +
-                    ' - ' + UI.date(year.end_date) + ')'),
-                el('span.muted', ' ' + (STATE[year.state] || year.state)),
-                el('span.spacer'),
-                yearWrite && year.state === 'open' ? button(
-                    'Close Fiscal Year', function () {
-                        act('year-close', [year.id], 'Close the fiscal ' +
-                            'year ' + year.name + '? All its periods must ' +
-                            'be closed.');
-                    }) : null,
-                yearWrite && year.state === 'closed' ? button(
-                    'Reopen Fiscal Year', function () {
-                        act('year-reopen', [year.id], 'Reopen the fiscal ' +
-                            'year ' + year.name + '?');
-                    }) : null),
-                table(columns, year.periods)));
+            body.appendChild(el('fieldset.jsa-box', el('legend',
+                'Accounting Periods'), table(columns, rows)));
+            if (can('account.fiscalyear', 'write')) {
+                body.appendChild(el('fieldset.jsa-box', el('legend',
+                    'Fiscal Years'), table([
+                        {key: 'name', label: 'Fiscal Year'},
+                        {key: 'start_date', label: 'Start Date',
+                            type: 'date'},
+                        {key: 'end_date', label: 'End Date', type: 'date'},
+                        {key: 'state', label: 'Status', render: function (y) {
+                            return STATE[y.state] || y.state;
+                        }},
+                        {key: 'action', label: '', render: yearAction}],
+                    years)));
+            }
         }
 
         function load() {
@@ -557,38 +715,8 @@
                 function (result) {
                     years = result[0];
                     access = result[1];
-                    newYear.hidden = !(access['account.fiscalyear'] &&
-                        access['account.fiscalyear'].create);
-                    UI.clear(yearSelect);
-                    years.forEach(function (y) {
-                        yearSelect.appendChild(el('option', {value: y.id},
-                            y.name));
-                    });
                     render();
                 }, UI.showError);
-        }
-
-        function addYear() {
-            var last = years[0];
-            var end = el('input', {type: 'date', value: last ? String(
-                parseInt(last.end_date.slice(0, 4), 10) + 1) +
-                last.end_date.slice(4) : ''});
-            var kind = el('select', el('option', {value: 'monthly'},
-                'Monthly'), el('option', {value: 'quarterly'}, 'Quarterly'));
-            UI.modal('New Fiscal Year', [
-                el('p.jsa-note', 'Made from the latest fiscal year (its ' +
-                    'numbering renewed), with its periods.'),
-                el('label.field', 'End Date'), end,
-                el('label.field', 'Period Type'), kind], [
-                {label: 'Cancel'},
-                {label: 'Auto', primary: true, onclick: function () {
-                    Rpc.desk('jsadmin_fiscalyear_create', [{end_date:
-                        Rpc.date(end.value), period_type: kind.value}])
-                        .then(function () {
-                            UI.toast('Fiscal year created', 'ok');
-                            load();
-                        }, UI.showError);
-                }}]);
         }
 
         load();
@@ -596,11 +724,44 @@
 
     /* ---- Account Interface -------------------------------------------- */
 
+    /* Jobshop's tab bar inside a screen: [[title, pane]], shows the first */
+    function tabbed(main, items) {
+        var bar = el('div.tabs', {role: 'tablist'});
+        var panes = el('div.tab-panes');
+        function show(index) {
+            Array.prototype.forEach.call(bar.children, function (b, i) {
+                b.classList.toggle('active', i === index);
+            });
+            items.forEach(function (item, i) {
+                item[1].hidden = i !== index;
+            });
+        }
+        items.forEach(function (item, index) {
+            bar.appendChild(el('button.tab', {type: 'button', role: 'tab',
+                onclick: function () {
+                    show(index);
+                }}, item[0]));
+            item[1].classList.add('tab-pane', 'panel');
+            item[1].setAttribute('role', 'tabpanel');
+            panes.appendChild(item[1]);
+        });
+        main.appendChild(bar);
+        main.appendChild(panes);
+        show(0);
+        return show;
+    }
+
+    /* Jobshop's Account Interface (VAccounting/Interface): tab Account
+     * Periods (Transactions: Post to Period End Date of previous / current,
+     * Post; the periods grid) and tab Export (Accounting Package, Period End
+     * Posting Dates, Options: what to export and the file names) */
     Screens.jsAccountInterface = function (main) {
         style();
-        var body = el('div');
+        var periodsPane = el('div');
+        var exportPane = el('div');
         var data = null;
         var periods = [];
+        var years = [];
         var access = {};
         ribbon(main, 'Account Interface', [
             button('Refresh', load, false, 'F5'),
@@ -608,8 +769,9 @@
                 UI.openScreen('js-reports/accounting/journal_batch_list',
                     'Journal Batch List');
             })]);
-        main.appendChild(body);
-        shortcuts(body, {refresh: load});
+        tabbed(main, [['Account Periods', periodsPane],
+            ['Export', exportPane]]);
+        shortcuts(periodsPane, {refresh: load});
 
         function load() {
             Promise.all([Rpc.desk('jsadmin_interface', [null, null]),
@@ -619,9 +781,13 @@
                     'account.invoice', 'party.party'])]).then(
                 function (result) {
                     data = result[0];
+                    years = result[1];
                     periods = [];
-                    result[1].forEach(function (y) {
-                        periods = periods.concat(y.periods);
+                    years.forEach(function (y) {
+                        y.periods.forEach(function (p, i) {
+                            periods.push(Object.assign({year: y.name,
+                                number: i + 1}, p));
+                        });
                     });
                     periods.sort(function (a, b) {
                         return a.end_date < b.end_date ? -1 : 1;
@@ -644,23 +810,20 @@
                 return p.end_date < current.start_date;
             }).pop() : null;
             var choice = 'current';
-            function radio(value, label, period) {
-                return el('label', el('input', {type: 'radio', name:
-                    'jsa-post', checked: value === choice, disabled:
+            function radio(value, period) {
+                return el('div', el('label', el('input', {type: 'radio',
+                    name: 'jsa-post', checked: value === choice, disabled:
                     !period, onchange: function () {
                         choice = value;
-                    }}), ' ' + label + (period ? ' ' + UI.date(
-                        period.end_date) : ' (none)'));
+                    }}), ' Post to Period End Date of ' + (period ?
+                        UI.date(period.end_date) : '(none)')));
             }
-            var box = el('fieldset.jsa-box', el('legend', 'Account Periods'),
+            var box = el('fieldset.jsa-box', el('legend', 'Transactions'),
+                radio('previous', previous), radio('current', current),
                 el('p.jsa-note', 'Post: the unposted moves of the stock, ' +
                     'production and invoice operations up to the period ' +
                     'end are posted, then gathered by journal into journal ' +
-                    'batches for the export.'),
-                el('div', radio('previous', 'Post to Previous Period End ' +
-                    'Date of', previous)),
-                el('div', radio('current', 'Post to Current Period End ' +
-                    'Date of', current)));
+                    'batches for the export.'));
             if (can('account.move', 'write') &&
                     can('nline.js.journal_batch', 'create')) {
                 box.appendChild(el('div.toolbar', button('Post', function () {
@@ -727,52 +890,86 @@
         }
 
         function exportSection() {
-            var from = el('input', {type: 'date'});
-            var to = el('input', {type: 'date', value: UI.today()});
+            var from = el('input', {type: 'date', 'aria-label': 'From'});
+            var to = el('input', {type: 'date', value: UI.today(),
+                'aria-label': 'To'});
             var reexport = el('input', {type: 'checkbox'});
-            var batch = el('select', el('option', {value: ''}, ''),
+            var batchDate = el('span.muted');
+            var batch = el('select', {'aria-label': 'Batch ID', onchange:
+                function () {
+                    var b = data.batches.filter(function (x) {
+                        return String(x.id) === batch.value;
+                    })[0];
+                    batchDate.textContent = b ? UI.date(b.posting_date) : '';
+                }}, el('option', {value: ''}, ''),
                 data.batches.map(function (b) {
-                    return el('option', {value: b.id}, b.number + ' ' +
-                        b.description);
+                    return el('option', {value: b.id}, b.number);
                 }));
             var forBatch = el('input', {type: 'checkbox', onchange:
                 function () {
                     batch.disabled = !forBatch.checked;
                 }});
             batch.disabled = true;
-            var detail = el('input', {type: 'radio', name: 'jsa-roll'});
             var rolled = el('input', {type: 'radio', name: 'jsa-roll',
                 checked: true});
+            var detail = el('input', {type: 'radio', name: 'jsa-roll'});
+            var nameAsId = {customers: el('input', {type: 'checkbox'}),
+                suppliers: el('input', {type: 'checkbox'})};
             var what = {};
+            var fileNames = {};
             var options = [
                 ['gl', 'Posted Inventory Transactions (General Ledger)',
+                    'inventory_transactions.csv',
                     can('nline.js.journal_batch', 'write')],
-                ['ar', 'Invoices (Accounts Receivable)',
+                ['ar', 'Invoices (Accounts Receivable)', 'invoices.csv',
                     can('account.invoice', 'read')],
-                ['ap', 'Receivers (Accounts Payable)',
+                ['ap', 'Receivers (Accounts Payable)', 'receivers.csv',
                     can('account.invoice', 'read')],
-                ['customers', 'Customer Information',
+                ['customers', 'Customer Information', 'customers.csv',
                     can('party.party', 'read')],
-                ['suppliers', 'Supplier Information',
+                ['suppliers', 'Supplier Information', 'suppliers.csv',
                     can('party.party', 'read')]];
-            var box = el('fieldset.jsa-box', el('legend', 'Export'),
-                el('div.jsa-filters',
-                    el('label', 'From'), from, el('span'),
-                    el('label', 'To'), to, el('span'),
-                    el('label', 'Re-Export All in Date Range'), reexport,
-                    el('span'),
-                    el('label', 'For Batch ID'), forBatch, batch),
-                el('div', el('label', rolled, ' Export Rolled-up Batch by ' +
-                    'Account ID')),
-                el('div', el('label', detail, ' Export Individual ' +
-                    'Transaction Details')),
-                options.filter(function (o) {
-                    return o[2];
-                }).map(function (o) {
-                    what[o[0]] = el('input', {type: 'checkbox', checked:
-                        o[0] === 'gl'});
-                    return el('div', el('label', what[o[0]], ' ' + o[1]));
-                }),
+            var rows = [];
+            options.filter(function (o) {
+                return o[3];
+            }).forEach(function (o) {
+                what[o[0]] = el('input', {type: 'checkbox', checked:
+                    o[0] === 'gl'});
+                fileNames[o[0]] = el('input', {type: 'text', value: o[2],
+                    'aria-label': 'Export To', size: 34});
+                rows.push(el('div.toolbar', el('label', {style: {minWidth:
+                    '330px'}}, what[o[0]], ' ' + o[1]), el('label',
+                    'Export To: ', fileNames[o[0]])));
+                if (o[0] === 'gl') {
+                    rows.push(el('div', {style: {marginLeft: '24px'}},
+                        el('div.toolbar', el('label', forBatch,
+                            ' For Batch ID'), batch, batchDate),
+                        el('div', el('label', rolled, ' Export Rolled-up ' +
+                            'Batch by Account ID')),
+                        el('div', el('label', detail, ' Export Individual ' +
+                            'Transaction Details'))));
+                }
+                if (nameAsId[o[0]]) {
+                    rows.push(el('div', {style: {marginLeft: '24px'}},
+                        el('label', nameAsId[o[0]], o[0] === 'customers' ?
+                            ' Substitute Customer Name for Customer ID' :
+                            ' Substitute Supplier Name for Supplier ID')));
+                }
+            });
+            if (!rows.length) {
+                return el('p.muted', 'Nothing you may export.');
+            }
+            return el('div',
+                el('div.toolbar', el('label.ribbon-field',
+                    'Accounting Package: ', el('strong',
+                        'CSV files (N-Line\'s books are kept in Tryton)'))),
+                el('fieldset.jsa-box', el('legend',
+                    'Period End Posting Dates'), el('div.toolbar',
+                        el('label.ribbon-field', 'From: ', from),
+                        el('label.ribbon-field', 'To: ', to),
+                        el('label', reexport,
+                            ' Re-Export All in Date Range'))),
+                el('fieldset.jsa-box', el('legend', 'Options'), rows),
                 el('div.toolbar', button('Export', function () {
                     var chosen = Object.keys(what).filter(function (k) {
                         return what[k].checked;
@@ -786,26 +983,43 @@
                             reexport: reexport.checked,
                             batch: forBatch.checked && batch.value ?
                                 parseInt(batch.value, 10) : null,
-                            detail: detail.checked}]);
+                            detail: detail.checked,
+                            name_as_id: nameAsId[k] ? nameAsId[k].checked :
+                                false}]).then(function (files) {
+                            return [k, files];
+                        });
                     })).then(function (results) {
-                        results.forEach(function (files) {
+                        results.forEach(function (result) {
+                            var files = result[1];
                             files.forEach(function (f) {
-                                download(f.name, f.content);
+                                /* Jobshop's "Export To:" names the file */
+                                var wanted = fileNames[result[0]].value
+                                    .trim();
+                                download(files.length === 1 && wanted ?
+                                    wanted : f.name, f.content);
                             });
                         });
                         UI.toast('Exported', 'ok');
                         load();
                     }, UI.showError);
                 }, true)));
-            return box;
         }
 
         function render() {
-            UI.clear(body);
-            body.appendChild(postSection());
-            body.appendChild(groupsSection());
-            body.appendChild(exportSection());
-            body.appendChild(el('fieldset.jsa-box', el('legend',
+            UI.clear(periodsPane);
+            UI.clear(exportPane);
+            periodsPane.appendChild(postSection());
+            periodsPane.appendChild(el('fieldset.jsa-box', el('legend',
+                'Account Periods'), table([
+                    {key: 'year', label: 'Fiscal Year'},
+                    {key: 'number', label: 'Period', type: 'int'},
+                    {key: 'end_date', label: 'Last Day', type: 'date'},
+                    {key: 'posted', label: 'Posted', render: function (p) {
+                        return p.state !== 'open' ? '✔' : '';
+                    }}], periods.slice().reverse())));
+            periodsPane.appendChild(groupsSection());
+            exportPane.appendChild(exportSection());
+            exportPane.appendChild(el('fieldset.jsa-box', el('legend',
                 'Journal Batches'), table([
                     {key: 'number', label: 'Batch ID'},
                     {key: 'posting_date', label: 'Posting Date',
@@ -827,7 +1041,85 @@
     /* ---- Executive Information ---------------------------------------- */
 
     var EXEC_TITLES = {sales: 'Sales', purchasing: 'Purchasing',
-        production: 'Production', financials: 'Financials'};
+        production: 'Production', financials: 'Financial'};
+
+    /* Jobshop's Executive Information window (VExecutive/*): one line per
+     * figure: "Total Value of [status] <documents> from [date] to [date]"
+     * and its value; "..." lists the documents (the report behind it) */
+    function execLines(kind, box) {
+        var key = 'jsa-exec-lines-' + kind;
+        var choices = storeGet(key) || {};
+
+        function load() {
+            Rpc.desk('jsadmin_exec_values', [kind, choices]).then(render,
+                function (error) {
+                    /* (an older server without the lines: the dashboard
+                     * below is still shown) */
+                    UI.clear(box);
+                    box.hidden = true;
+                    if (global.console) {
+                        global.console.warn(error);
+                    }
+                });
+        }
+
+        function changed(lineKey, name, value) {
+            choices[lineKey] = choices[lineKey] || {};
+            choices[lineKey][name] = value;
+            storeSet(key, choices);
+            load();
+        }
+
+        function render(lines) {
+            UI.clear(box);
+            box.hidden = false;
+            lines.forEach(function (line) {
+                var label = [el('span', line.label)];
+                if (line.statuses) {
+                    var status = el('select', {'aria-label': line.label,
+                        onchange: function () {
+                            changed(line.key, 'status', status.value);
+                        }}, line.statuses.map(function (s) {
+                            return el('option', {value: s}, s);
+                        }));
+                    status.value = line.status;
+                    label.push(' ', status);
+                }
+                if (line.noun) {
+                    label.push(' ' + line.noun);
+                }
+                var from = '', to = '';
+                if (line.dates) {
+                    from = el('input', {type: 'date', value: line.from ?
+                        String(line.from).slice(0, 10) : '', 'aria-label':
+                        'From', onchange: function () {
+                            changed(line.key, 'from', from.value || null);
+                        }});
+                    to = el('input', {type: 'date', value: line.to ?
+                        String(line.to).slice(0, 10) : '', 'aria-label': 'to',
+                        onchange: function () {
+                            changed(line.key, 'to', to.value || null);
+                        }});
+                }
+                var extra = '';
+                if (line.proforma !== undefined) {
+                    extra = el('label', el('input', {type: 'checkbox',
+                        checked: line.proforma, onchange: function (e) {
+                            changed(line.key, 'proforma', e.target.checked);
+                        }}), ' Use Proforma');
+                }
+                box.appendChild(el('div.jsa-exec-row', el('div.lbl', label),
+                    el('div', from), el('div.to', line.dates ? 'to' : ''),
+                    el('div', to), el('div.num',
+                        UI.money(line.value, true)), el('div.act', extra,
+                        line.report ? button('…', function () {
+                            UI.openScreen(line.report);
+                        }, false, 'List the documents') : '')));
+            });
+        }
+
+        load();
+    }
 
     Screens.jsExec = function (main, params) {
         style();
@@ -837,15 +1129,21 @@
                 return el('option', {value: m}, 'Last ' + m + ' months');
             }));
         months.value = String(storeGet('jsa-exec-months') || 12);
+        var lines = el('div.panel', {hidden: true});
         var body = el('div');
-        ribbon(main, 'Executive Information - ' + EXEC_TITLES[kind], [
+        ribbon(main, 'Executive ' + EXEC_TITLES[kind] + ' Information', [
             el('label.ribbon-field', 'Show ', months),
-            button('Refresh', load, false, 'F5'),
+            button('Refresh', function () {
+                execLines(kind, lines);
+                load();
+            }, false, 'F5'),
             button('Print', function () {
                 global.print();
             })]);
+        main.appendChild(lines);
         main.appendChild(body);
         shortcuts(body, {refresh: load});
+        execLines(kind, lines);
 
         function load() {
             storeSet('jsa-exec-months', parseInt(months.value, 10));
@@ -925,7 +1223,7 @@
                 optionNodes.map(function (n) {
                     return el('div', n);
                 })),
-            el('label.field', 'Roles'), groupList], [
+            el('label.field', 'Role Name'), groupList], [
             {label: 'Cancel'},
             {label: 'OK', primary: true, onclick: function (close) {
                 var values = {
@@ -956,31 +1254,70 @@
         login.focus();
     }
 
+    /* Jobshop's Role Properties (Vmfg/EditGroup): Role Name and the Users
+     * frame (User ID, Name) with Add / Remove */
     function roleDialog(data, group, done) {
         group = group || {users: []};
-        var roleName = el('input', {type: 'text', value: group.name || ''});
-        var checks = {};
-        var users = el('div', {style: {maxHeight: '260px', overflowY: 'auto',
-            border: '1px solid var(--line)', padding: '4px'}},
-            data.users.map(function (u) {
-                checks[u.id] = el('input', {type: 'checkbox', checked:
-                    group.users.indexOf(u.id) >= 0});
-                return el('div', el('label', checks[u.id], ' ' + u.login +
-                    ' - ' + u.name));
+        var roleName = el('input', {type: 'text', value: group.name || '',
+            maxlength: 60});
+        var members = group.users.slice();
+        var byId = {};
+        data.users.forEach(function (u) {
+            byId[u.id] = u;
+        });
+        var selected = null;
+        var grid = el('div');
+        var adding = el('select', {'aria-label': 'User to add'});
+        var remove = button('Remove', function () {
+            if (selected !== null) {
+                members = members.filter(function (id) {
+                    return id !== selected;
+                });
+                selected = null;
+                draw();
+            }
+        });
+        function draw() {
+            UI.clear(grid);
+            UI.clear(adding);
+            data.users.forEach(function (u) {
+                if (members.indexOf(u.id) < 0) {
+                    adding.appendChild(el('option', {value: u.id}, u.login +
+                        ' - ' + u.name));
+                }
+            });
+            remove.disabled = selected === null;
+            var body = el('tbody', members.map(function (id) {
+                var u = byId[id] || {login: String(id), name: ''};
+                return el('tr' + (id === selected ? '.active' : ''), {
+                    style: {cursor: 'pointer', background: id === selected ?
+                        'var(--accent-soft)' : ''},
+                    onclick: function () {
+                        selected = id;
+                        draw();
+                    }}, el('td', u.login), el('td', u.name));
             }));
+            grid.appendChild(el('div.table-wrap', {style: {maxHeight:
+                '240px', overflowY: 'auto'}}, el('table.data', el('thead',
+                    el('tr', el('th', 'User ID'), el('th', 'Name'))), body)));
+        }
+        draw();
         UI.modal(group.id ? 'Role Properties' : 'Role Properties - New', [
-            el('label.field', 'Role'), roleName,
-            el('label.field', 'Users'), users], [
+            el('label.field', 'Role Name'), roleName,
+            el('fieldset.jsa-box', el('legend', 'Users'), grid,
+                el('div.toolbar', adding, button('Add', function () {
+                    if (adding.value) {
+                        members.push(parseInt(adding.value, 10));
+                        draw();
+                    }
+                }), remove))], [
             {label: 'Cancel'},
             group.id ? {label: 'Add User', onclick: function () {
                 userDialog(data, null, done, group.id);
             }} : null,
             {label: 'OK', primary: true, onclick: function (close) {
                 Rpc.desk('jsadmin_role_save', [{id: group.id || null,
-                    name: roleName.value, users: Object.keys(checks).filter(
-                        function (id) {
-                            return checks[id].checked;
-                        }).map(Number)}]).then(function () {
+                    name: roleName.value, users: members}]).then(function () {
                     close();
                     UI.toast('Role saved', 'ok');
                     done();
@@ -1056,7 +1393,7 @@
             var canGroup = access['res.group'] && access['res.group'].write;
             body.appendChild(el('h3', 'Roles'));
             body.appendChild(table([
-                {key: 'name', label: 'Role'},
+                {key: 'name', label: 'Role Name'},
                 {key: 'users', label: 'Users', type: 'int', render:
                     function (g) {
                         return String(g.users.length);
@@ -1138,16 +1475,42 @@
             var allowed = entity.allowed.indexOf(screen.id) >= 0;
             var everyone = !screen.needs.length;
             var label = allowed ? 'Allow' : 'Deny';
-            if (everyone || !canEdit() || (isUser && entity.admin)) {
+            /* By role, Deny removes the role from the menu: not offered
+             * when it is the menu's only role (the menu would open to
+             * everyone) or when the role allows it through a folder */
+            var fixed = !isUser && allowed && (screen.groups.indexOf(
+                entity.id) < 0 || screen.groups.length < 2);
+            if (everyone || fixed || !canEdit() || (isUser &&
+                    entity.admin)) {
                 return el('span' + (allowed ? '.jsa-allow' : '.jsa-deny'),
                     everyone ? 'Allow (everyone)' : label);
             }
+            function setTo(allow) {
+                var values = {menu: screen.id, allow: allow};
+                values[isUser ? 'user' : 'group'] = entity.id;
+                set(values);
+            }
+            /* Jobshop's PopupPermission: Access Allowed / Access Denied
+             * (its Read Only has no Tryton equivalent per menu) */
             return el('button' + (allowed ? '.jsa-allow' : '.jsa-deny'), {
-                type: 'button', title: 'Click to ' + (allowed ? 'deny' :
-                    'allow'), onclick: function () {
-                    var values = {menu: screen.id, allow: !allowed};
-                    values[isUser ? 'user' : 'group'] = entity.id;
-                    set(values);
+                type: 'button', title: 'Click (or right-click) to ' +
+                    (allowed ? 'deny' : 'allow'), onclick: function () {
+                    setTo(!allowed);
+                }, oncontextmenu: function (event) {
+                    event.preventDefault();
+                    UI.contextMenu(event, [
+                        {label: 'Access Allowed', checked: allowed,
+                            onclick: function () {
+                                if (!allowed) {
+                                    setTo(true);
+                                }
+                            }},
+                        {label: 'Access Denied', checked: !allowed,
+                            onclick: function () {
+                                if (allowed) {
+                                    setTo(false);
+                                }
+                            }}]);
                 }}, label);
         }
 
@@ -1238,8 +1601,8 @@
                 folders[key].push(s);
             });
             order.forEach(function (folder) {
-                body.appendChild(el('fieldset.jsa-box', folder ? el('legend',
-                    folder) : null, table([
+                body.appendChild(el('fieldset.jsa-box.jsa-auth', folder ?
+                    el('legend', folder) : null, table([
                         {key: 'name', label: 'Function', render: function (s) {
                             return tree.checked ? s.name : s.path;
                         }},
@@ -1255,8 +1618,11 @@
 
     /* ---- System Settings ---------------------------------------------- */
 
+    /* Jobshop's tabs in its order (Vmfg/Settings); Logo, User Alerts and
+     * Individual Privacy are not emulated (see the status file) */
     var SETTING_TABS = ['Address', 'Accounting', 'Estimating', 'Inventory',
-        'Purchasing', 'Sales', 'Shopfloor'];
+        'Purchasing', 'Sales', 'Shopfloor', 'Labor and Attendance',
+        'General'];
 
     Screens.jsSystemSettings = function (main) {
         style();
@@ -1440,6 +1806,10 @@
                         }
                     });
                 }
+                if (!grid.children.length && pane.children.length === 1) {
+                    /* (nothing on this tab for this server / user) */
+                    tabBar.lastChild.hidden = true;
+                }
                 panes.appendChild(pane);
             });
             show(0);
@@ -1515,7 +1885,15 @@
      * advanced filters and sorts; get() -> params, set(params) */
     function reportDialog(definition, onrun) {
         var box = el('div.panel.jsa-noprint');
-        var grid = el('div.jsa-filters');
+        /* Jobshop's dialog: each ID / date range in its own frame (the
+         * frame's title is the field), From over To */
+        var grid = el('div.jsa-dialog');
+        function frame(title, children) {
+            return el('fieldset.jsa-dlg-frame', el('legend', title),
+                children.map(function (c) {
+                    return el('div', c);
+                }));
+        }
         var getters = [];
         var setters = [];
         definition.filters.forEach(function (f) {
@@ -1524,9 +1902,8 @@
                     'aria-label': f.label + ' from'});
                 var b = el('input', {type: 'text', placeholder: 'To',
                     'aria-label': f.label + ' to'});
-                grid.appendChild(el('label', f.label));
-                grid.appendChild(a);
-                grid.appendChild(b);
+                grid.appendChild(frame(f.label, [el('label', 'From ', a),
+                    el('label', 'To ', b)]));
                 getters.push(function (p) {
                     if (a.value.trim()) {
                         p[f.key + '_from'] = a.value.trim();
@@ -1561,9 +1938,8 @@
                         choice.value = 'custom';
                     });
                 });
-                grid.appendChild(el('label', f.label));
-                grid.appendChild(el('span', choice, ' ', from));
-                grid.appendChild(to);
+                grid.appendChild(frame(f.label, [choice, el('label',
+                    'From ', from), el('label', 'To ', to)]));
                 getters.push(function (p) {
                     if (from.value) {
                         p[f.key + '_from'] = from.value;
@@ -1589,9 +1965,8 @@
                         f.options).map(function (o) {
                         return el('option', {value: o[0]}, o[1]);
                     }));
-                grid.appendChild(el('label', f.label));
-                grid.appendChild(select);
-                grid.appendChild(el('span'));
+                grid.appendChild(el('div.jsa-dlg-line', el('label',
+                    f.label + ' '), select));
                 getters.push(function (p) {
                     if (select.value !== '') {
                         p[f.key] = select.value;
@@ -1601,11 +1976,35 @@
                     select.value = p[f.key] !== undefined ? p[f.key] :
                         (f['default'] || '');
                 });
+            } else if (f.type === 'radio') {
+                /* Jobshop's "For" group: Active ... Only / Inactive ...
+                 * Only / Both */
+                var radioName = 'jsa-radio-' + definition.id + '-' + f.key;
+                var radios = f.options.map(function (o) {
+                    return el('input', {type: 'radio', name: radioName,
+                        value: o[0]});
+                });
+                grid.appendChild(frame(f.label, radios.map(function (r, i) {
+                    return el('label', r, ' ' + f.options[i][1]);
+                })));
+                getters.push(function (p) {
+                    radios.forEach(function (r) {
+                        if (r.checked) {
+                            p[f.key] = r.value;
+                        }
+                    });
+                });
+                setters.push(function (p) {
+                    var value = p[f.key] !== undefined ? p[f.key] :
+                        f['default'];
+                    radios.forEach(function (r) {
+                        r.checked = r.value === value;
+                    });
+                });
             } else if (f.type === 'check') {
                 var check = el('input', {type: 'checkbox'});
-                grid.appendChild(el('label', f.label));
-                grid.appendChild(check);
-                grid.appendChild(el('span'));
+                grid.appendChild(el('div.jsa-dlg-line', el('label', check,
+                    ' ' + f.label)));
                 getters.push(function (p) {
                     p[f.key] = check.checked;
                 });
@@ -1615,9 +2014,7 @@
                 });
             } else if (f.type === 'date') {
                 var date = el('input', {type: 'date'});
-                grid.appendChild(el('label', f.label));
-                grid.appendChild(date);
-                grid.appendChild(el('span'));
+                grid.appendChild(frame(f.label, [date]));
                 getters.push(function (p) {
                     if (date.value) {
                         p[f.key] = date.value;
@@ -1634,20 +2031,17 @@
                 return el('option', {value: c.key}, c.label);
             }));
         var desc = el('input', {type: 'checkbox'});
-        grid.appendChild(el('label', 'Sort By'));
-        grid.appendChild(sortBy);
-        grid.appendChild(el('label', desc, ' Descending'));
+        grid.appendChild(el('div.jsa-dlg-line', el('label', 'Sort By '),
+            sortBy, el('label', ' ', desc, ' Descending')));
         var group = null;
         if (definition.group_by) {
             group = el('input', {type: 'checkbox', checked: true});
-            grid.appendChild(el('label', 'Subtotals'));
-            grid.appendChild(el('label', group, ' By ' + definition.columns
-                .filter(function (c) {
+            grid.appendChild(el('div.jsa-dlg-line', el('label', group,
+                ' Subtotals by ' + definition.columns.filter(function (c) {
                     return c.key === definition.group_by;
                 }).map(function (c) {
                     return c.label;
-                })[0]));
-            grid.appendChild(el('span'));
+                })[0])));
         }
         box.appendChild(grid);
 
@@ -1899,17 +2293,23 @@
             lines.join('\r\n'));
     }
 
+    /* The label reports and the text printed above the bar code */
+    var LABELS = {employee_label: 'employee', part_label: 'description',
+        warehouse_location_label: 'description'};
+
     /* Avery 5160: three labels across */
     function labelsOutput(data) {
         var page = el('div.report-page.jsa-report-out');
         var keys = data.columns.map(function (c) {
             return c.key;
         });
+        var text = LABELS[data.id];
         page.appendChild(el('div.jsa-labels', data.rows.filter(function (r) {
             return r.k === 'row';
         }).map(function (r) {
-            return el('div.jsa-label', el('div', r.v[keys.indexOf(
-                'employee')]), el('div.bar', r.v[keys.indexOf('barcode')]));
+            return el('div.jsa-label', el('div', r.v[0] + (text &&
+                keys[0] !== text ? ' ' + (r.v[keys.indexOf(text)] || '') :
+                '')), el('div.bar', r.v[keys.indexOf('barcode')]));
         })));
         return page;
     }
@@ -1943,6 +2343,8 @@
             }
         }, false, 'Export to a CSV file');
         ribbon(main, title, [printButton, exportButton]);
+        /* (greyed until a report has run, as Jobshop's) */
+        printButton.disabled = exportButton.disabled = true;
         var layout = el('div.jsa-split', list, right);
         main.appendChild(layout);
         shortcuts(layout, {refresh: function () {
@@ -1955,13 +2357,14 @@
             Rpc.desk('jsadmin_report_run', [current.id, p]).then(
                 function (result) {
                     data = result;
+                    printButton.disabled = exportButton.disabled = false;
                     pageStyle.textContent = data.landscape ?
                         '@page { size: landscape; }' : '';
                     var out = right.querySelector('.jsa-report-out');
                     if (out) {
                         out.remove();
                     }
-                    right.appendChild(current.id === 'employee_label' ?
+                    right.appendChild(LABELS[current.id] ?
                         labelsOutput(data) : reportOutput(data));
                     UI.setTitle(data.title);
                 }, UI.showError);

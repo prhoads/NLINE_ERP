@@ -153,8 +153,16 @@
             ICONS[item.label] || '▢'), item.label);
     }
 
+    var watchingAlerts = false;
     Screens.home = function (main) {
         main = UI.form(main, {title: 'Home'}).body;
+        /* Preferences: Show User Alert Messages at Startup and Check for
+         * New Messages (Home is the tab that stays open) */
+        if (!watchingAlerts && global.JobshopCommon &&
+                global.JobshopCommon.watchAlerts) {
+            watchingAlerts = true;
+            global.JobshopCommon.watchAlerts();
+        }
         var board = el('div.home');
         /* The user's unread Jobshop alerts (nothing when there are none) */
         if (global.JobshopCommon && global.JobshopCommon.alertsPanel) {

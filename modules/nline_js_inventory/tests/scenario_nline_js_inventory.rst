@@ -35,7 +35,7 @@ Activate modules::
     >>> Desk = Model.get('nline.desk')
     >>> setup = Desk.inventory_setup(config.context)
     >>> len(setup['user_labels'])
-    10
+    12
 
 Locations window: two shelves in the warehouse::
 
@@ -103,6 +103,39 @@ A part with Jobshop's fields::
     True
     >>> part, = bolt.products
 
+Supplier ID 2 goes after the first; clearing it removes it::
+
+    >>> other_supplier = Party(name="Nut Supply")
+    >>> other_supplier.save()
+    >>> bolt.preferred_supplier_2 = other_supplier
+    >>> bolt.save()
+    >>> bolt.reload()
+    >>> bolt.preferred_supplier == supplier, \
+    ...     bolt.preferred_supplier_2 == other_supplier
+    (True, True)
+    >>> bolt.preferred_supplier_2 = None
+    >>> bolt.save()
+    >>> bolt.reload()
+    >>> bolt.preferred_supplier_2, bolt.update_costs_from_po, \
+    ...     bool(bolt.commissionable)
+    (None, 'system', True)
+
+Jobshop's part rules: an R+D/Consumable part is not stocked::
+
+    >>> bolt.consumable = True
+    >>> bolt.save()  # doctest: +IGNORE_EXCEPTION_DETAIL
+    Traceback (most recent call last):
+        ...
+    ValidationError: ...
+    >>> bolt.reload()
+    >>> bolt.auto_issue = True
+    >>> bolt.lot_tracked = True
+    >>> bolt.save()  # doctest: +IGNORE_EXCEPTION_DETAIL
+    Traceback (most recent call last):
+        ...
+    ValidationError: ...
+    >>> bolt.reload()
+
 The Part ID is unique::
 
     >>> other = Template(name="Other bolt", default_uom=unit, type='goods')
@@ -153,6 +186,25 @@ Adjust parts in at value and out::
     ...         'adjustment', 10, config.context)]
     [('Adjust Out', 3.0), ('Adjust In', 10.0)]
 
+Set Last Counted Date and the Transaction Note::
+
+    >>> _ = Desk.adjustments_post({'lines': [
+    ...         {'type': 'in', 'template': bolt.id, 'quantity': 1,
+    ...             'location': shelf_a, 'last_counted': True,
+    ...             'date': str(today), 'note': 'Found on the floor'}]},
+    ...     config.context)
+    >>> Desk.adjustments_history('adjustment', 1, config.context)[0]['note']
+    'Found on the floor'
+    >>> bolt.reload()
+    >>> bolt.part_locations[0].last_counted == today
+    True
+    >>> _ = Desk.adjustments_post({'lines': [
+    ...         {'type': 'out', 'template': bolt.id, 'quantity': 1,
+    ...             'location': shelf_a}]}, config.context)
+    >>> bolt.reload()
+    >>> bolt.quantity_on_hand, bolt.quantity_on_hold
+    (7.0, 0.0)
+
 The part is now in shelf A1 (its Locations tab)::
 
     >>> bolt.reload()
@@ -182,7 +234,7 @@ Transfer two to shelf B1::
     [2.0, 5.0]
     >>> txs = Desk.inventory_transactions(bolt.id, None, 50, config.context)
     >>> [t['class'] for t in txs]
-    ['TRANSFER', 'ADJUSTMENT', 'ADJUSTMENT']
+    ['TRANSFER', 'ADJUSTMENT', 'ADJUSTMENT', 'ADJUSTMENT', 'ADJUSTMENT']
 
 Physical count: shelf A1 counts 4 (one is missing)::
 
@@ -243,6 +295,30 @@ Where used, supply and demand::
     [(True, 6.0, 'Released')]
     >>> Desk.part_orders(bolt.id, 'sale', ['closed'], config.context)
     []
+    >>> len(Desk.part_orders(bolt.id, 'sale', ['all'], config.context))
+    1
+    >>> [r['number'] for r in Desk.part_orders(valve_template.id,
+    ...         'production', ['unreleased'], config.context)] == [
+    ...     production.number]
+    True
+    >>> setup = Desk.part_lines_setup(config.context)
+    >>> sorted(k for k in setup if k != 'prices')
+    ['production', 'purchase', 'sale']
+    >>> setup['sale']['default']
+    ['released']
+    >>> [r['party_name'] for r in Desk.part_prices(bolt.id, 'supplier',
+    ...         config.context)]
+    ['Bolt Supply']
+    >>> Desk.part_tracking(bolt.id, True, config.context)
+    []
+
+Material Availability of the work order (N-Line's layout)::
+
+    >>> availability = Desk.wo_material_availability(production.id, None,
+    ...     True, config.context)
+    >>> [(r['level'], r['part_code'], r['required'], r['issued'])
+    ...     for r in availability['rows']]
+    [(0, '321-BOLT', 8.0, 0.0)]
     >>> sd = Desk.part_supply_demand(bolt.id, config.context)
     >>> [r['demand'] for r in sd['sales']], [r['demand'] for r in
     ...     sd['work_orders']]
@@ -316,7 +392,7 @@ The Jobshop data (migration/jobshop/inventory.py) from a stand-in Jobshop::
     ...                 'INACTIVE': -1}]),
     ...         ('INVENTORY_PART_LOCATION', [{'PART_ID': '321-BOLT',
     ...             'LOCATION_ID': 'C2', 'QTY_ON_HAND': 5, 'HOLD': -1,
-    ...             'LAST_COUNTED': None}]),
+    ...             'INACTIVE': -1, 'LAST_COUNTED': None}]),
     ...         ('INVENTORY_PART', [{'ID': '321-BOLT', 'STOCKED': -1,
     ...             'PRODUCT_CODE': 'FAST', 'COMMODITY_CODE': 'SS',
     ...             'WEIGHT': 0.25, 'WEIGHT_UM': 'LBS', 'MFG_NAME': 'Vesta',
@@ -325,7 +401,10 @@ The Jobshop data (migration/jobshop/inventory.py) from a stand-in Jobshop::
     ...             'PLANNING_LEADTIME': 14, 'ORDER_POINT': 20,
     ...             'SAFETY_STOCK_QTY': 5, 'UNIT_MAT_COST': 1.1,
     ...             'UNIT_BUR_COST': 0.1, 'USER_0': 'R:/list.pdf',
-    ...             'USER_1': 'B', 'INACTIVE': 0,
+    ...             'USER_1': 'B', 'USER_11': '316', 'INACTIVE': 0,
+    ...             'COMMISSIONABLE': 0, 'UPDATE_COSTS_FROM_PO': 'NEVER',
+    ...             'PURCHASING_INSTRUCTIONS': 'Certs required',
+    ...             'PRIVATE_UNIT_COSTS': -1,
     ...             'NOTES': 'Unit cost updated by receiver 02558'}]),
     ...         ]
     ...     def rows(self, sql, *params):
@@ -361,8 +440,12 @@ It can be run again::
     ('C2', 'Vesta', 20.0, 14, 'FAST', 'B')
     >>> bolt.unit_cost
     Decimal('1.2000')
-    >>> sorted((l.location.code, bool(l.hold)) for l in bolt.part_locations)
-    [('A1', False), ('B1', False), ('C2', True)]
+    >>> bolt.user_11, bool(bolt.commissionable), bolt.update_costs_from_po, \
+    ...     bolt.purchasing_instructions, bool(bolt.preserve_unit_costs)
+    ('316', False, 'never', 'Certs required', True)
+    >>> sorted((l.location.code, bool(l.hold), bool(l.inactive))
+    ...     for l in bolt.part_locations)
+    [('A1', False, False), ('B1', False, False), ('C2', True, True)]
     >>> sorted(c.sentence for c in bolt.unit_conversions)
     ['1 BOX = 10 u', '1 PK = 12 u']
     >>> Conversion = Model.get('nline.js.unit_conversion')
@@ -377,7 +460,7 @@ It can be run again::
     ...     len(Uom.find([('symbol', '=', 'e')]))
     (1, 0)
     >>> Desk.inventory_setup(config.context)['user_labels'][:3]
-    ['Eng Parts List', 'Part Number Rev', 'User Defined 3']
+    ['Eng Parts List', 'Part Number Rev', 'User 2']
     >>> Note = Model.get('ir.note')
     >>> len(Note.find([('resource', '=', 'product.template,%s' % bolt.id)]))
     1

@@ -59,6 +59,41 @@ Not in the help's Common section, asked for in the brief:
   - The ERP raises "Item is Late" for sales orders (shipping date passed, not sent), purchase orders (delivery date passed, not received) and work orders (planned date passed, not done): cron every morning at 5:30 and on Refresh, once per user, document and change
   - Missing: the other 38 changes (status changes, costs over estimate, …) are stored but nothing raises them yet; the Email action does not send mail (the recipient is kept)
 
+## Second pass (28 Oct 2026): Jobshop's own window definitions
+
+Analysis and gap tables: `docs/jobshop/analysis/common.md` (layouts,
+menus, user guide; frame-wide items for the integrator).
+
+Changed:
+- codeTable (every Jobshop table window, other areas' too): Jobshop's
+  Inactive column (was Active), inactive rows listed by default, row header
+  `*` / `+` / check / X, popup Add Row / Delete Row, Find = "begins with"
+  with `*` and `?`, `validate` hook, Maximum Browse Records from the
+  preferences, Ctrl+B, F5 / Shift+F5; the grid tools on every table
+  (`JobshopCommon.gridTools`): header click sort (Shift: Z-A), column size
+  and move, Filter Including / Excluding / by, Remove Filters/Sort, Sort
+  Ascending / Descending, Browse Filter dialog (Columns / Filters / Sorting),
+  Save widths and positions, Freeze/UnFreeze Columns, Export to Excel (the
+  Export dialog, CSV) — kept per computer.
+- Titles and captions from the layouts: FOB Points, Status Reason Codes,
+  column Type, Postal Code (and its 5-character rule), Terms age types in
+  Jobshop's words and order ("Age in days", "Day of next month",
+  "Collect on delivery", "End of this month") with the COD = 0 days and day
+  1-31 rules; route `reason-codes/inventory` (VInventory\ReasonCode: ID,
+  Reason).
+- Alert Messages: Messages tab as User Messages (Archived check, Created
+  On, Message, + Document; Show All; right-click Show Details…, Open…,
+  Delete); Alerts tab as User Alerts (What, When, How, From, To, Subject).
+  `common_alerts` also returns action, action_string, recipient.
+- File > Preferences: route `preferences` (General, Toolbar, Card Colors,
+  Shipping, Receiving placed as Jobshop draws them, `UI.placedForm`), per
+  computer; `JobshopCommon.preferences()`. The Control Panel links it.
+- Prototypes for the frame / other areas: `checkPostalCode` and
+  `addStateProvince` (Add On the Fly dialogs), `findReplace` (Find and
+  Replace), `pictureTools` (Insert / Clear / Stretch to Fit), `watchAlerts`
+  (alert check at start-up / every N minutes), `filterDomain`.
+- No new model or database field; labels changed (module update).
+
 ## Built
 
 - Models: `nline.fob_point`, `nline.ship_via`, `nline.product_code` (+ `markup_percent`), `nline.commodity_code` (+ `markup_percent`), `nline.reason_code` (+ `reason_type`; description labelled "Reason"), `nline.user_alert`, `nline.alert_message`
@@ -94,3 +129,16 @@ Not in the help's Common section, asked for in the brief:
 - nline_js_admin: `terms_list` could print `net_type` / `net_days` (Jobshop's Invoice Age Type and Days) instead of the largest delta; `currency_code_list` could use `thousands_separator` / `decimal_separator` / `exchange_rate`; a route `#/js-reports/common/<report id>` would let each window's Print open its report directly (common.js uses it when it exists).
 - nline_migrate.py: with js_common making every Jobshop term, the `TERMS` map (NET 45 DAYS -> Net 30 Days) could go and `js_common` could run before `parties` so customers and suppliers get their own Jobshop terms.
 - The cron runs only where `trytond-cron` runs.
+
+## Screenshot review fixes (28 Oct, second pass)
+
+- File > Preferences: every control of Vmfg\Preferences in its place (Save
+  Settings / Current Group on Exit, Navigator Menu Icons, Tips at Startup,
+  the "(Enter a '0' to load all rows)" note, the File Paths box, the
+  Toolbar tab's status bar / navigation bar settings): leaving the
+  desktop-only ones out left empty gaps. They are kept on this computer;
+  their tooltips say what the browser does instead.
+- Migration `postal_codes`: fills the State of postal codes made before the
+  ERP had the subdivisions (a re-run after `trytond_import_countries`).
+  On nline_test the State column is blank because only US-OK and US-TX
+  exist there (data step, not code).

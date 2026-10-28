@@ -34,6 +34,22 @@ class Schedule(ModelSQL, ModelView):
             ('first', "First, Don't Freeze Started Operations"),
             ('first_freeze', "First, Freeze Started Operations"),
             ], "Schedule Started Work Orders", required=True)
+    mode = fields.Selection([
+            ('together', "Released and Firm Together (normal)"),
+            ('released_first', "Released then Firm"),
+            ('released', "Released Only"),
+            ], "Work Orders to Schedule", required=True)
+    piece_scheduling = fields.Boolean(
+        "Piece Scheduling",
+        help="Kept as Jobshop has it; the scheduler does not split "
+        "operations by piece (no minimum move quantity).")
+    retry_backward = fields.Boolean(
+        "Retry Backward Schedule after Forward Schedule",
+        help="A work order that could not be scheduled backward from its "
+        "want date is scheduled forward, then backward again from the "
+        "forward schedule's end date.")
+    keep_forward_dp = fields.Boolean(
+        "Keep Determinant Path From Forward Schedule on Backward Retry")
     load_horizon = fields.Integer(
         "Set Load Horizon (Days)",
         help="The days of schedule the Scheduling window shows.")
@@ -63,6 +79,10 @@ class Schedule(ModelSQL, ModelView):
     @staticmethod
     def default_started():
         return 'normal'
+
+    @staticmethod
+    def default_mode():
+        return 'together'
 
     @staticmethod
     def default_load_horizon():
@@ -115,6 +135,9 @@ class ScheduleOperation(ModelSQL, ModelView):
     could_start = fields.DateTime("Could Start Date")
     could_finish = fields.DateTime("Could Finish Date")
     determinant = fields.Boolean("Determinant")
+    forward = fields.Boolean("Forward",
+        help="Scheduled forward (from the release date or as soon as "
+        "possible), not backward from the want date.")
     frozen = fields.Boolean("Frozen",
         help="The operation does not move when the schedule is run again.")
     started = fields.Boolean("Started")

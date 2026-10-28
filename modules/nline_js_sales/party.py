@@ -47,6 +47,29 @@ class Party(metaclass=PoolMeta):
             'country.country', "Country"),
         'get_sold_to', setter='set_sold_to')
     contact_title = fields.Char("Title")
+    # Jobshop's Inactive / Exported (to QuickBooks) of the customer: its own
+    # flags, the party may be a supplier too (purchasing: supplier_*)
+    customer_inactive = fields.Boolean("Inactive",
+        help="Jobshop's inactive customer: kept, left out of the lists.")
+    customer_exported = fields.Boolean("Exported",
+        help="Exported to the accounting (QuickBooks).")
+    customer_exported_date = fields.Date("Exported Date", readonly=True)
+    customer_contact = fields.Char("Contact")
+    # The main contact's numbers: the party's contact mechanisms
+    customer_phone = fields.Function(fields.Char("Phone"),
+        'get_contact_value', setter='set_contact_value')
+    customer_fax = fields.Function(fields.Char("Fax"),
+        'get_contact_value', setter='set_contact_value')
+    customer_email = fields.Function(fields.Char("E-mail"),
+        'get_contact_value', setter='set_contact_value')
+    customer_mobile = fields.Function(fields.Char("Mobile"),
+        'get_contact_value', setter='set_contact_value')
+    # Browse: Address 1 / Address 2 (the lines of the main address)
+    # (and the Customers tab's ADDR_1 / ADDR_2 fields)
+    sold_to_address_1 = fields.Function(fields.Char("Address 1"),
+        'get_sold_to_lines', setter='set_sold_to_lines')
+    sold_to_address_2 = fields.Function(fields.Char("Address 2"),
+        'get_sold_to_lines', setter='set_sold_to_lines')
 
     # Account tab
     customer_open_date = fields.Date("Account Opened")
@@ -128,6 +151,93 @@ class Party(metaclass=PoolMeta):
                 Address.write([address], {field: value})
             elif value:
                 Address.create([{'party': party.id, field: value}])
+
+    @classmethod
+    def get_sold_to_lines(cls, parties, names):
+        result = {n: {} for n in names}
+        for party in parties:
+            address = party._sold_to_address()
+            lines = (address.street or '').splitlines() if address else []
+            for name in names:
+                index = 0 if name.endswith('_1') else 1
+                # Address 2: the rest of the address (Jobshop has 2 lines)
+                value = lines[0] if index == 0 and lines else (
+                    ', '.join(lines[1:]) if index == 1 else None)
+                result[name][party.id] = value or None
+        return result
+
+    @classmethod
+    def set_sold_to_lines(cls, parties, name, value):
+        "The Customers tab's Address lines 1 and 2 into the main address"
+        Address = Pool().get('party.address')
+        index = 0 if name.endswith('_1') else 1
+        for party in parties:
+            address = party._sold_to_address()
+            lines = (address.street or '').splitlines() if address else []
+            lines += [''] * (2 - len(lines))
+            if index == 0:
+                lines[0] = value or ''
+            else:
+                lines[1:] = [value or '']
+            street = '\n'.join(lines).rstrip('\n') or None
+            if address:
+                if street != address.street:
+                    Address.write([address], {'street': street})
+            elif street:
+                Address.create([{'party': party.id, 'street': street}])
+
+    def get_contact_value(self, name):
+        kind = name[len('customer_'):]
+        for mechanism in self.contact_mechanisms:
+            if mechanism.type == kind:
+                return mechanism.value
+        return None
+
+    @classmethod
+    def set_contact_value(cls, parties, name, value):
+        "Jobshop's Phone / Fax / E-mail / Mobile: the first of the type"
+        Mechanism = Pool().get('party.contact_mechanism')
+        kind = name[len('customer_'):]
+        value = (value or '').strip()
+        to_delete, to_create = [], []
+        for party in parties:
+            current = [m for m in party.contact_mechanisms if m.type == kind]
+            if current:
+                if value:
+                    if current[0].value != value:
+                        Mechanism.write([current[0]], {'value': value})
+                else:
+                    to_delete.append(current[0])
+            elif value:
+                to_create.append({'party': party.id, 'type': kind,
+                        'value': value})
+        if to_delete:
+            Mechanism.delete(to_delete)
+        if to_create:
+            Mechanism.create(to_create)
+
+    @staticmethod
+    def default_customer_inactive():
+        return False
+
+    @classmethod
+    def write(cls, *args):
+        "Exported: its date (Jobshop's read-only Date beside it)"
+        Date = Pool().get('ir.date')
+        super().write(*args)
+        touched = []
+        for i in range(0, len(args), 2):
+            if 'customer_exported' in args[i + 1] \
+                    and 'customer_exported_date' not in args[i + 1]:
+                touched.extend(args[i])
+        dated = [p for p in cls.browse(touched)
+            if p.customer_exported and not p.customer_exported_date]
+        undated = [p for p in cls.browse(touched)
+            if not p.customer_exported and p.customer_exported_date]
+        if dated:
+            super().write(dated, {'customer_exported_date': Date.today()})
+        if undated:
+            super().write(undated, {'customer_exported_date': None})
 
     @classmethod
     def get_customer_orders(cls, parties, names):

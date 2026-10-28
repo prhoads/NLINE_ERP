@@ -14,11 +14,15 @@ The Jobshop windows sit on the Tryton records:
 The fields Jobshop has and Tryton has not are added here (Specs, drawings,
 run types, costs, scrap, additional resources, variables...).
 """
+import re
+
 from trytond.model import ModelSQL, ModelView, fields
 from trytond.modules.nline_js_common.common import CodeTable
 from trytond.pool import Pool, PoolMeta
+from trytond.transaction import Transaction
 
 from . import estimating
+from .estimating import StampMixin
 
 # Jobshop's work order statuses (VShopfloorWorkOrder "Order Status")
 ORDER_STATUS = [
@@ -154,6 +158,9 @@ class MaterialMixin(DrawingMixin):
     fixed_cost = fields.Numeric("Fixed Cost", digits=COST_DIGITS)
     supplier = fields.Many2One('party.party', "Supplier")
     required_date = fields.Date("Required Date")
+    reference = fields.Char(
+        "Reference", help="Jobshop's material reference (e.g. the job that "
+        "supplies it).")
 
     @classmethod
     def default_qty_per_type(cls):
@@ -164,8 +171,30 @@ MATERIAL_FIELDS = [
     'qty_per_type', 'fixed_quantity', 'scrap_percent', 'dimensions',
     'drawing_number', 'drawing_revision', 'drawing_page', 'drawing_file',
     'specifications', 'unit_cost', 'fixed_cost', 'supplier',
-    'required_date',
+    'required_date', 'reference',
     ]
+
+
+class InactiveMixin:
+    "Jobshop's Inactive check box: the inverse of Tryton's active"
+    __slots__ = ()
+    inactive = fields.Function(fields.Boolean("Inactive"),
+        'get_inactive', setter='set_inactive', searcher='search_inactive')
+
+    def get_inactive(self, name):
+        return not self.active
+
+    @classmethod
+    def set_inactive(cls, records, name, value):
+        cls.write(records, {'active': not value})
+
+    @classmethod
+    def search_inactive(cls, name, clause):
+        _, operator, value = clause[:3]
+        if operator not in {'=', '!='}:
+            return []
+        active = not value if operator == '=' else bool(value)
+        return [('active', '=', active)]
 
 
 class HeaderMixin(DrawingMixin):
@@ -180,13 +209,70 @@ class HeaderMixin(DrawingMixin):
         "Global Rank", help="The lower, the earlier it is scheduled.")
     forward_schedule = fields.Boolean(
         "Forward Schedule", help="Schedule from the release date forward.")
+    # Jobshop's user defined fields USER_0 / USER_1: N-Line's sign-off
+    # tooling fills them on masters and work orders (released drawing PDF
+    # and its revision); their labels are not set up in Jobshop
+    user_0 = fields.Char(
+        "User 0", help="Jobshop's USER_0: the released drawing (PDF).")
+    user_1 = fields.Char(
+        "User 1", help="Jobshop's USER_1: the released drawing's revision.")
+
+    # The read-only descriptions beside the codes (Jobshop's type4 fields)
+    product_code_description = fields.Function(
+        fields.Char("Product Code Description"), 'get_code_description')
+    commodity_code_description = fields.Function(
+        fields.Char("Commodity Code Description"), 'get_code_description')
+    stock_um = fields.Function(fields.Char("Stock U/M"), 'get_stock_um')
 
     @classmethod
     def default_global_rank(cls):
         return 50
 
+    def get_code_description(self, name):
+        code = getattr(self, name[:-len('_description')], None)
+        return code.description if code else None
 
-class Production(HeaderMixin, metaclass=PoolMeta):
+    def get_stock_um(self, name):
+        "Jobshop's U/M ID (the migration maps EA to the unit u)"
+        unit = getattr(self, 'unit', None)
+        if unit is None and getattr(self, 'part', None):
+            unit = self.part.default_uom
+        if unit is None:
+            # A quote master without a part quotes pieces
+            return 'EA' if getattr(self, 'master_type', None) == 'quote'                 else None
+        return 'EA' if unit.symbol == 'u' else (unit.symbol or '').upper()
+
+
+# The header fields a new work order takes from its master (Jobshop copies
+# the master into the work order)
+HEADER_COPY = [
+    'engineered_by', 'engineered_date', 'drawing_number', 'drawing_revision',
+    'drawing_page', 'drawing_file', 'product_code', 'commodity_code',
+    'forward_schedule', 'specifications', 'user_0', 'user_1',
+    ]
+
+# Jobshop's Work/Lot/Split ID kept in the work order number as imported:
+# WORK[/LOT][.SPLIT] (lot 1 and split 0 are not written)
+_NUMBER = re.compile(r'^(.+?)(?:/([^/.]*))?(?:\.([^/.]*))?$')
+
+
+def split_number(number):
+    "The (work, lot, split) of a work order number"
+    match = _NUMBER.match(number or '')
+    if not match:
+        return (number or None, '1', '0')
+    return (match.group(1), match.group(2) or '1', match.group(3) or '0')
+
+
+def join_number(work, lot, split):
+    "The work order number of Jobshop's Work/Lot/Split ID"
+    lot = (lot or '1').strip() or '1'
+    split = (split or '0').strip() or '0'
+    return (work or '') + ('' if lot == '1' else '/' + lot) + (
+        '' if split == '0' else '.' + split)
+
+
+class Production(HeaderMixin, StampMixin, metaclass=PoolMeta):
     __name__ = 'production'
 
     planning_status = fields.Selection([
@@ -207,6 +293,56 @@ class Production(HeaderMixin, metaclass=PoolMeta):
     drawing_revision = fields.Char("Drawing Rev")
     variables = fields.One2Many(
         'nline.engineering.variable', 'production', "Variables")
+    # The Work Order tab's fields Tryton has not (VShopFloor WorkOrder)
+    work_id = fields.Function(fields.Char("Work ID"),
+        'get_number_part', setter='set_number_part')
+    lot_id = fields.Function(fields.Char("Lot ID"),
+        'get_number_part', setter='set_number_part')
+    split_id = fields.Function(fields.Char("Split ID"),
+        'get_number_part', setter='set_number_part')
+    description = fields.Char(
+        "Description", help="The work order's description (the part's "
+        "when empty).")
+    other_info = fields.Char("Project/Ref/Other")
+    archived = fields.Boolean("Archived")
+    hard_release_date = fields.Boolean(
+        "Treat Release Date as Hard",
+        help="The scheduler never starts the work order before its release "
+        "date.")
+    schedule_start_date = fields.DateTime(
+        "Schedule Start Date", readonly=True)
+    schedule_finish_date = fields.DateTime(
+        "Schedule Finish Date", readonly=True)
+    linked = fields.Function(fields.Boolean(
+            "Linked", help="Linked to a sales order line."), 'get_linked')
+
+    def get_number_part(self, name):
+        if self.parent:
+            # A leg: its own number (work order/leg)
+            return self.number if name == 'work_id' else None
+        work, lot, split = split_number(self.number)
+        return {'work_id': work, 'lot_id': lot, 'split_id': split}[name]
+
+    @classmethod
+    def set_number_part(cls, productions, name, value):
+        for production in productions:
+            if production.parent:
+                if name == 'work_id' and value:
+                    cls.write([production], {'number': value})
+                continue
+            parts = dict(zip(('work_id', 'lot_id', 'split_id'),
+                    split_number(production.number)))
+            parts[name] = value
+            if not parts['work_id']:
+                continue
+            number = join_number(
+                parts['work_id'], parts['lot_id'], parts['split_id'])
+            if number != production.number:
+                cls.write([production], {'number': number})
+
+    def get_linked(self, name):
+        root = self.root or self
+        return getattr(root.origin, '__name__', None) == 'sale.line'
 
     def get_order_status(self, name):
         if self.state in {'request', 'draft'}:
@@ -262,6 +398,10 @@ class Production(HeaderMixin, metaclass=PoolMeta):
             # The Work Order window gives the part only: its unit
             if values.get('product') and not values.get('unit'):
                 values['unit'] = Product(values['product']).default_uom.id
+            # Jobshop's Description: the part's, until changed
+            if values.get('product') and not values.get('description'):
+                values['description'] = Product(
+                    values['product']).template.name
         return super().create(vlist)
 
     @classmethod
@@ -269,6 +409,9 @@ class Production(HeaderMixin, metaclass=PoolMeta):
         default = default.copy() if default is not None else {}
         default.setdefault('printed_date', None)
         default.setdefault('planning_status', None)
+        default.setdefault('archived', False)
+        default.setdefault('schedule_start_date', None)
+        default.setdefault('schedule_finish_date', None)
         return super().copy(productions, default=default)
 
     # The information cards (nline_build_tree): what Jobshop's cards show
@@ -278,8 +421,8 @@ class Production(HeaderMixin, metaclass=PoolMeta):
         node.update({
                 'kind': 'production',
                 'order_status': self.order_status,
-                'description': (self.product.template.name
-                    if self.product else None),
+                'description': self.description or (
+                    self.product.template.name if self.product else None),
                 'drawing_number': self.drawing_number,
                 'drawing_file': self.drawing_file,
                 'has_specs': bool(self.specifications),
@@ -317,7 +460,7 @@ def _step_extras(record):
         }
 
 
-class BOM(HeaderMixin, metaclass=PoolMeta):
+class BOM(HeaderMixin, InactiveMixin, StampMixin, metaclass=PoolMeta):
     __name__ = 'production.bom'
 
     master_type = fields.Selection([
@@ -405,6 +548,7 @@ class MaterialCard(MaterialMixin, metaclass=PoolMeta):
                 'has_specs': bool(self.specifications),
                 'description': self.product.template.name,
                 'supplier': self.supplier.rec_name if self.supplier else None,
+                'reference': self.reference,
                 })
         return node
 
@@ -467,7 +611,8 @@ class Work(OperationMixin, metaclass=PoolMeta):
         return node
 
 
-class OperationTemplate(OperationMixin, CodeTable):
+class OperationTemplate(
+        OperationMixin, InactiveMixin, StampMixin, CodeTable):
     "Operation Template"
     __name__ = 'nline.engineering.operation_template'
 
@@ -486,6 +631,25 @@ class OperationTemplate(OperationMixin, CodeTable):
     extra_resources = fields.One2Many(
         'nline.engineering.operation_resource', 'template',
         "Additional Resources")
+
+    @classmethod
+    def copy(cls, templates, default=None):
+        "Copy: a new Template ID (the ID is unique)"
+        default = default.copy() if default is not None else {}
+        if 'code' not in default:
+            with Transaction().set_context(active_test=False):
+                codes = {t.code for t in cls.search([])}
+
+            def new_code(data):
+                index = 1
+                while True:
+                    code = '%s-%s' % (data['code'], index)
+                    if code not in codes:
+                        codes.add(code)
+                        return code
+                    index += 1
+            default['code'] = new_code
+        return super().copy(templates, default=default)
 
 
 class OperationResource(ModelSQL, ModelView):

@@ -51,10 +51,64 @@ class Configuration(metaclass=PoolMeta):
         "Prevent Run Labor Entry in Data Collection")
     js_lock_clock_in = fields.Boolean(
         "Lock Labor Data Collection Clock In and Clock Out Fields")
+    # The other settings of Jobshop's System Settings (LSA_SETTINGS): kept
+    # for the areas that do the transactions
+    js_log_cost_changes = fields.Boolean(
+        "Log automated cost changes in Notes for affected Part")
+    js_log_adjustments = fields.Boolean(
+        "Log Adjustments and Transfers in Notes for affected Part")
+    js_inactive_part_notes = fields.Boolean(
+        "Display the Part Notes When an Inactive Part is Entered")
+    js_log_planning_changes = fields.Boolean(
+        "Log Planning Variable Changes in Notes for affected Part")
+    js_ship_early_days = fields.Integer(
+        "Number of Days Early Order Lines Can Ship",
+        help="Calendar days.")
+    js_labor_closed_wo = fields.Boolean(
+        "Allow Labor Tickets Entered Through Labor Entry Against Closed "
+        "Work Orders")
+    js_warn_labor_estimate = fields.Boolean(
+        "Warn When Labor Exceeds Estimate")
+    js_single_clock_in = fields.Boolean(
+        "Disallow an Employee to be Clocked Into More Than One Operation at "
+        "a Time")
+    js_close_op_run_complete = fields.Boolean(
+        "Close the Operation Only When the User Checks Run Completed")
+    js_shift_start_grace = fields.Integer("Shift Start Grace (mins)")
+    js_shift_end_grace = fields.Integer("Shift End Grace (mins)")
+    js_ta_reason_required = fields.Boolean(
+        "Reason Codes Required when TA Clock In/Out is outside the Grace "
+        "Periods")
+    js_adjust_to_shift = fields.Selection([
+            ('ask', "Ask to Adjust to Shift Start/End"),
+            ('always', "Always Adjust to Shift Start/End"),
+            ('keep', "Keep Actual Time"),
+            ], "Adjust Clock In/Out to Shift Start/End")
+    js_no_inactive_items = fields.Boolean(
+        "Do not allow the use of 'Inactive' items")
+    js_color_late_want = fields.Boolean(
+        "Turn on Color Coding for Work Orders beyond their want date or "
+        "scheduled to complete beyond their want date")
+    js_color_late_release = fields.Boolean(
+        "Turn on Color Coding for unReleased Work Orders beyond their "
+        "release date")
+    js_no_auto_mark_shipper = fields.Boolean(
+        "Do Not Automatically Mark Shipper Lines for Deletion based on "
+        "Desired Ship Date and Quantity Available")
+    js_no_auto_create_wo = fields.Boolean(
+        "Do Not Auto Check 'Create WO' in 'Create Sales Order from Quote' "
+        "when 'Cost From' an Engineering Master")
+    js_sync_udefs = fields.Boolean(
+        "Synchronize User Defined Fields Between Sales Order Line and Linked "
+        "Work Order")
 
     @classmethod
     def default_js_period_type(cls):
         return 'monthly'
+
+    @classmethod
+    def default_js_adjust_to_shift(cls):
+        return 'ask'
 
     @classmethod
     def default_js_update_cost(cls):
@@ -119,8 +173,16 @@ OPTIONS = [
         'js_inventory_account_set'),
     ('update_cost', 'Inventory', 'nline.desk.configuration',
         'js_update_cost'),
+    ('log_cost_changes', 'Inventory', 'nline.desk.configuration',
+        'js_log_cost_changes'),
     ('allow_negative', 'Inventory', 'nline.desk.configuration',
         'js_allow_negative'),
+    ('log_adjustments', 'Inventory', 'nline.desk.configuration',
+        'js_log_adjustments'),
+    ('inactive_part_notes', 'Inventory', 'nline.desk.configuration',
+        'js_inactive_part_notes'),
+    ('log_planning_changes', 'Inventory', 'nline.desk.configuration',
+        'js_log_planning_changes'),
     ('purchasing_account_set', 'Purchasing', 'nline.desk.configuration',
         'js_purchasing_account_set'),
     ('receiver_approved', 'Purchasing', 'nline.desk.configuration',
@@ -129,14 +191,45 @@ OPTIONS = [
         'purchase_invoice_method'),
     ('sales_account_set', 'Sales', 'nline.desk.configuration',
         'js_sales_account_set'),
+    ('ship_early_days', 'Sales', 'nline.desk.configuration',
+        'js_ship_early_days'),
     ('sale_invoice_method', 'Sales', 'sale.configuration',
         'sale_invoice_method'),
     ('sale_shipment_method', 'Sales', 'sale.configuration',
         'sale_shipment_method'),
-    ('prevent_run_labor', 'Shopfloor', 'nline.desk.configuration',
-        'js_prevent_run_labor'),
-    ('lock_clock_in', 'Shopfloor', 'nline.desk.configuration',
+    # Labor and Attendance: Labor Collection Settings, Attendance Settings
+    ('prevent_run_labor', 'Labor and Attendance',
+        'nline.desk.configuration', 'js_prevent_run_labor'),
+    ('labor_closed_wo', 'Labor and Attendance', 'nline.desk.configuration',
+        'js_labor_closed_wo'),
+    ('warn_labor_estimate', 'Labor and Attendance',
+        'nline.desk.configuration', 'js_warn_labor_estimate'),
+    ('lock_clock_in', 'Labor and Attendance', 'nline.desk.configuration',
         'js_lock_clock_in'),
+    ('single_clock_in', 'Labor and Attendance', 'nline.desk.configuration',
+        'js_single_clock_in'),
+    ('close_op_run_complete', 'Labor and Attendance',
+        'nline.desk.configuration', 'js_close_op_run_complete'),
+    ('shift_start_grace', 'Labor and Attendance',
+        'nline.desk.configuration', 'js_shift_start_grace'),
+    ('shift_end_grace', 'Labor and Attendance', 'nline.desk.configuration',
+        'js_shift_end_grace'),
+    ('ta_reason_required', 'Labor and Attendance',
+        'nline.desk.configuration', 'js_ta_reason_required'),
+    ('adjust_to_shift', 'Labor and Attendance', 'nline.desk.configuration',
+        'js_adjust_to_shift'),
+    # General: Options
+    ('no_inactive_items', 'General', 'nline.desk.configuration',
+        'js_no_inactive_items'),
+    ('color_late_want', 'General', 'nline.desk.configuration',
+        'js_color_late_want'),
+    ('color_late_release', 'General', 'nline.desk.configuration',
+        'js_color_late_release'),
+    ('no_auto_mark_shipper', 'General', 'nline.desk.configuration',
+        'js_no_auto_mark_shipper'),
+    ('no_auto_create_wo', 'General', 'nline.desk.configuration',
+        'js_no_auto_create_wo'),
+    ('sync_udefs', 'General', 'nline.desk.configuration', 'js_sync_udefs'),
     ]
 
 

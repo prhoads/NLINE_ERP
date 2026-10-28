@@ -19,6 +19,8 @@ except ImportError:                     # the tests
         return value[:size] if size else value
 
 STARTED = {1: 'first', 2: 'first_freeze'}
+# SCHEDULE.MODE: Released and Firm Together, Released then Firm, Released Only
+MODE = {1: 'released_first', 2: 'released'}
 
 
 def run(m):
@@ -37,6 +39,10 @@ def run(m):
         schedule.hard_release_dates = bool(row.get('HARD_RELEASE_DATES'))
         schedule.sort_by = 'priority' if row.get('SORT_BY') == 1 else 'want'
         schedule.started = STARTED.get(row.get('SCHED_STARTED_WO'), 'normal')
+        schedule.mode = MODE.get(row.get('MODE'), 'together')
+        schedule.piece_scheduling = bool(row.get('PIECE_SCHEDULING'))
+        schedule.retry_backward = bool(row.get('RETRY_BACKWARD'))
+        schedule.keep_forward_dp = bool(row.get('KEEP_FORWARD_DP'))
         schedule.active = bool(row.get('ACTIVE', True))
         schedule.save()
         schedules[code] = schedule

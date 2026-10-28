@@ -163,10 +163,44 @@ Copying Into a New Engineering Master (revision C of the valve)::
     >>> copy.revision, len(copy.inputs), len(copy.routing.steps)
     ('C', 3, 1)
 
+Resequence Materials for Operation (here by 5)::
+
+    >>> tree = Desk.eng_resequence('bom', copy_id, 10, 5, ctx)
+    >>> [c['piece'] for c in tree['cards']]
+    [5, 10, 15]
+
 Revision A is the valve's current revision::
 
     >>> valve.template.engineering_revision = 'A'
     >>> valve.template.save()
+
+The master's header goes into its work orders::
+
+    >>> valve_bom.engineered_by = 'ABOSTAIN'
+    >>> valve_bom.drawing_number = '102-001'
+    >>> valve_bom.user_0 = r'R:\NLine_Released\332-001_A.pdf'
+    >>> valve_bom.save()
+    >>> header = Desk.eng_header('bom', valve_bom.id, ctx)
+    >>> header['unit'], bool(header['created'])
+    ('u', True)
+
+Inactive is the inverse of active (masters and operation templates)::
+
+    >>> turn.inactive = True
+    >>> turn.save()
+    >>> turn.reload()
+    >>> with config.set_context(active_test=False):
+    ...     found = OperationTemplate.find([('inactive', '=', True)])
+    >>> bool(turn.active), len(found)
+    (False, 1)
+    >>> template = OperationTemplate(turn.id)
+    >>> template.created_by.split()[0]
+    'admin'
+    >>> turn_copy, = OperationTemplate.duplicate([template])
+    >>> turn_copy.code
+    'TURN-1'
+    >>> turn.inactive = False
+    >>> turn.save()
 
 A work order of the valve: its materials, operations and the body leg come
 from the master::
@@ -179,6 +213,28 @@ from the master::
     >>> work_order.reload()
     >>> work_order.bom == valve_bom, work_order.order_status
     (True, 'unreleased')
+    >>> work_order.engineered_by, work_order.drawing_number, work_order.user_0
+    ('ABOSTAIN', '102-001', 'R:\\NLine_Released\\332-001_A.pdf')
+    >>> work_order.description, work_order.linked, work_order.stock_um
+    ('Valve', False, 'EA')
+
+The Work/Lot/Split ID is the number (lot 1 and split 0 are not written)::
+
+    >>> work_order.work_id, work_order.lot_id, work_order.split_id
+    ('WO-1', '1', '0')
+    >>> work_order.lot_id = '2'
+    >>> work_order.save()
+    >>> work_order.reload()
+    >>> work_order.number
+    'WO-1/2'
+    >>> work_order.lot_id = '1'
+    >>> work_order.save()
+    >>> work_order.reload()
+    >>> work_order.number
+    'WO-1'
+    >>> header = Desk.eng_header('production', work_order.id, ctx)
+    >>> header['revision'], header['linked']
+    ('A', False)
     >>> tree = Desk.eng_tree('production', work_order.id, ctx)
     >>> [(c['product'], c['supply'], c['has_specs']) for c in tree['cards']]
     [('[400-001] Bolt', 'stock', False), ('[311-002] Round Bar', 'stock', False), ('[323-001] Body', 'leg', False)]
@@ -235,9 +291,25 @@ work order's demand::
 
 Schedule Work Order backward from the want date::
 
+    >>> want = work_order.planned_date
     >>> result = Desk.eng_schedule(work_order.id, False, ctx)
     >>> work_order.reload()
-    >>> work_order.planned_start_date < work_order.planned_date
+    >>> work_order.schedule_start_date < work_order.schedule_finish_date
+    True
+    >>> work_order.schedule_finish_date.date() == want == work_order.planned_date
+    True
+
+Treat Release Date as Hard: the schedule does not start before the release
+date::
+
+    >>> work_order.hard_release_date = True
+    >>> work_order.planned_start_date = want - dt.timedelta(days=1)
+    >>> work_order.save()
+    >>> result = Desk.eng_schedule(work_order.id, False, ctx)
+    >>> work_order.reload()
+    >>> work_order.schedule_start_date.date() == want - dt.timedelta(days=1)
+    True
+    >>> work_order.schedule_finish_date.date() >= want
     True
 
 Purchase this Material: a draft purchase from the card's supplier::
@@ -249,6 +321,8 @@ Purchase this Material: a draft purchase from the card's supplier::
     >>> purchase = Purchase(purchase_id)
     >>> purchase.party == supplier, purchase.lines[0].quantity
     (True, 2.0)
+    >>> Desk.eng_po_links(work_order.id, 'card', card.id, ctx)
+    []
 
 Unreleased again: the operations stay as the work order's routing::
 
@@ -341,10 +415,18 @@ Copying the quote, printing it, losing the copy and winning the quote::
     >>> copy.reload()
     >>> copy.status, copy.won_loss_reason
     ('lost', 'Price')
+    >>> Note = Model.get('ir.note')
+    >>> note = Note(resource=quote, message="Customer wants test certs")
+    >>> note.save()
+    >>> quote.copy_notes = True
+    >>> quote.save()
     >>> sale_id = Desk.eng_quote_win(quote.id, False, ctx)
     >>> quote.reload()
     >>> quote.status, quote.sale.id == sale_id
     ('won', True)
+    >>> [n.message for n in Note.find(
+    ...     [('resource', '=', 'sale.sale,%s' % sale_id)])]
+    ['Customer wants test certs']
     >>> sale = Model.get('sale.sale')(sale_id)
     >>> [(l.description, l.quantity, l.unit_price) for l in sale.lines]
     [('Valve', 1.0, Decimal('500.0000')), ('Special valve', 2.0, Decimal('300.0000')), ('Freight', 1.0, Decimal('50.0000'))]

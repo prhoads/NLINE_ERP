@@ -220,6 +220,14 @@ Indirect labor has no work order::
     >>> float(indirect['labor_cost']), indirect['number']
     (25.0, '')
 
+Pay Rate: indirect labor costed at the employee's run rate::
+
+    >>> paid = Desk.sf_labor_post({'employee': greg['id'],
+    ...     'type': 'indirect', 'hours': 1, 'pay_rate': 'run'},
+    ...     config.context)
+    >>> paid['pay_rate'], float(paid['labor_cost'])
+    ('run', 30.0)
+
 A deviated quantity needs a reason code::
 
     >>> Desk.sf_labor_post({'employee': greg['id'], 'type': 'run',
@@ -234,7 +242,7 @@ Labor Reversal of the first ticket::
     >>> tickets = Desk.sf_labor_tickets({'kind': 'employee',
     ...     'employee': greg['id']}, config.context)
     >>> len(tickets)
-    3
+    4
     >>> reversal, = Desk.sf_labor_reverse([ticket['id']], config.context)
     >>> reversal['reversing'], reversal['hours'], float(
     ...     reversal['labor_cost'])
@@ -428,3 +436,66 @@ Jobshop's::
     ...     ('clock_no', '=', 'OPCOMPLETE')])
     >>> bool(opcomplete.inactive)
     True
+
+The Employees window: the name, address and phones are the person's; a new
+employee makes its person::
+
+    >>> Employee = Model.get('company.employee')
+    >>> kirsch = Employee(greg['id'])
+    >>> kirsch.phone = '555-1234'
+    >>> kirsch.addr_1 = '1 Main St'
+    >>> kirsch.city = 'Dover'
+    >>> kirsch.save()
+    >>> kirsch.reload()
+    >>> kirsch.phone, kirsch.addr_1, kirsch.city, kirsch.party.addresses[0].city
+    ('555-1234', '1 Main St', 'Dover', 'Dover')
+    >>> newcomer = Employee(clock_no='NEWE', employee_name='New Person')
+    >>> newcomer.save()
+    >>> newcomer.party.name, newcomer.employee_name
+    ('New Person', 'New Person')
+    >>> _ = newcomer.calendar_weeks.new(day_of_week='2', shift_1=8.0)
+    >>> newcomer.save()
+    >>> len(newcomer.calendar_weeks)
+    1
+
+Time and Attendance: a ticket, approved, Who is In/Out::
+
+    >>> row = Desk.sf_attendance_save({'employee': greg['id'],
+    ...     'clock_in': '2026-10-20 07:00', 'clock_out': '2026-10-20 15:30',
+    ...     'notes': 'Doctor'}, config.context)
+    >>> row['hours'], row['transaction_date'], row['has_notes']
+    (8.5, '2026-10-20', True)
+    >>> row['id'] in [r['id'] for r in Desk.sf_attendance({
+    ...     'show': 'not_approved', 'employee': greg['id']}, config.context)]
+    True
+    >>> approved, = Desk.sf_attendance_approve([row['id']], config.context)
+    >>> approved['approved'], bool(approved['approved_by'])
+    (True, True)
+    >>> exported = Desk.sf_attendance_save({'id': row['id'],
+    ...     'exported': True}, config.context)
+    >>> exported['exported'], bool(exported['exported_date'])
+    (True, True)
+    >>> who = Desk.sf_who_is_in(config.context)
+    >>> sorted(who[0])  # doctest: +NORMALIZE_WHITESPACE
+    ['absence', 'clock_in', 'clock_no', 'clock_out', 'employee', 'name',
+     'shift_no', 'shift_start', 'status']
+
+Shop Resources: Inactive is Active the other way round; Where Used gives
+Jobshop's columns; Reset Operation Costs of the description only::
+
+    >>> drill.inactive
+    False
+    >>> used = Desk.sf_resource_where_used(lathe.id, {}, config.context)
+    >>> used['description']
+    'Lathe 1'
+    >>> all(k in used['rows'][0] for k in ['created', 'sub', 'op_status',
+    ...     'setup_hours', 'run_type', 'drawing_id', 'preserved'])
+    True
+    >>> Desk.sf_reset_operation_costs({'resource': lathe.id, 'costs': False,
+    ...     'description': True, 'templates': True, 'statuses': ['all']},
+    ...     config.context)['templates']
+    0
+    >>> drill.inactive = True
+    >>> drill.save()
+    >>> bool(drill.active)
+    False

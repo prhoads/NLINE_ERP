@@ -15,7 +15,26 @@ from trytond.transaction import Transaction, without_check_access
 PERCENT = (10, 6)
 
 
-class SalesRep(CodeTable):
+class InactiveMixin:
+    """Jobshop's Inactive column: the reverse of Tryton's active, read-only
+    (the windows change active), searchable for the Browse tabs"""
+    __slots__ = ()
+    inactive = fields.Function(fields.Boolean("Inactive"),
+        'get_inactive', searcher='search_inactive')
+
+    def get_inactive(self, name):
+        return not self.active
+
+    @classmethod
+    def search_inactive(cls, name, clause):
+        _, operator, value = clause[:3]
+        if operator in {'=', '!='}:
+            wanted = not value if operator == '=' else bool(value)
+            return [('active', '=', wanted)]
+        return []
+
+
+class SalesRep(InactiveMixin, CodeTable):
     "Sales Representative"
     __name__ = 'nline.sales_rep'
     commission = fields.Numeric("Commission %", digits=PERCENT)
@@ -31,17 +50,17 @@ class SalesRep(CodeTable):
         return Decimal(0)
 
 
-class Territory(CodeTable):
+class Territory(InactiveMixin, CodeTable):
     "Territory"
     __name__ = 'nline.territory'
 
 
-class SicCode(CodeTable):
+class SicCode(InactiveMixin, CodeTable):
     "SIC Code"
     __name__ = 'nline.sic_code'
 
 
-class Carrier(CodeTable):
+class Carrier(InactiveMixin, CodeTable):
     "Carrier"
     __name__ = 'nline.carrier'
     carrier_code = fields.Char("Carrier Code")
@@ -55,7 +74,7 @@ class Carrier(CodeTable):
         cls.description.string = "Name"
 
 
-class ServiceCharge(CodeTable):
+class ServiceCharge(InactiveMixin, CodeTable):
     "Service Charge"
     __name__ = 'nline.service_charge'
     amount = fields.Numeric("Amount", digits=(16, 2))
@@ -67,7 +86,7 @@ class ServiceCharge(CodeTable):
         return Decimal(0)
 
 
-class TaxGroup(CodeTable):
+class TaxGroup(InactiveMixin, CodeTable):
     "Sales Tax Group"
     __name__ = 'nline.sales_tax_group'
     lines = fields.One2Many('nline.sales_tax_group.line', 'group', "Taxes")
@@ -249,7 +268,7 @@ class SalePriceBreak(ModelSQL, ModelView):
         cls._order = [('quantity', 'ASC')]
 
 
-class DiscountClass(CodeTable):
+class DiscountClass(InactiveMixin, CodeTable):
     "Discount Class"
     __name__ = 'nline.discount_class'
     discount_percent = fields.Numeric("Discount Percent", digits=PERCENT)

@@ -57,6 +57,14 @@ class LaborTicket(ModelSQL, ModelView):
             ('double', "Double"),
             ('triple', "Triple"),
             ], "Shift Type", required=True)
+    # Jobshop's Pay Rate: the employee's rate to cost the hours with (empty:
+    # the rate of the transaction type)
+    pay_rate = fields.Selection([
+            (None, ""),
+            ('base', "Base"),
+            ('setup', "Setup"),
+            ('run', "Run"),
+            ], "Pay Rate")
     type = fields.Selection([
             ('setup', "Setup"),
             ('run', "Run"),
@@ -243,8 +251,8 @@ class LaborTicket(ModelSQL, ModelView):
         hours = dec(self.hours_worked)
         quantity = dec(self.completed_qty) if step == 'run' else ZERO
         self.multiplier = MULTIPLIERS.get(self.shift_type, Decimal(1))
-        self.cost_per_hr = (employee.labor_rate(step) if employee else ZERO
-            ) or rates.get('labor_per_hr') or ZERO
+        self.cost_per_hr = (employee.labor_rate(self.pay_rate or step)
+            if employee else ZERO) or rates.get('labor_per_hr') or ZERO
         self.cost_per_unit = ((employee.cost_per_unit if employee else ZERO)
             or rates.get('labor_per_unit') or ZERO) if step == 'run' else ZERO
         burden_hr = rates.get('burden_per_hr') or ZERO

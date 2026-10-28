@@ -57,110 +57,495 @@
 
     /* browse(model, {title, domain, columns: [{field, label, money}],
      * order}) -> Promise of the chosen record (rejected on Cancel) */
+    /* Jobshop's search text: "AB" begins with AB, "*AB" contains it, "?" is
+     * any one character */
+    function jobshopLike(text) {
+        text = (text || '').trim();
+        if (!text) {
+            return null;
+        }
+        /* (an open end always: Jobshop's text is a beginning) */
+        return (/\*$/.test(text) ? text : text + '*').replace(/%/g, '\\%')
+            .replace(/\*/g, '%').replace(/\?/g, '_');
+    }
+
+    /* The user's Preferences (common.js), defaults when not loaded */
+    function preference(name, fallback) {
+        var common = global.JobshopCommon;
+        var value = common && common.preferences ?
+            common.preferences()[name] : undefined;
+        return value === undefined ? fallback : value;
+    }
+
+    /* Jobshop's lookup columns per table (its Browse definitions), for a
+     * "..." anywhere: {title, columns: [{name, label, type ('date',
+     * 'money', 'float', 'boolean'), labels, w (width), search (false: not
+     * searched)}]}; or a function of the lookup's domain (Customers or
+     * Suppliers). UI.lookups.register(model, spec) adds or replaces one.
+     * Tables without one show the ID and the Description (the two parts
+     * of the record's name). */
+    var PO_LOOKUP_STATUS = {unreleased: 'Unreleased', firm: 'Firm',
+        released: 'Released', closed: 'Closed', cancelled: 'Cancelled'};
+    var WO_LOOKUP_STATUS = {unreleased: 'Unreleased', firm: 'Firm',
+        hold: 'Hold', released: 'Released', closed: 'Closed',
+        cancelled: 'Cancelled'};
+    var LOOKUPS = {
+        'purchase.purchase': {title: 'Purchase Orders', columns: [
+            {name: 'number', label: 'ID', w: 90},
+            {name: 'party.code', label: 'Supplier ID', w: 110},
+            {name: 'party.name', label: 'Name', w: 190},
+            {name: 'reference', label: 'Supplier Quote Ref', w: 130},
+            {name: 'buyer', label: 'Buyer', w: 60},
+            {name: 'purchase_date', label: 'Order Date', type: 'date',
+                w: 85},
+            {name: 'delivery_date', label: 'Desired Recv Date',
+                type: 'date', w: 85},
+            {name: 'jobshop_status', label: 'Status', labels:
+                PO_LOOKUP_STATUS, search: false, w: 80}]},
+        'sale.sale': {title: 'Customer Orders', columns: [
+            {name: 'number', label: 'ID', w: 90},
+            {name: 'party.code', label: 'Customer ID', w: 110},
+            {name: 'party.name', label: 'Name', w: 190},
+            {name: 'reference', label: 'Customer PO Ref', w: 130},
+            {name: 'sale_date', label: 'Order Date', type: 'date', w: 85},
+            {name: 'shipping_date', label: 'Desired Ship Date',
+                type: 'date', w: 85},
+            {name: 'js_status', label: 'Status', search: false, w: 80}]},
+        'nline.quote': {title: 'Quotes', columns: [
+            {name: 'number', label: 'ID', w: 90},
+            {name: 'party.code', label: 'Customer ID', w: 110},
+            {name: 'name', label: 'Name', w: 190},
+            {name: 'customer_reference', label: 'Customer RFQ Ref', w: 130},
+            {name: 'quote_date', label: 'Quote Date', type: 'date', w: 85},
+            {name: 'status', label: 'Status', search: false, w: 80}]},
+        'nline.rfq': {title: 'Requests for Quote', columns: [
+            {name: 'number', label: 'ID', w: 90},
+            {name: 'rfq_date', label: 'Quote Date', type: 'date', w: 85},
+            {name: 'due_date', label: 'Due Date', type: 'date', w: 85},
+            {name: 'supplier_1.code', label: 'Supplier 1 ID', w: 110},
+            {name: 'supplier_2.code', label: 'Supplier 2 ID', w: 110},
+            {name: 'supplier_3.code', label: 'Supplier 3 ID', w: 110},
+            {name: 'status', label: 'Status', search: false, w: 80}]},
+        'production': {title: 'Work Orders', columns: [
+            {name: 'number', label: 'ID', w: 110},
+            {name: 'product.code', label: 'Part ID', w: 130},
+            {name: 'description', label: 'Description', w: 220},
+            {name: 'quantity', label: 'Desired Qty', type: 'float',
+                search: false, w: 80},
+            {name: 'planned_date', label: 'Want Date', type: 'date', w: 85},
+            {name: 'order_status', label: 'Status', labels:
+                WO_LOOKUP_STATUS, search: false, w: 80}]},
+        'product.product': {title: 'Parts', columns: [
+            {name: 'code', label: 'ID', w: 150},
+            {name: 'name', label: 'Description', w: 260},
+            {name: 'producible', label: 'Fab\'d', type: 'boolean', w: 45},
+            {name: 'purchasable', label: 'Pur\'d', type: 'boolean', w: 45},
+            {name: 'default_uom.symbol', label: 'Stock U/M', w: 70,
+                search: false},
+            {name: 'drawing_number', label: 'Drawing ID', w: 110}]},
+        'product.template': {title: 'Parts', columns: [
+            {name: 'code', label: 'ID', w: 150},
+            {name: 'name', label: 'Description', w: 260},
+            {name: 'producible', label: 'Fab\'d', type: 'boolean', w: 45},
+            {name: 'purchasable', label: 'Pur\'d', type: 'boolean', w: 45},
+            {name: 'default_uom.symbol', label: 'Stock U/M', w: 70,
+                search: false}]},
+        'party.party': function (domain) {
+            var text = JSON.stringify(domain || []);
+            if (/supplier/.test(text) && !/customer/.test(text)) {
+                return {title: 'Suppliers', columns: [
+                    {name: 'code', label: 'ID', w: 120},
+                    {name: 'name', label: 'Name', w: 220},
+                    {name: 'supplier_city', label: 'City', w: 110},
+                    {name: 'supplier_state', label: 'State', w: 50},
+                    {name: 'supplier_phone', label: 'Phone', w: 110},
+                    {name: 'supplier_buyer', label: 'Buyer', w: 60}]};
+            }
+            if (/customer/.test(text)) {
+                return {title: 'Customers', columns: [
+                    {name: 'code', label: 'ID', w: 120},
+                    {name: 'name', label: 'Name', w: 220},
+                    {name: 'sold_to_city', label: 'City', w: 110},
+                    {name: 'sold_to_subdivision.code', label: 'State',
+                        w: 50, search: false},
+                    {name: 'customer_phone', label: 'Phone', w: 110}]};
+            }
+            return {title: 'Customers and Suppliers', columns: [
+                {name: 'code', label: 'ID', w: 120},
+                {name: 'name', label: 'Name', w: 260}]};
+        },
+        'company.employee': {title: 'Employees', columns: [
+            {name: 'party.code', label: 'ID', w: 100},
+            {name: 'employee_name', label: 'Name', w: 200},
+            {name: 'clock_no', label: 'Clock No', w: 70},
+            {name: 'title', label: 'Title', w: 120},
+            {name: 'shift_no', label: 'Shift', search: false, w: 45}]},
+        'production.work.center': {title: 'Shop Resources', columns: [
+            {name: 'name', label: 'ID', w: 130},
+            {name: 'description', label: 'Description', w: 240},
+            {name: 'resource_type', label: 'Type', search: false, w: 90}]},
+        'stock.shipment.out': {title: 'Shippers', columns: [
+            {name: 'number', label: 'Packlist ID', w: 100},
+            {name: 'customer.code', label: 'Customer ID', w: 110},
+            {name: 'customer.name', label: 'Name', w: 190},
+            {name: 'reference', label: 'Reference', w: 120},
+            {name: 'effective_date', label: 'Shipped Date', type: 'date',
+                w: 85},
+            {name: 'js_tracking_number', label: 'Tracking No', w: 120}]},
+        'stock.shipment.in': {title: 'Receivers', columns: [
+            {name: 'number', label: 'Receiver ID', w: 100},
+            {name: 'supplier.code', label: 'Supplier ID', w: 110},
+            {name: 'supplier.name', label: 'Name', w: 190},
+            {name: 'purchase.number', label: 'Purchase Order ID', w: 110},
+            {name: 'reference', label: 'Reference', w: 120},
+            {name: 'effective_date', label: 'Received Date', type: 'date',
+                w: 85}]},
+        'account.invoice': {title: 'Invoices', columns: [
+            {name: 'number', label: 'Invoice ID', w: 100},
+            {name: 'party.code', label: 'Customer ID', w: 110},
+            {name: 'party.name', label: 'Name', w: 190},
+            {name: 'reference', label: 'Reference', w: 120},
+            {name: 'invoice_date', label: 'Invoice Date', type: 'date',
+                w: 85},
+            {name: 'total_amount', label: 'Total', type: 'money',
+                search: false, w: 90}]},
+        'production.bom': {title: 'Engineering Masters', columns: [
+            {name: 'part.code', label: 'Part ID', w: 150},
+            {name: 'revision', label: 'Eng ID', w: 60},
+            {name: 'description', label: 'Description', w: 260},
+            {name: 'drawing_number', label: 'Drawing ID', w: 110}]},
+        'product.uom': {title: 'Units of Measure', columns: [
+            {name: 'symbol', label: 'ID', w: 90},
+            {name: 'name', label: 'Description', w: 220},
+            {name: 'category.name', label: 'Category', w: 120,
+                search: false}]},
+        'stock.location': {title: 'Locations', columns: [
+            {name: 'code', label: 'ID', w: 110},
+            {name: 'name', label: 'Description', w: 240},
+            {name: 'type', label: 'Type', search: false, w: 90}]}
+    };
+
+    /* Tables whose lookup columns Tryton cannot search (computed): the
+     * search looks at the name (ID and name) only */
+    var NAME_ONLY = {};
+
+    function lookupSpec(model, domain) {
+        var spec = LOOKUPS[model];
+        return typeof spec === 'function' ? spec(domain) : spec;
+    }
+
+    var lookups = {
+        register: function (model, spec) {
+            LOOKUPS[model] = spec;
+        },
+        get: lookupSpec
+    };
+
+    /* A read value, also through a relation ("party.code": Tryton reads
+     * it as row["party."].code) */
+    function readValue(row, name) {
+        if (row[name] !== undefined || name.indexOf('.') < 0) {
+            return row[name];
+        }
+        var parts = name.split('.');
+        var value = row;
+        for (var i = 0; i < parts.length && value; i++) {
+            value = i < parts.length - 1 ? value[parts[i] + '.'] :
+                value[parts[i]];
+        }
+        return value;
+    }
+
+    /* The record's name split in Jobshop's ID and Description */
+    function nameParts(name) {
+        name = name || '';
+        var at = name.indexOf(' - ');
+        return at > 0 ? [name.slice(0, at), name.slice(at + 3)] :
+            [name, ''];
+    }
+
+    /* browse(model, {title, domain, columns, order, text (typed so far),
+     * current (the record id shown now)}) -> Promise of the chosen record
+     * (rejected on Cancel). Jobshop's lookup window: the table's Browse
+     * columns in a grid (header click sorts, drag sizes, right-click
+     * filters, Export), Search with Find and Refresh, OK / Cancel; a
+     * double-click or Enter takes the row. */
     function browse(model, options) {
         options = options || {};
-        var columns = options.columns || [{field: 'rec_name',
-            label: 'Name'}];
-        var fields = columns.map(function (c) {
-            return c.field;
+        var spec = lookupSpec(model, options.domain) || {};
+        var columns = (options.columns || spec.columns || [
+            {name: 'rec_name', label: 'ID', part: 0, w: 160},
+            {name: 'rec_name', label: 'Description', part: 1, w: 300,
+                search: false}]).map(function (c) {
+                    /* (the old {field, money} columns) */
+                    return c.field ? {name: c.field, label: c.label, type:
+                        c.money ? 'money' : c.type, w: c.w} : c;
+                });
+        var fields = ['rec_name'];
+        columns.forEach(function (c) {
+            if (c.type === 'many2one') {
+                fields.push(c.name, c.name + '.rec_name');
+            } else if (fields.indexOf(c.name) < 0) {
+                fields.push(c.name);
+            }
         });
-        if (fields.indexOf('rec_name') < 0) {
-            fields.push('rec_name');
+        var title = options.lookupTitle || spec.title || options.title ||
+            'Find';
+
+        function cell(row, c) {
+            var v = c.part !== undefined ? nameParts(row.rec_name)[c.part] :
+                c.type === 'many2one' ? (row[c.name + '.'] || {}).rec_name :
+                readValue(row, c.name);
+            var num = c.type === 'money' || c.type === 'float' ||
+                c.type === 'integer';
+            var text = v === null || v === undefined || v === false ? '' :
+                c.type === 'money' ? UI.money(v) :
+                c.type === 'date' || !c.type && /^\d{4}-\d\d-\d\d$/.test(
+                    v) ? UI.date(v) :
+                c.type === 'boolean' ? (v ? '✔' : '') :
+                c.labels ? (c.labels[v] || String(v)) :
+                c.type === 'many2one' ? UI.shortName('', v) : String(v);
+            return el('td' + (num ? '.num' : c.type === 'boolean' ?
+                '.center' : ''), text);
         }
+
         return new Promise(function (resolve, reject) {
             var search = el('input', {type: 'text', 'aria-label': 'Search',
-                placeholder: 'Search (* for any text)'});
+                value: options.text || ''});
             var body = el('tbody');
-            var records = [];
-            var active = 0;
+            var table = el('table.data.lookup-grid', el('thead', el('tr',
+                [el('th.row-head')].concat(columns.map(function (c) {
+                    return el('th', {style: {width: (c.w || 120) + 'px'}},
+                        c.label);
+                })))), body);
+            var gridBox = el('div.lookup-grid-box', table);
+            var count = el('span.lookup-count');
+            var tools = null;
+            var loaded = false;
+            var done = false;
+            var overlay;
 
-            function render() {
-                UI.clear(body);
-                records.forEach(function (record, index) {
-                    body.appendChild(el('tr' + (index === active ?
-                        '.active' : ''), {
-                        onclick: function () {
-                            active = index;
-                            render();
-                        },
-                        ondblclick: function () {
-                            pick(record);
-                        }
-                    }, columns.map(function (c) {
-                        var value = record[c.field];
-                        return el('td' + (c.money ? '.num' : ''),
-                            c.money ? UI.money(value) : value === null ||
-                            value === undefined ? '' : String(value));
-                    })));
+            function rows() {
+                return Array.prototype.filter.call(body.rows, function (tr) {
+                    return tr.record && tr.style.display !== 'none' &&
+                        !tr.hidden;
                 });
-                if (!records.length) {
-                    body.appendChild(el('tr', el('td', {colspan:
-                        columns.length}, 'Nothing found.')));
+            }
+
+            function activeRow() {
+                return body.querySelector('tr.active');
+            }
+
+            function activate(tr) {
+                var old = activeRow();
+                if (old) {
+                    old.classList.remove('active');
                 }
-                var row = body.querySelector('tr.active');
-                if (row) {
-                    row.scrollIntoView({block: 'nearest'});
+                if (tr) {
+                    tr.classList.add('active');
+                    tr.scrollIntoView({block: 'nearest'});
                 }
             }
 
-            function load() {
+            function finish(record) {
+                if (done) {
+                    return;
+                }
+                done = true;
+                overlay.remove();
+                global.document.removeEventListener('keydown', keys, true);
+                if (record) {
+                    resolve(record);
+                } else {
+                    reject({cancelled: true});
+                }
+            }
+
+            function load(nameOnly) {
                 var domain = (options.domain || []).slice();
-                var text = search.value.trim().replace(/\*/g, '%');
+                var text = jobshopLike(search.value);
+                var wide = false;
                 if (text) {
-                    domain.push(['rec_name', 'ilike', text.indexOf('%') >=
-                        0 ? text : '%' + text + '%']);
+                    /* The name and the text columns (a computed column
+                     * Tryton cannot search: the name only, see below) */
+                    var or = ['OR', ['rec_name', 'ilike', text]];
+                    columns.forEach(function (c) {
+                        if (!nameOnly && !NAME_ONLY[model] &&
+                                c.search !== false && c.part === undefined &&
+                                !c.labels && (!c.type || c.type === 'char')) {
+                            or.push([c.name, 'ilike', text]);
+                            wide = true;
+                        }
+                    });
+                    domain.push(or);
                 }
-                global.Rpc.searchRead(model, domain, fields, {limit: 100,
-                    order: options.order}).then(function (rows) {
-                    records = rows;
-                    active = 0;
-                    render();
-                }, UI.showError);
+                var limit = preference('browseMaxRows', 1000) || null;
+                count.textContent = 'Loading...';
+                global.Rpc.searchRead(model, domain, fields, {limit: limit,
+                    order: options.order || spec.order}).then(function (
+                        records) {
+                    UI.clear(body);
+                    records.forEach(function (record) {
+                        var tr = el('tr', {
+                            onclick: function () {
+                                activate(tr);
+                            },
+                            ondblclick: function () {
+                                finish(record);
+                            }
+                        }, [el('td.row-head')].concat(columns.map(function (
+                            c) {
+                            return cell(record, c);
+                        })));
+                        tr.record = record;
+                        body.appendChild(tr);
+                    });
+                    loaded = true;
+                    if (tools) {
+                        tools.apply();
+                    }
+                    var shown = rows();
+                    var current = options.current && shown.filter(function (
+                        tr) {
+                        return tr.record.id === options.current;
+                    })[0];
+                    activate(current || shown[0]);
+                    count.textContent = shown.length + (limit &&
+                        records.length >= limit ? '+' : '') + ' record' +
+                        (shown.length === 1 ? '' : 's');
+                }, function (error) {
+                    if (wide) {
+                        NAME_ONLY[model] = true;
+                        load(true);
+                        return;
+                    }
+                    count.textContent = '';
+                    UI.showError(error);
+                });
             }
 
-            var close;
+            function move(by) {
+                var shown = rows();
+                var at = shown.indexOf(activeRow());
+                activate(shown[Math.max(0, Math.min(shown.length - 1,
+                    (at < 0 ? 0 : at) + by))]);
+            }
 
-            function pick(record) {
-                close();
-                resolve(record);
+            /* Arrows, Page Up/Down, Home/End move; Enter takes the row
+             * (or runs a search not run yet); Esc cancels; F5 refreshes */
+            function keys(event) {
+                if (done || global.document.querySelector('.ctx-menu') ||
+                        overlay.nextElementSibling) {
+                    return;
+                }
+                var page = Math.max(1, Math.floor(gridBox.clientHeight /
+                    24) - 1);
+                var by = {ArrowDown: 1, ArrowUp: -1, PageDown: page,
+                    PageUp: -page}[event.key];
+                if (by) {
+                    move(by);
+                } else if ((event.key === 'Home' || event.key === 'End') &&
+                        event.target !== search) {
+                    var shown = rows();
+                    activate(event.key === 'Home' ? shown[0] :
+                        shown[shown.length - 1]);
+                } else if (event.key === 'Enter') {
+                    if (event.target === search && search.dataset.dirty) {
+                        delete search.dataset.dirty;
+                        global.clearTimeout(timer);
+                        load();
+                    } else if (activeRow()) {
+                        finish(activeRow().record);
+                    }
+                } else if (event.key === 'Escape') {
+                    finish(null);
+                } else if (event.key === 'F5') {
+                    load();
+                } else {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
             }
 
             var timer;
             search.addEventListener('input', function () {
+                search.dataset.dirty = '1';
                 global.clearTimeout(timer);
-                timer = global.setTimeout(load, 200);
+                timer = global.setTimeout(function () {
+                    delete search.dataset.dirty;
+                    load();
+                }, 300);
             });
-            search.addEventListener('keydown', function (event) {
-                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                    active = Math.max(0, Math.min(records.length - 1,
-                        active + (event.key === 'ArrowDown' ? 1 : -1)));
-                    render();
-                    event.preventDefault();
-                } else if (event.key === 'Enter' && records[active]) {
-                    event.preventDefault();
-                    pick(records[active]);
-                } else if (event.key === 'Escape') {
-                    close();
-                    reject({cancelled: true});
+
+            function button(label, onclick, primary) {
+                return el('button' + (primary ? '.primary' : ''), {type:
+                    'button', onclick: onclick}, label);
+            }
+
+            var win = el('div.lookup-win', {role: 'dialog', 'aria-label':
+                title},
+                el('div.lookup-title', el('span', title), el(
+                    'button.lookup-x', {type: 'button', title: 'Cancel (Esc)',
+                        'aria-label': 'Close', onclick: function () {
+                            finish(null);
+                        }}, '×')),
+                el('div.lookup-tabs', el('span.lookup-tab', 'Browse')),
+                gridBox,
+                el('div.lookup-bar',
+                    el('label', 'Search'), search,
+                    button('Find', function () {
+                        global.clearTimeout(timer);
+                        load();
+                    }),
+                    button('Refresh', function () {
+                        load();
+                    }),
+                    el('span.lookup-gap'),
+                    button('OK', function () {
+                        if (activeRow()) {
+                            finish(activeRow().record);
+                        }
+                    }, true),
+                    button('Cancel', function () {
+                        finish(null);
+                    })),
+                el('div.lookup-status', el('span',
+                    'Right click within the grid to open a right click ' +
+                    'menu, if available.'), count));
+            overlay = el('div.overlay.lookup-overlay', win);
+            global.document.body.appendChild(overlay);
+            global.document.addEventListener('keydown', keys, true);
+            if (global.JobshopCommon && global.JobshopCommon.gridTools) {
+                tools = global.JobshopCommon.gridTools({table: table,
+                    offset: 1, key: 'lookup.' + model + '.' + title, title:
+                    title, columns: columns, onchange: function (shown,
+                        total) {
+                        if (loaded) {
+                            count.textContent = shown + ' of ' + total +
+                                ' records';
+                        }
+                    }});
+            }
+            table.addEventListener('contextmenu', function (event) {
+                var tr = event.target.closest('tbody tr');
+                if (tr && tr.record) {
+                    activate(tr);
+                } else {
+                    tr = null;
                 }
+                UI.contextMenu(event, [
+                    {label: 'Select', disabled: !tr, onclick: function () {
+                        finish(tr.record);
+                    }},
+                    {label: 'Refresh', shortcut: 'F5', onclick: function () {
+                        load();
+                    }}
+                ].concat(tools ? ['-'].concat(tools.menuItems(tr,
+                    tools.columnAt(event))) : []));
             });
-            close = UI.modal(options.title || 'Find', [search,
-                el('div.browse', el('table.data', el('thead', el('tr',
-                    columns.map(function (c) {
-                        return el('th' + (c.money ? '.num' : ''), c.label);
-                    }))), body))], [
-                {label: 'Cancel', onclick: function () {
-                    reject({cancelled: true});
-                }},
-                {label: 'OK', primary: true, onclick: function () {
-                    if (records[active]) {
-                        resolve(records[active]);
-                        return;
-                    }
-                    return true;
-                }}
-            ]);
             search.focus();
+            search.select();
             load();
         });
     }
@@ -260,6 +645,35 @@
                     options.find) {
                 event.preventDefault();
                 find();
+            } else if ((event.ctrlKey || event.metaKey) && key === 's' &&
+                    options.onSaveStay && !saveClose.hidden) {
+                /* Jobshop's File > Save (Ctrl+S): saved, the window stays
+                 * on the record */
+                event.preventDefault();
+                if (!saving) {
+                    saving = true;
+                    Promise.resolve(options.onSaveStay()).then(function () {
+                        saving = false;
+                    }, function () {
+                        saving = false;
+                    });
+                }
+            } else if (key === 'f5' && !event.shiftKey && options.onRefresh) {
+                /* File > Refresh (F5): back to the saved record */
+                event.preventDefault();
+                options.onRefresh();
+            } else if ((event.ctrlKey || event.metaKey) && key === 'p' &&
+                    extraButtons.Print && !extraButtons.Print.hidden) {
+                event.preventDefault();
+                extraButtons.Print.click();
+            } else if (key === 'delete' && options.onDelete &&
+                    extraButtons.Delete && !extraButtons.Delete.hidden &&
+                    !/^(INPUT|SELECT|TEXTAREA)$/.test(
+                        (global.document.activeElement || {}).tagName ||
+                        '') && !global.document.querySelector('.overlay')) {
+                /* Edit > Delete (Del) outside a field */
+                event.preventDefault();
+                options.onDelete();
             }
         });
 
@@ -334,7 +748,8 @@
     /* ---- The line grid ------------------------------------------------ */
 
     /* grid({columns: [{key, label, width, kind: 'text'|'money'|'number'|
-     * 'picker'|'computed', picker: {model, domain, placeholder, fields,
+     * 'date'|'check'|'picker'|'computed', picker: {model, domain,
+     * placeholder, fields,
      * onselect(record, controls)}, compute(values) -> number}], total: key,
      * onchange(total)}) -> {node, rows(), total(), addRow(values), clear()}.
      * A row is a {key: control}; the last column's Enter adds a row. */
@@ -356,6 +771,12 @@
             }
             if (column.kind === 'money' || column.kind === 'number') {
                 return UI.parseMoney(control.value);
+            }
+            if (column.kind === 'check') {
+                return control.checked;
+            }
+            if (column.kind === 'date') {
+                return control.value || null;
             }
             return control.value;
         }
@@ -423,6 +844,10 @@
                             }}));
                 } else if (column.kind === 'money') {
                     control = UI.moneyInput({'aria-label': column.label});
+                } else if (column.kind === 'date' || column.kind ===
+                        'check') {
+                    control = el('input', {type: column.kind === 'date' ?
+                        'date' : 'checkbox', 'aria-label': column.label});
                 } else {
                     control = el('input', {type: 'text', 'aria-label':
                         column.label, inputmode: column.kind === 'number' ?
@@ -433,7 +858,11 @@
                 }
                 row.controls[column.key] = control;
                 if (column.default !== undefined) {
-                    control.value = column.default;
+                    if (column.kind === 'check') {
+                        control.checked = !!column.default;
+                    } else {
+                        control.value = column.default;
+                    }
                 }
                 var input = control.input || control;
                 input.addEventListener('input', function () {
@@ -499,8 +928,11 @@
                 var v = values[key];
                 if (control && control.set) {
                     control.set(v.id, v.rec_name);
+                } else if (control && control.type === 'checkbox') {
+                    control.checked = !!v;
                 } else if (control) {
-                    control.value = v;
+                    control.value = v === null || v === undefined ? '' :
+                        control.type === 'date' ? String(v).slice(0, 10) : v;
                 }
             });
             rows.push(row);
@@ -863,6 +1295,32 @@
                 input.value = value === null || value === undefined ? '' :
                     value;
             };
+        } else if (f.type === 'radio') {
+            /* Jobshop's radio group (layout type3): options [[value,
+             * label]], one under the other (f.inline: side by side) */
+            var group = 'r' + Math.random().toString(36).slice(2);
+            var radios = (f.options || []).map(function (o) {
+                return el('input', {type: 'radio', name: group, value:
+                    o[0] === null ? '' : o[0], disabled: f.readonly ? true :
+                    null});
+            });
+            input = el('div.js-radio' + (f.inline ? '.inline' : ''), {role:
+                'radiogroup', 'aria-label': f.label}, radios.map(
+                function (r, i) {
+                    return el('label', r, ' ' + f.options[i][1]);
+                }));
+            get = function () {
+                var on = radios.filter(function (r) {
+                    return r.checked;
+                })[0];
+                return on && on.value !== '' ? on.value : null;
+            };
+            set = function (value) {
+                radios.forEach(function (r) {
+                    r.checked = r.value === (value === null || value ===
+                        undefined ? '' : String(value));
+                });
+            };
         } else if (f.type === 'text') {
             input = el('textarea', Object.assign({rows: f.rows || 4}, attrs));
             get = function () {
@@ -883,7 +1341,7 @@
             };
         } else {
             input = el('input', Object.assign({type: f.type === 'date' ?
-                'date' : 'text'}, attrs));
+                'date' : f.type === 'time' ? 'time' : 'text'}, attrs));
             if (f.type === 'integer' || f.type === 'float' ||
                     f.type === 'decimal') {
                 input.classList.add('money');
@@ -903,6 +1361,13 @@
                 }
                 if (f.type === 'date') {
                     return global.Rpc.date(input.value);
+                }
+                if (f.type === 'time') {
+                    /* Tryton's encoding of a datetime.time */
+                    var hm = input.value.split(':');
+                    return {__class__: 'time', hour: parseInt(hm[0], 10),
+                        minute: parseInt(hm[1], 10), second: 0,
+                        microsecond: 0};
                 }
                 return input.value;
             };
@@ -943,6 +1408,77 @@
      * defaults, writes (false: read-only window)}): the Jobshop window: ID
      * with "..." lookup (blank ID = new), tabs, the Browse tab last, Save,
      * Clear, Copy, Delete; Browse rows open with a double-click */
+    /* Jobshop's window layout (its Layouts\*.vml): a field placed with
+     * at: [left, top, right, bottom] in Jobshop's units, its label inside
+     * that box (split: the label's width, default 120; 0 = no label), a
+     * check box with its caption on the right; tab.frames [{label, at}] are
+     * Jobshop's group boxes, tab.buttons [{label, at, onclick}] its buttons.
+     * Fields without at follow in the usual grid below. The units scale
+     * with the pane's width (--u px per unit). */
+    function jobshopPlaced(tab) {
+        return (tab.fields || []).some(function (f) {
+            return f.at;
+        });
+    }
+
+    function placedForm(tab, makeControl) {
+        var box = el('div.js-layout');
+        var rest = el('div.grid-form');
+        var bottom = 0, right = 0;
+        function place(at) {
+            bottom = Math.max(bottom, at[3]);
+            right = Math.max(right, at[2]);
+            return {left: 'calc(var(--u) * ' + at[0] + ')',
+                top: 'calc(var(--u) * ' + at[1] + ')',
+                width: 'calc(var(--u) * ' + (at[2] - at[0]) + ')',
+                height: 'calc(var(--u) * ' + (at[3] - at[1]) + ')'};
+        }
+        (tab.frames || []).forEach(function (fr) {
+            box.appendChild(el('fieldset.js-frame', {style: place(fr.at)},
+                el('legend', fr.label)));
+        });
+        (tab.fields || []).forEach(function (f) {
+            var c = makeControl(f);
+            if (!f.at) {
+                rest.appendChild(el('div', f.span ? {style: {gridColumn:
+                    'span ' + f.span}} : null, el('label.field', f.label),
+                    c.node));
+                return;
+            }
+            var check = f.type === 'boolean';
+            var split = f.split === undefined ? 120 : f.split;
+            var label = f.label && (check || split) ? el('label.js-label',
+                check ? null : {style: {width: 'calc(var(--u) * ' + split +
+                    ')'}}, f.label) : null;
+            var node = el('div.js-ctl' + (check ? '.js-check' : '') +
+                (f.type === 'text' || f.type === 'radio' ? '.js-multi' :
+                    ''), {style: place(f.at),
+                title: f.help || ''}, check ? [c.node, label] : [label,
+                c.node]);
+            box.appendChild(node);
+        });
+        (tab.buttons || []).forEach(function (b) {
+            box.appendChild(el('button.js-btn', {type: 'button', style:
+                place(b.at), onclick: b.onclick}, b.label));
+        });
+        box.style.height = 'calc(var(--u) * ' + (bottom + 8) + ')';
+        function scale() {
+            var width = box.clientWidth || box.parentNode &&
+                box.parentNode.clientWidth || 0;
+            if (width) {
+                box.style.setProperty('--u', Math.max(1.25, Math.min(1.9,
+                    (width - 8) / (right + 8))).toFixed(3) + 'px');
+            }
+        }
+        scale();
+        global.addEventListener('resize', scale);
+        /* (the pane is hidden until its tab shows: measure then) */
+        if (global.ResizeObserver) {
+            new global.ResizeObserver(scale).observe(box);
+        }
+        return rest.children.length ? el('div', box, rest) : box;
+    }
+
     function master(main, options) {
         var record = null;
         var controls = {};
@@ -950,7 +1486,14 @@
         var allFields = [];
         var id = UI.picker(options.model, {label: options.label || 'ID',
             placeholder: options.label || 'ID', domain: options.domain,
-            order: options.order, onselect: function (r) {
+            order: options.order,
+            /* The lookup: Jobshop's columns for the table, else this
+             * window's Browse columns */
+            lookupColumns: lookupSpec(options.model, options.domain) ?
+                undefined : options.browse, lookupTitle: lookupSpec(
+                options.model, options.domain) ? undefined :
+                options.title + 's',
+            onselect: function (r) {
                 load(r.id);
             }});
         var status = el('span.muted', 'New');
@@ -968,17 +1511,32 @@
             lineTabs.forEach(function (t) {
                 values[t.name] = t.changes();
             });
-            if (options.beforeSave) {
-                values = options.beforeSave(values, record) || values;
+            /* Jobshop's ID field (options.idField): typed in the lookup
+             * itself for a new record */
+            if (options.idField && !controls[options.idField] && !record &&
+                    id.input.value.trim()) {
+                values[options.idField] = id.input.value.trim();
             }
-            var call = record ? global.Rpc.model(options.model, 'write',
-                [[record.id], values]).then(function () {
-                    return record.id;
-                }) : global.Rpc.model(options.model, 'create', [[
-                    Object.assign({}, options.defaults || {}, values)]])
-                .then(function (ids) {
-                    return ids[0];
-                });
+            /* beforeSave may change the values, or return a promise (a
+             * Jobshop "Continue?" question): rejected, nothing is saved */
+            var ready;
+            try {
+                ready = Promise.resolve(options.beforeSave ?
+                    options.beforeSave(values, record) : null);
+            } catch (error) {
+                ready = Promise.reject(error);
+            }
+            var call = ready.then(function (changed) {
+                values = changed || values;
+                return record ? global.Rpc.model(options.model, 'write',
+                    [[record.id], values]).then(function () {
+                        return record.id;
+                    }) : global.Rpc.model(options.model, 'create', [[
+                        Object.assign({}, options.defaults || {}, values)]])
+                    .then(function (ids) {
+                        return ids[0];
+                    });
+            });
             return call.then(function (newId) {
                 return Promise.resolve(options.afterSave ?
                     options.afterSave(newId) : null).then(function () {
@@ -994,7 +1552,13 @@
                 if (browseLoaded) {
                     browseLoad();
                 }
-            }, UI.showError);
+            }, function (error) {
+                /* (a beforeSave that declined: no message) */
+                if (error !== undefined && error !== null && error !==
+                        false) {
+                    UI.showError(error);
+                }
+            });
         }
 
         /* What the user may do on the model (Tryton's access: roles, the
@@ -1037,10 +1601,19 @@
 
         function load(recordId) {
             global.Rpc.model(options.model, 'read', [[recordId],
-                readFields(allFields).concat(['rec_name'])]).then(
+                readFields(allFields).concat(['rec_name'],
+                    options.idField && !controls[options.idField] ?
+                        [options.idField] : [])]).then(
                 function (rows) {
                     record = rows[0];
-                    id.set(record.id, record.rec_name);
+                    /* Jobshop shows the ID (idField), the name as its
+                     * tooltip */
+                    id.set(record.id, options.idField &&
+                        record[options.idField] ? record[options.idField] :
+                        record.rec_name);
+                    if (options.idField) {
+                        id.input.title = record.rec_name;
+                    }
                     status.textContent = '';
                     Object.keys(controls).forEach(function (name) {
                         var c = controls[name];
@@ -1064,8 +1637,32 @@
             if (!record) {
                 return;
             }
-            global.Rpc.model(options.model, 'copy', [[record.id], {}]).then(
-                function (ids) {
+            /* Jobshop's Save As: a copy needs its own ID */
+            if (options.idField) {
+                var input = el('input', {type: 'text', 'aria-label':
+                    'New ' + (options.label || 'ID'),
+                    maxlength: options.idLength || null});
+                UI.modal('Save As', [el('label.field', 'New ' +
+                    (options.label || 'ID')), input], [
+                    {label: 'Cancel'},
+                    {label: 'OK', primary: true, onclick: function () {
+                        var value = input.value.trim();
+                        if (!value) {
+                            input.focus();
+                            return true;
+                        }
+                        var defaults = {};
+                        defaults[options.idField] = value;
+                        copyWith(defaults);
+                    }}]);
+                return;
+            }
+            copyWith({});
+        }
+
+        function copyWith(defaults) {
+            global.Rpc.model(options.model, 'copy', [[record.id],
+                defaults]).then(function (ids) {
                     UI.toast(options.title + ' copied', 'ok');
                     load(ids[0]);
                 }, UI.showError);
@@ -1084,6 +1681,10 @@
                         .then(function () {
                             UI.toast('Deleted', 'ok');
                             clear();
+                            if (browseLoaded && preference(
+                                    'autoRefreshBrowse', true)) {
+                                browseLoad();
+                            }
                         }, UI.showError);
                 });
         }
@@ -1112,7 +1713,16 @@
         var form = UI.form(main, {title: options.title, extra: extra,
             onClear: clear, onSave: writes ? function (andNew) {
                 return save(andNew);
-            } : null});
+            } : null, onSaveStay: writes ? function () {
+                return save(false);
+            } : null, onRefresh: function () {
+                if (record) {
+                    load(record.id);
+                }
+                if (browseLoaded) {
+                    browseLoad();
+                }
+            }, onDelete: writes && !options.single ? remove : null});
         main = form.body;
 
         /* Browse > First / Previous / Next / Last: through the records in
@@ -1142,8 +1752,13 @@
                         step(b[0]);
                     }}, b[1]);
             }));
-        main.appendChild(el('div.panel.master-head',
-            el('label.field', options.label || 'ID'), id.node, status, nav));
+        /* options.idAt: the ID lookup sits in the first tab where Jobshop
+         * has it (no header bar above the tabs) */
+        if (!options.idAt) {
+            main.appendChild(el('div.panel.master-head',
+                el('label.field', options.label || 'ID'), id.node, status,
+                nav));
+        }
 
         var customTabs = [];
         var tabs = (options.tabs || []).map(function (tab) {
@@ -1178,21 +1793,38 @@
         }
 
         var browseLoaded = false;
+        var browseTools = null;
         var browseBody = el('tbody');
         var browseSearch = el('input', {type: 'text', placeholder:
             'Search (* for any text)', 'aria-label': 'Search'});
+        /* Jobshop's Browse "Show All" (the inactive records too) */
+        var browseAll = options.browseShowAll ? el('input', {type:
+            'checkbox', onchange: function () {
+                browseLoad();
+            }}) : null;
 
         function browseLoad() {
             browseLoaded = true;
             var domain = (options.domain || []).slice();
-            var text = browseSearch.value.trim().replace(/\*/g, '%');
+            /* browseShowAll: true (Tryton's active) or {field} (a Jobshop
+             * Inactive flag of the record's own, e.g. customer_inactive) */
+            var inactiveField = options.browseShowAll &&
+                options.browseShowAll.field;
+            if (browseAll && browseAll.checked && !inactiveField) {
+                /* (a domain on active turns Tryton's active test off) */
+                domain.push(['active', 'in', [true, false]]);
+            } else if (browseAll && !browseAll.checked && inactiveField) {
+                domain.push([inactiveField, '!=', true]);
+            }
+            var text = jobshopLike(browseSearch.value);
             if (text) {
-                domain.push(['rec_name', 'ilike', text.indexOf('%') >= 0 ?
-                    text : '%' + text + '%']);
+                domain.push(['rec_name', 'ilike', text]);
             }
             var columns = options.browse;
+            /* Preferences: Maximum Browse Records to Load (0 = all) */
+            var limit = preference('browseMaxRows', 1000) || null;
             global.Rpc.searchRead(options.model, domain, readFields(columns),
-                {limit: 300, order: options.order}).then(function (rows) {
+                {limit: limit, order: options.order}).then(function (rows) {
                     UI.clear(browseBody);
                     rows.forEach(function (row) {
                         browseBody.appendChild(el('tr', {title:
@@ -1201,9 +1833,11 @@
                                 show(0);
                             }}, columns.map(function (c) {
                                 var v = c.type === 'many2one' ? (m2o(row,
-                                    c.name) || {}).rec_name : row[c.name];
+                                    c.name) || {}).rec_name : readValue(row,
+                                    c.name);
                                 return el('td' + (c.type === 'money' ||
-                                    c.type === 'float' ? '.num' : ''),
+                                    c.type === 'float' ? '.num' : '') +
+                                    (c.nowrap ? '.nowrap' : ''),
                                     c.type === 'money' ? UI.money(v) :
                                     c.type === 'date' ? UI.date(v) :
                                     c.labels ? (c.labels[v] || v || '') :
@@ -1212,6 +1846,14 @@
                                     '' : String(v));
                             })));
                     });
+                    if (browseTools) {
+                        browseTools.apply();
+                    }
+                    if (limit && rows.length >= limit &&
+                            preference('browseMaxRowsWarning', true)) {
+                        UI.toast('Only the first ' + limit + ' records are ' +
+                            'shown (File > Preferences)');
+                    }
                 }, UI.showError);
         }
 
@@ -1221,7 +1863,15 @@
                     show(index);
                 }}, tab.title));
             var pane = el('div.tab-pane.panel', {role: 'tabpanel'});
-            if (tab.fields) {
+            if (tab.fields && jobshopPlaced(tab)) {
+                pane.appendChild(placedForm(tab, function (f) {
+                    var c = fieldControl(f);
+                    c.field = f;
+                    controls[f.name] = c;
+                    allFields.push(f);
+                    return c;
+                }));
+            } else if (tab.fields) {
                 var grid = el('div.grid-form');
                 tab.fields.forEach(function (f) {
                     var c = fieldControl(f);
@@ -1241,20 +1891,86 @@
                     global.clearTimeout(timer);
                     timer = global.setTimeout(browseLoad, 250);
                 });
-                pane.appendChild(el('div.toolbar', el('div', {style: {width:
+                pane.appendChild(el('div.toolbar', browseAll ? el('label',
+                    browseAll, ' Show All') : null, el('div', {style: {width:
                     '320px'}}, browseSearch)));
-                pane.appendChild(el('div.table-wrap', el('table.data',
-                    el('thead', el('tr', tab.browse.map(function (c) {
+                var browseTable = el('table.data', el('thead', el('tr',
+                    tab.browse.map(function (c) {
                         return el('th', c.label);
-                    }))), browseBody)));
+                    }))), browseBody);
+                pane.appendChild(el('div.table-wrap', browseTable));
+                /* Jobshop's Browse tools (common.js): header sort, column
+                 * sizes and order, the right-click filters, Browse Filter
+                 * (Ctrl+B), Export */
+                if (global.JobshopCommon && global.JobshopCommon.gridTools) {
+                    browseTools = global.JobshopCommon.gridTools({table:
+                        browseTable, key: 'browse.' + options.model, title:
+                        options.title, columns: tab.browse});
+                    browseTable.addEventListener('contextmenu', function (
+                            event) {
+                        if (event.shiftKey) {
+                            return;
+                        }
+                        var tr = event.target.closest('tbody tr');
+                        UI.contextMenu(event, [{label: 'Refresh Browse ' +
+                            '(Shift+F5)', onclick: browseLoad}, '-'].concat(
+                            browseTools.menuItems(tr, browseTools.columnAt(
+                                event))));
+                    });
+                }
             } else if (tab.render) {
                 customTabs.push({pane: pane, render: tab.render});
                 pane.appendChild(el('p.muted', 'Save or choose one first.'));
+            }
+            if (tab.fields && tab.render) {
+                /* Fields with a grid under them (a quote's lines on its
+                 * Quote tab) */
+                var below = el('div.tab-below');
+                pane.appendChild(below);
+                customTabs.push({pane: below, render: tab.render});
             }
             panes.appendChild(pane);
         });
         main.appendChild(tabBar);
         main.appendChild(panes);
+        global.document.addEventListener('keydown', function (event) {
+            if (!tabBar.isConnected || !options.browse) {
+                return;
+            }
+            var key = event.key.toLowerCase();
+            if ((event.ctrlKey || event.metaKey) && key === 'b' &&
+                    browseTools) {
+                /* Browse > Browse Filter (Ctrl+B) */
+                event.preventDefault();
+                show(tabs.length - 1);
+                browseTools.filterDialog();
+            } else if (key === 'f5' && event.shiftKey) {
+                /* Browse > Refresh Browse (Shift+F5) */
+                event.preventDefault();
+                browseLoad();
+            }
+        });
+        if (options.idAt) {
+            var layout = panes.firstChild && panes.firstChild.querySelector(
+                '.js-layout');
+            var at = options.idAt;
+            var idBox = el('div.js-ctl.master-id', {style: {
+                left: 'calc(var(--u) * ' + at[0] + ')',
+                top: 'calc(var(--u) * ' + at[1] + ')',
+                width: 'calc(var(--u) * ' + (at[2] - at[0]) + ')',
+                height: 'calc(var(--u) * ' + (at[3] - at[1]) + ')'}},
+                el('label.js-label', {style: {width: 'calc(var(--u) * ' +
+                    (options.idSplit === undefined ? 120 :
+                        options.idSplit) + ')'}}, options.label || 'ID'),
+                id.node);
+            if (layout) {
+                layout.appendChild(idBox);
+            } else {
+                main.insertBefore(el('div.panel.master-head',
+                    el('label.field', options.label || 'ID'), id.node,
+                    status), tabBar);
+            }
+        }
         show(0);
         clear();
         if (options.open) {
@@ -1325,8 +2041,24 @@
             };
             reader.readAsDataURL(f);
         });
-        pane.appendChild(el('div.toolbar', writes ? el('label',
-            'Add picture ', file) : null));
+        /* Jobshop's Edit > Picture (common.js): Insert Picture (replaces),
+         * Clear Picture, Stretch to Fit; also the right-click on the
+         * picture */
+        var common = global.JobshopCommon;
+        if (common && common.pictureTools) {
+            var tools = common.pictureTools(list, {model: model, id: id,
+                writes: writes, reload: load});
+            pane.appendChild(el('div.toolbar', tools.menuItems().map(
+                function (item) {
+                    return el('button', {type: 'button', onclick:
+                        function () {
+                            item.onclick();
+                        }}, item.label);
+                })));
+        } else {
+            pane.appendChild(el('div.toolbar', writes ? el('label',
+                'Add picture ', file) : null));
+        }
         pane.appendChild(list);
         load();
     }
@@ -1502,61 +2234,122 @@
     /* ---- Right-click menu ------------------------------------------- */
 
     /* contextMenu(event, items): items are {label, onclick} or '-' (a
-     * separator); the menu closes on a choice, a click elsewhere or Esc */
-    var openMenu = null;
-    function closeMenu() {
-        if (openMenu) {
-            openMenu.remove();
-            openMenu = null;
+     * separator); {label, items} opens a submenu beside it (Jobshop's
+     * "Change Status >"), {checked: true} shows a tick, {disabled: true}
+     * greys it, {shortcut: 'Ctrl+S'} shows the key on the right; the
+     * menus close on a choice, a click elsewhere or Esc */
+    var openMenus = [];
+    function closeMenu(level) {
+        level = typeof level === 'number' ? level : 0;
+        while (openMenus.length > level) {
+            openMenus.pop().remove();
         }
     }
-    function contextMenu(event, items) {
-        event.preventDefault();
-        closeMenu();
-        items = items.filter(function (item, i) {
+    function clean(items) {
+        items = (items || []).filter(Boolean);
+        return items.filter(function (item, i) {
             /* No separator first, last or twice */
             return item !== '-' || (i > 0 && i < items.length - 1 &&
                 items[i - 1] !== '-');
         });
+    }
+    function showMenu(items, x, y, level) {
+        closeMenu(level);
+        items = clean(items);
         if (!items.length) {
-            return;
+            return null;
         }
         var menu = el('div.ctx-menu', {role: 'menu'}, items.map(
             function (item) {
                 if (item === '-') {
                     return el('div.ctx-sep', {role: 'separator'});
                 }
-                return el('button.ctx-item', {type: 'button', role: 'menuitem',
-                    onclick: function () {
+                var sub = item.items && clean(item.items);
+                var button = el('button.ctx-item' + (sub ? '.ctx-parent' :
+                    ''), {type: 'button', role: 'menuitem', disabled:
+                    item.disabled ? true : null, 'aria-haspopup': sub ?
+                    'menu' : null}, item.checked ? '✓ ' : '', item.label +
+                    (sub && !/▸$/.test(item.label) ? ' ▸' : ''),
+                    item.shortcut ? el('span.ctx-key', item.shortcut) : null);
+                function openSub() {
+                    var box = button.getBoundingClientRect();
+                    var child = showMenu(sub, box.right - 2, box.top,
+                        level + 1);
+                    if (child) {
+                        var first = child.querySelector('.ctx-item');
+                        return first;
+                    }
+                    return null;
+                }
+                if (sub) {
+                    button.addEventListener('mouseenter', openSub);
+                    button.addEventListener('click', function () {
+                        var first = openSub();
+                        if (first) {
+                            first.focus();
+                        }
+                    });
+                    button.addEventListener('keydown', function (e) {
+                        if (e.key === 'ArrowRight' || e.key === 'Enter') {
+                            e.preventDefault();
+                            var first = openSub();
+                            if (first) {
+                                first.focus();
+                            }
+                        }
+                    });
+                } else {
+                    button.addEventListener('mouseenter', function () {
+                        closeMenu(level + 1);
+                    });
+                    button.addEventListener('click', function () {
                         closeMenu();
-                        item.onclick();
-                    }}, item.label);
+                        if (item.onclick) {
+                            item.onclick();
+                        }
+                    });
+                }
+                return button;
             }));
         document.body.appendChild(menu);
-        var x = event.clientX, y = event.clientY;
         var box = menu.getBoundingClientRect();
         menu.style.left = Math.max(0, Math.min(x, global.innerWidth -
             box.width - 4)) + 'px';
         menu.style.top = Math.max(0, Math.min(y, global.innerHeight -
             box.height - 4)) + 'px';
-        openMenu = menu;
-        var first = menu.querySelector('.ctx-item');
-        if (first) {
-            first.focus();
-        }
+        openMenus.push(menu);
         menu.addEventListener('keydown', function (e) {
             var buttons = Array.prototype.slice.call(
-                menu.querySelectorAll('.ctx-item'));
+                menu.querySelectorAll('.ctx-item:not([disabled])'));
             var at = buttons.indexOf(document.activeElement);
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                 e.preventDefault();
                 buttons[(at + (e.key === 'ArrowDown' ? 1 : -1) +
                     buttons.length) % buttons.length].focus();
+            } else if (e.key === 'ArrowLeft' && level > 0) {
+                e.preventDefault();
+                closeMenu(level);
+                var parent = openMenus[level - 1];
+                var back = parent && parent.querySelector('.ctx-parent');
+                if (back) {
+                    back.focus();
+                }
             }
         });
+        return menu;
+    }
+    function contextMenu(event, items) {
+        event.preventDefault();
+        var menu = showMenu(items, event.clientX, event.clientY, 0);
+        var first = menu && menu.querySelector('.ctx-item:not([disabled])');
+        if (first) {
+            first.focus();
+        }
     }
     document.addEventListener('mousedown', function (event) {
-        if (openMenu && !openMenu.contains(event.target)) {
+        if (openMenus.length && !openMenus.some(function (m) {
+            return m.contains(event.target);
+        })) {
             closeMenu();
         }
     }, true);
@@ -1576,10 +2369,12 @@
         contextMenu: contextMenu,
         closeMenu: closeMenu,
         master: master,
+        placedForm: placedForm,
         fieldControl: fieldControl,
         report: report,
         setTitle: setTitle,
         browse: browse,
+        lookups: lookups,
         form: form,
         grid: grid,
         center: center,

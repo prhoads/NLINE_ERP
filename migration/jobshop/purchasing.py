@@ -20,7 +20,22 @@ SHIP_TO = [('ship_to_name', 'SHIPTO_NAME'), ('ship_to_city', 'SHIPTO_CITY'),
     ('ship_to_title', 'SHIPTO_CONTACT_TITLE'),
     ('ship_to_phone', 'SHIPTO_CONTACT_PHONE'),
     ('ship_to_fax', 'SHIPTO_CONTACT_FAX'),
-    ('ship_to_email', 'SHIPTO_CONTACT_EMAIL')]
+    ('ship_to_email', 'SHIPTO_CONTACT_EMAIL'),
+    ('ship_to_mobile', 'SHIPTO_CONTACT_MOBILE')]
+# The Purchase From tab: the order's own copy of the supplier's address
+PURCHASE_FROM = [('purchase_from_name', 'NAME'),
+    ('purchase_from_address_1', 'ADDR_1'),
+    ('purchase_from_address_2', 'ADDR_2'),
+    ('purchase_from_city', 'CITY'), ('purchase_from_state', 'STATE'),
+    ('purchase_from_postal_code', 'POSTAL_CODE'),
+    ('purchase_from_country', 'COUNTRY'),
+    ('purchase_from_etc', 'ADDR_ETC'),
+    ('purchase_from_contact', 'CONTACT_NAME'),
+    ('purchase_from_title', 'CONTACT_TITLE'),
+    ('purchase_from_phone', 'CONTACT_PHONE'),
+    ('purchase_from_fax', 'CONTACT_FAX'),
+    ('purchase_from_email', 'CONTACT_EMAIL'),
+    ('purchase_from_mobile', 'CONTACT_MOBILE')]
 
 
 def text(value):
@@ -202,6 +217,10 @@ def supplier_fields(m, codes):
             'supplier_rfq_instructions': text(row.get('RFQ_INSTRUCTIONS')),
             'supplier_po_instructions': text(
                 row.get('PURCHASING_INSTRUCTIONS')),
+            # The Other tab: the user defined fields N-Line fills
+            'supplier_user_0': one_line(row.get('USER_0')) or None,
+            'supplier_user_1': one_line(row.get('USER_1')) or None,
+            'supplier_user_2': one_line(row.get('USER_2')) or None,
             }
         for field, code_model, code in [
                 ('supplier_fob_point', 'nline.fob_point', 'FOB_POINT'),
@@ -221,6 +240,8 @@ def supplier_fields(m, codes):
             values['supplier_country'] = row['COUNTRY'].strip()
         if row.get('CONTACT_FAX'):
             values['supplier_fax'] = row['CONTACT_FAX'].strip()
+        if row.get('CONTACT_MOBILE'):
+            values['supplier_mobile'] = row['CONTACT_MOBILE'].strip()
         if row.get('WEB_URL'):
             values['supplier_web_url'] = row['WEB_URL'].strip()
         changed = False
@@ -482,6 +503,8 @@ def rfqs(m, codes):
                 'drawing': one_line(row.get('DRAWING_ID')) or None,
                 'drawing_revision': one_line(row.get('DRAWING_REV_NO'))
                 or None,
+                'user_0': one_line(row.get('USER_0')) or None,
+                'user_1': one_line(row.get('USER_1')) or None,
                 'prices': [],
                 'links': links(m, linked.get(row['LINE_NO'], [])),
                 }
@@ -562,21 +585,27 @@ def purchase_orders(m, codes):
                 'specifications': text(head.get('SPECIFICATIONS')),
                 'hold': (head.get('ORDER_STATUS') == 'HOLD'
                     and purchase.state in ('draft', 'quotation')),
+                'user_0': one_line(head.get('USER_0')) or None,
+                'user_1': one_line(head.get('USER_1')) or None,
+                'user_2': one_line(head.get('USER_2')) or None,
                 'ship_to_street': '\n'.join(filter(None, [
                             one_line(head.get('SHIPTO_ADDR_1')),
                             one_line(head.get('SHIPTO_ADDR_2')),
                             text(head.get('SHIPTO_ADDR_ETC'))])) or None,
                 }
-            for field, column in SHIP_TO:
+            for field, column in SHIP_TO + PURCHASE_FROM:
                 values[field] = one_line(head.get(column)) or None
+            if head.get('SHIPTO_ADDR_NO'):
+                values['ship_to_address_no'] = int(head['SHIPTO_ADDR_NO'])
             record = codes.get('nline.fob_point', head.get('FOB_POINT'))
             values['fob_point'] = record.id if record else None
             record = codes.get('nline.ship_via', head.get('SHIP_VIA'))
             values['ship_via'] = record.id if record else None
             group = tax_group(m, head.get('TAX_GROUP_ID'))
             values['tax_group'] = group.id if group else None
-            if purchase.state == 'draft':
-                values['delivery_date'] = day(head.get('DESIRED_RECV_DATE'))
+            # (the desired receive date of a released order too: the
+            # Receiving Activity's Desired Recv)
+            values['delivery_date'] = day(head.get('DESIRED_RECV_DATE'))
             if head.get('RFQ_ID') in rfq_ids:
                 values['rfq'] = rfq_ids[head['RFQ_ID']]
             Purchase.write([purchase.id], values, m.context)
@@ -593,7 +622,14 @@ def purchase_orders(m, codes):
                         or row.get('SUPPLIER_SERVICE_ID')) or None,
                     'mfg_name': one_line(row.get('MFG_NAME')) or None,
                     'mfg_part_id': one_line(row.get('MFG_PART_ID')) or None,
+                    'drawing': one_line(row.get('DRAWING_ID')) or None,
+                    'drawing_revision': one_line(row.get('DRAWING_REV_NO'))
+                    or None,
+                    'user_0': one_line(row.get('USER_0')) or None,
+                    'user_1': one_line(row.get('USER_1')) or None,
                     'promise_date': day(row.get('PROMISE_DATE')),
+                    'delivery_date_edit': bool(row.get('DESIRED_RECV_DATE')),
+                    'delivery_date_store': day(row.get('DESIRED_RECV_DATE')),
                     'specifications': text(row.get('SPECIFICATIONS')),
                     'line_closed': (row.get('LINE_STATUS') or '').upper()
                     == 'CLOSED' and float(row.get('RECEIVED_QTY') or 0)

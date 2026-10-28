@@ -49,6 +49,9 @@ def _address_fields(prefix, label):
         prefix + 'contact_phone': fields.Char(label + "Phone"),
         prefix + 'contact_fax': fields.Char(label + "Fax"),
         prefix + 'contact_email': fields.Char(label + "Email"),
+        # Jobshop's Etc. line of the address and the contact's Mobile
+        prefix + 'addr_etc': fields.Char(label + "Etc."),
+        prefix + 'contact_mobile': fields.Char(label + "Mobile"),
         }
 
 
@@ -59,7 +62,23 @@ for _name, _field in list(_address_fields('', '').items()) + list(
 ADDRESS_FIELDS = list(_address_fields('', '').keys())
 
 
-class Quote(AddressMixin, ModelSQL, ModelView):
+class StampMixin:
+    "Jobshop's Created by / Last Modified by: the user and the time"
+    __slots__ = ()
+    created_by = fields.Function(fields.Char("Created by"), 'get_stamp')
+    modified_by = fields.Function(
+        fields.Char("Last Modified by"), 'get_stamp')
+
+    def get_stamp(self, name):
+        user, date = ((self.create_uid, self.create_date)
+            if name == 'created_by' else (self.write_uid, self.write_date))
+        if not date:
+            return None
+        return '%s %s' % (user.login if user else '',
+            date.strftime('%m/%d/%Y %I:%M:%S %p'))
+
+
+class Quote(AddressMixin, StampMixin, ModelSQL, ModelView):
     "Quote"
     __name__ = 'nline.quote'
 
@@ -110,6 +129,8 @@ class Quote(AddressMixin, ModelSQL, ModelView):
     # Specs tab
     specifications = fields.Text("Specifications")
     footer = fields.Text("Quote Footer")
+    copy_notes = fields.Boolean("Copy Notes to Sales Order",
+        help="Winning the quote copies its notes to the sales order.")
     lines = fields.One2Many('nline.quote.line', 'quote', "Lines")
     charges = fields.One2Many('nline.quote.charge', 'quote', "Charges")
     sale = fields.Many2One(
@@ -216,6 +237,8 @@ class Quote(AddressMixin, ModelSQL, ModelView):
         phone = party.contact_mechanism_get({'phone', 'mobile'})
         self.contact_email = email.value if email else None
         self.contact_phone = phone.value if phone else None
+        mobile = party.contact_mechanism_get('mobile')
+        self.contact_mobile = mobile.value if mobile else None
         if getattr(party, 'customer_payment_term', None):
             self.payment_term = party.customer_payment_term
 

@@ -21,7 +21,19 @@ from trytond.transaction import Transaction
 
 # Lot Tracked: a lot on every move of the part (stock_lot's lot_required)
 LOT_ALL = ['supplier', 'customer', 'lost_found', 'storage', 'production']
-USER_FIELDS = 10
+# Jobshop's USER_0..USER_33: N-Line fills USER_0, USER_1, USER_10, USER_11
+USER_FIELDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+# Update on Receipt (UPDATE_COSTS_FROM_PO)
+UPDATE_COSTS = [
+    ('system', "System Setting"),
+    ('always', "Always"),
+    ('ask', "Ask"),
+    ('never', "Never"),
+    ]
+# The fields Jobshop's part rules look at (refused combinations)
+RULE_FIELDS = {'consumable', 'stocked', 'lot_tracked', 'lot_required',
+    'auto_issue', 'piece_tracked', 'producible', 'primary_location',
+    'issue_from_location'}
 COSTS = ['unit_material_cost', 'unit_labor_cost', 'unit_burden_cost',
     'unit_service_cost']
 
@@ -81,6 +93,64 @@ class Template(metaclass=PoolMeta):
         "Drawing File", help="The path of the drawing file.")
     mfg_name = fields.Char("Manufacturer")
     mfg_part_id = fields.Char("Manufacturer Part ID")
+    date_tracked = fields.Boolean(
+        "Date Tracked",
+        help="The tracking numbers of the part carry a date (Jobshop Date "
+        "Tracked, with Lot/Serial Tracked).")
+    commissionable = fields.Boolean(
+        "Commissionable",
+        help="Sales of the part earn the sales rep's commission.")
+    preserve_unit_costs = fields.Boolean(
+        "Preserve Unit Costs",
+        help="Rolling up the engineering master costs does not change the "
+        "part's unit costs.")
+    preserve_unit_price = fields.Boolean(
+        "Preserve Unit Price",
+        help="Rolling up the costs does not change the part's unit price.")
+    update_costs_from_po = fields.Selection(
+        UPDATE_COSTS, "Update on Receipt",
+        help="Whether receiving a purchase order updates the part's unit "
+        "material cost: the System Setting, always, ask or never.")
+    quantity_on_hand = fields.Function(fields.Float(
+            "Quantity on Hand", digits=(16, 4),
+            help="In all the storage locations of the warehouse."),
+        'get_quantities')
+    quantity_on_hold = fields.Function(fields.Float(
+            "Quantity on Hold", digits=(16, 4),
+            help="In the part's locations on hold."),
+        'get_quantities')
+    # ---- The read-only texts of the Part window (Jobshop's type4
+    # descriptions beside a code, Created by / Last Modified by)
+    record_created = fields.Function(
+        fields.Char("Created by"), 'get_descriptions')
+    record_modified = fields.Function(
+        fields.Char("Last Modified by"), 'get_descriptions')
+    account_set_description = fields.Function(
+        fields.Char("Account Set Description"), 'get_descriptions')
+    expense_account_code = fields.Function(
+        fields.Char("Expense Acct ID"), 'get_descriptions')
+    expense_account_description = fields.Function(
+        fields.Char("Expense Acct Description"), 'get_descriptions')
+    dimensions_uom_description = fields.Function(
+        fields.Char("Dimensions U/M Description"), 'get_descriptions')
+    supplier_name_1 = fields.Function(
+        fields.Char("Supplier 1 Name"), 'get_descriptions')
+    supplier_name_2 = fields.Function(
+        fields.Char("Supplier 2 Name"), 'get_descriptions')
+    supplier_name_3 = fields.Function(
+        fields.Char("Supplier 3 Name"), 'get_descriptions')
+    supplier_name_4 = fields.Function(
+        fields.Char("Supplier 4 Name"), 'get_descriptions')
+    supplier_name_5 = fields.Function(
+        fields.Char("Supplier 5 Name"), 'get_descriptions')
+    # ---- Spec Instr. tab: the texts each document copies from the part
+    quote_instructions = fields.Text("Estimating Quotes")
+    sales_instructions = fields.Text("Sales Orders")
+    shipping_instructions = fields.Text("Shipping")
+    material_instructions = fields.Text("Material Cards")
+    rfq_instructions = fields.Text("Request For Quotes")
+    purchasing_instructions = fields.Text("Purchase Orders")
+    receiving_instructions = fields.Text("Receiving")
     # ---- General tab -----------------------------------------------------
     primary_location = fields.Many2One(
         'stock.location', "Primary Location", ondelete='RESTRICT',
@@ -93,6 +163,18 @@ class Template(metaclass=PoolMeta):
     preferred_supplier = fields.Function(fields.Many2One(
             'party.party', "Preferred Supplier",
             help="The first supplier of the part."),
+        'get_preferred_supplier', setter='set_preferred_supplier')
+    preferred_supplier_2 = fields.Function(fields.Many2One(
+            'party.party', "Supplier ID 2"),
+        'get_preferred_supplier', setter='set_preferred_supplier')
+    preferred_supplier_3 = fields.Function(fields.Many2One(
+            'party.party', "Supplier ID 3"),
+        'get_preferred_supplier', setter='set_preferred_supplier')
+    preferred_supplier_4 = fields.Function(fields.Many2One(
+            'party.party', "Supplier ID 4"),
+        'get_preferred_supplier', setter='set_preferred_supplier')
+    preferred_supplier_5 = fields.Function(fields.Many2One(
+            'party.party', "Supplier ID 5"),
         'get_preferred_supplier', setter='set_preferred_supplier')
     lead_time_days = fields.Integer(
         "Leadtime (days)",
@@ -129,6 +211,8 @@ class Template(metaclass=PoolMeta):
     user_7 = fields.Char("User Defined 8")
     user_8 = fields.Char("User Defined 9")
     user_9 = fields.Char("User Defined 10")
+    user_10 = fields.Char("User 10")
+    user_11 = fields.Char("User 11")
     # ---- Costing tab -----------------------------------------------------
     unit_material_cost = fields.Numeric(
         "Unit Material Cost", digits=price_digits)
@@ -188,6 +272,26 @@ class Template(metaclass=PoolMeta):
     def default_safety_stock(cls):
         return 0
 
+    @classmethod
+    def default_date_tracked(cls):
+        return False
+
+    @classmethod
+    def default_commissionable(cls):
+        return True
+
+    @classmethod
+    def default_preserve_unit_costs(cls):
+        return False
+
+    @classmethod
+    def default_preserve_unit_price(cls):
+        return False
+
+    @classmethod
+    def default_update_costs_from_po(cls):
+        return 'system'
+
     def get_inactive(self, name):
         return not self.active
 
@@ -233,33 +337,111 @@ class Template(metaclass=PoolMeta):
         domain = [('lot_required', 'in', ['storage'])]
         return domain if positive else ['NOT', domain]
 
+    @staticmethod
+    def _supplier_slot(name):
+        "0 for preferred_supplier, 1 for preferred_supplier_2..."
+        return int(name.rsplit('_', 1)[1]) - 1 if name[-1].isdigit() else 0
+
+    def _part_suppliers(self):
+        "The part's own suppliers (not a variant's), in preference order"
+        return [s for s in getattr(self, 'product_suppliers', [])
+            if not s.product and getattr(s, 'active', True)]
+
     def get_preferred_supplier(self, name):
-        for supplier in getattr(self, 'product_suppliers', []):
-            if supplier.active and not supplier.product:
-                return supplier.party.id
+        suppliers = self._part_suppliers()
+        slot = self._supplier_slot(name)
+        if slot < len(suppliers):
+            return suppliers[slot].party.id
 
     @classmethod
     def set_preferred_supplier(cls, templates, name, value):
+        """Jobshop's Supplier ID 1 to 5: the part's suppliers in sequence
+        order. Setting a slot puts the supplier there (made when missing);
+        clearing one removes that supplier when it has no prices."""
         pool = Pool()
         ProductSupplier = pool.get('purchase.product_supplier')
-        if not value:
-            return
-        to_save = []
+        slot = cls._supplier_slot(name)
+        to_save, to_delete = [], []
         for template in templates:
-            suppliers = [s for s in template.product_suppliers
-                if not s.product]
-            if suppliers and suppliers[0].party.id == value:
+            suppliers = template._part_suppliers()
+            current = suppliers[slot] if slot < len(suppliers) else None
+            if value and current and current.party.id == value:
+                continue
+            if not value:
+                if current and not getattr(current, 'prices', None):
+                    to_delete.append(current)
                 continue
             found = [s for s in suppliers if s.party.id == value]
-            first = min([s.sequence for s in suppliers
-                    if s.sequence is not None] or [10])
             supplier = found[0] if found else ProductSupplier(
                 template=template, party=value)
-            # First in sequence order: the preferred one
-            supplier.sequence = first - 1
-            to_save.append(supplier)
+            ordered = [s for s in suppliers if s != supplier]
+            ordered.insert(min(slot, len(ordered)), supplier)
+            for sequence, record in enumerate(ordered, 1):
+                if (getattr(record, 'sequence', None) != sequence
+                        or record is supplier):
+                    record.sequence = sequence
+                    to_save.append(record)
+        if to_delete:
+            ProductSupplier.delete(to_delete)
         if to_save:
             ProductSupplier.save(to_save)
+
+    @classmethod
+    def get_descriptions(cls, templates, names):
+        def stamp(user, date):
+            if not user and not date:
+                return ''
+            return '%s %s' % (user.rec_name if user else '',
+                date.strftime('%m/%d/%Y %I:%M %p') if date else '')
+
+        result = {n: {} for n in names}
+        for template in templates:
+            category = template.account_category
+            expense = (getattr(category, 'account_expense', None)
+                if category else None)
+            suppliers = template._part_suppliers()
+            values = {
+                'record_created': stamp(template.create_uid,
+                    template.create_date),
+                'record_modified': stamp(template.write_uid,
+                    template.write_date),
+                'account_set_description': category.name if category else '',
+                'expense_account_code': (expense.code or '') if expense
+                else '',
+                'expense_account_description': expense.name if expense
+                else '',
+                'dimensions_uom_description': (template.dimensions_uom.name
+                    if template.dimensions_uom else ''),
+                }
+            for n in range(1, 6):
+                values['supplier_name_%s' % n] = (
+                    suppliers[n - 1].party.name if n <= len(suppliers)
+                    else '')
+            for name in names:
+                result[name][template.id] = values.get(name)
+        return result
+
+    @classmethod
+    def get_quantities(cls, templates, names):
+        pool = Pool()
+        Location = pool.get('stock.location')
+        PartLocation = pool.get('nline.js.part_location')
+        result = {n: {t.id: 0.0 for t in templates} for n in names}
+        warehouses = Location.search([('type', '=', 'warehouse')])
+        products = {p.id: t.id for t in templates for p in t.products}
+        if 'quantity_on_hand' in names and warehouses and products:
+            quantities = on_hand([w.id for w in warehouses], list(products))
+            for (location, product), quantity in quantities.items():
+                if product in products:
+                    result['quantity_on_hand'][products[product]] += quantity
+        if 'quantity_on_hold' in names:
+            for part_location in PartLocation.search([
+                        ('template', 'in', [t.id for t in templates]),
+                        ('hold', '=', True),
+                        ]):
+                result['quantity_on_hold'][part_location.template.id] += (
+                    part_location.quantity or 0)
+        return result
 
     def get_unit_cost(self, name):
         return round_price(
@@ -269,6 +451,64 @@ class Template(metaclass=PoolMeta):
     def validate(cls, templates):
         super().validate(templates)
         cls.check_part_id(templates)
+
+    @classmethod
+    def create(cls, vlist):
+        templates = super().create(vlist)
+        cls.check_part_rules(templates)
+        return templates
+
+    @classmethod
+    def write(cls, *args):
+        super().write(*args)
+        actions = iter(args)
+        changed = []
+        for templates, values in zip(actions, actions):
+            if RULE_FIELDS & set(values):
+                changed.extend(templates)
+        if changed:
+            cls.check_part_rules(cls.browse(changed))
+
+    @classmethod
+    def check_part_rules(cls, templates):
+        """Jobshop's part rules (classPartEditor), checked when the fields
+        they concern are saved; the migration skips them (old data)"""
+        pool = Pool()
+        PartLocation = pool.get('nline.js.part_location')
+        if Transaction().context.get('nline_js_no_part_rules'):
+            return
+        for template in templates:
+            part = template.rec_name
+
+            def error(message):
+                raise ValidationError(gettext(
+                        'nline_js_inventory.%s' % message, part=part))
+            lot = template.lot_tracked
+            if template.consumable and (template.stocked or lot
+                    or template.auto_issue or template.piece_tracked):
+                error('msg_rule_consumable')
+            if template.piece_tracked and template.producible:
+                error('msg_rule_piece_fabricated')
+            if template.piece_tracked and (lot or template.auto_issue):
+                error('msg_rule_piece_lot_auto')
+            if lot and template.auto_issue:
+                error('msg_rule_lot_auto')
+            locations = {
+                'primary': template.primary_location,
+                'issue_from': template.issue_from_location,
+                }
+            if not any(locations.values()):
+                continue
+            for part_location in PartLocation.search([
+                        ('template', '=', template.id),
+                        ('location', 'in', [l.id for l in locations.values()
+                                if l]),
+                        ]):
+                where = part_location.location
+                if where == locations['issue_from'] and part_location.hold:
+                    error('msg_rule_issue_from_hold')
+                if part_location.inactive:
+                    error('msg_rule_location_inactive')
 
     @classmethod
     def check_part_id(cls, templates):
@@ -313,7 +553,11 @@ class PartLocation(ModelSQL, ModelView):
         fields.Float("Qty On Hand", digits=(16, 4)), 'get_quantity')
     primary = fields.Function(fields.Boolean("Primary"), 'get_flags')
     issue_from = fields.Function(fields.Boolean("Issue From"), 'get_flags')
-    last_counted = fields.Date("Last Counted", readonly=True)
+    last_counted = fields.Date("Last Counted On", readonly=True)
+    inactive = fields.Boolean(
+        "Inactive",
+        help="The part is no longer kept in this location (hidden unless "
+        "Show All).")
 
     @classmethod
     def __setup__(cls):
@@ -328,6 +572,29 @@ class PartLocation(ModelSQL, ModelView):
     @classmethod
     def default_hold(cls):
         return False
+
+    @classmethod
+    def default_inactive(cls):
+        return False
+
+    @classmethod
+    def validate(cls, part_locations):
+        super().validate(part_locations)
+        if Transaction().context.get('nline_js_no_part_rules'):
+            return
+        # Jobshop: the primary / issue from location stays active, and
+        # parts are not issued from a location on hold
+        for part_location in part_locations:
+            part = part_location.template.rec_name
+            if part_location.inactive and (part_location.primary
+                    or part_location.issue_from):
+                raise ValidationError(gettext(
+                        'nline_js_inventory.msg_rule_location_inactive',
+                        part=part))
+            if part_location.hold and part_location.issue_from:
+                raise ValidationError(gettext(
+                        'nline_js_inventory.msg_rule_issue_from_hold',
+                        part=part))
 
     def get_location_name(self, name):
         return self.location.name if self.location else None

@@ -34,8 +34,11 @@ def _products(p, key='part'):
 
 
 def _part_codes(product):
-    "Product code and commodity code (fields of the inventory area)"
+    """Product code and commodity code (fields of the inventory area), and
+    the active / stocked flags of the dialogs' "For" choices"""
     return {
+        '_active': product.active,
+        '_stocked': product.template.type == 'goods',
         'product_code': attr(product, 'product_code', 'js_product_code')
         or attr(product.template, 'product_code', 'js_product_code') or '',
         'commodity_code': attr(product, 'commodity_code',
@@ -193,16 +196,18 @@ def inventory_turns(desk, p):
         value = (dec(on_hand.get(pid, 0)) * (product.cost_price or ZERO)
             ).quantize(CENT)
         turns = float(usage_value[pid] * 2 / value) if value else None
-        rows.append({
-                'part': part_id(product),
-                'description': product.name,
-                'on_hand': on_hand.get(pid, 0),
-                'unit': product.default_uom.symbol,
-                'value': value,
-                'usage': usage.get(pid, 0),
-                'usage_value': usage_value[pid],
-                'turns': round(turns, 2) if turns is not None else None,
-                })
+        row = {
+            'part': part_id(product),
+            'description': product.name,
+            'on_hand': on_hand.get(pid, 0),
+            'unit': product.default_uom.symbol,
+            'value': value,
+            'usage': usage.get(pid, 0),
+            'usage_value': usage_value[pid],
+            'turns': round(turns, 2) if turns is not None else None,
+            }
+        row.update(_part_codes(product))
+        rows.append(row)
     return rows
 
 
@@ -227,16 +232,18 @@ def inventory_value(desk, p):
         product = products[product]
         location = locations[location]
         cost = product.cost_price or ZERO
-        rows.append({
-                'part': part_id(product),
-                'description': product.name,
-                'location': location.code or location.name,
-                'account_set': name(product.account_category),
-                'quantity': qty,
-                'unit': product.default_uom.symbol,
-                'unit_cost': cost,
-                'value': (dec(qty) * cost).quantize(CENT),
-                })
+        row = {
+            'part': part_id(product),
+            'description': product.name,
+            'location': location.code or location.name,
+            'account_set': name(product.account_category),
+            'quantity': qty,
+            'unit': product.default_uom.symbol,
+            'unit_cost': cost,
+            'value': (dec(qty) * cost).quantize(CENT),
+            }
+        row.update(_part_codes(product))
+        rows.append(row)
     p.gap("Inventory value: Tryton's cost price per part (no FIFO layer "
         "by receipt date and no material / labor / burden / service "
         "split).")
@@ -354,14 +361,16 @@ def part_location_list(desk, p):
             continue
         product = products[product]
         location = locations[location]
-        rows.append({
-                'part': part_id(product),
-                'description': product.name,
-                'location': location.code or location.name,
-                'quantity': qty,
-                'unit': product.default_uom.symbol,
-                'on_hold': (product.template.id, location.id) in held,
-                })
+        row = {
+            'part': part_id(product),
+            'description': product.name,
+            'location': location.code or location.name,
+            'quantity': qty,
+            'unit': product.default_uom.symbol,
+            'on_hold': (product.template.id, location.id) in held,
+            }
+        row.update(_part_codes(product))
+        rows.append(row)
     return rows
 
 
@@ -436,25 +445,33 @@ def physical_count_form(desk, p):
         seen.add(product)
         product = products[product]
         location = locations[location]
-        rows.append({
-                'part': part_id(product),
-                'description': product.name,
-                'location': location.code or location.name,
-                'unit': product.default_uom.symbol,
-                'quantity': qty,
-                'count': '',
-                'variance': '',
-                })
+        row = {
+            'part': part_id(product),
+            'description': product.name,
+            'location': location.code or location.name,
+            'unit': product.default_uom.symbol,
+            'quantity': qty,
+            'count': '',
+            'variance': '',
+            }
+        row.update(_part_codes(product))
+        rows.append(row)
     if p.get('zero'):
         for pid, product in products.items():
             if pid not in seen:
-                rows.append({
-                        'part': part_id(product),
-                        'description': product.name,
-                        'location': '',
-                        'unit': product.default_uom.symbol,
-                        'quantity': 0.0,
-                        'count': '', 'variance': ''})
+                row = {
+                    'part': part_id(product),
+                    'description': product.name,
+                    'location': '',
+                    'unit': product.default_uom.symbol,
+                    'quantity': 0.0,
+                    'count': '', 'variance': ''}
+                row.update(_part_codes(product))
+                rows.append(row)
+    if p.get('hide_quantity'):
+        # Jobshop's "Hide Quantity on Hand": a blind count
+        for row in rows:
+            row['quantity'] = None
     return rows
 
 

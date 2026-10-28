@@ -122,5 +122,24 @@ this repository contains the full copyright notices and license terms. -->
         <record model="ir.message" id="msg_location_used">
             <field name="text">Location "%(location)s" has inventory transactions: it cannot be deleted. Mark it Inactive instead.</field>
         </record>
+        <!-- Jobshop's part rules (Parts window) -->
+        <record model="ir.message" id="msg_rule_consumable">
+            <field name="text">Part "%(part)s": an R+D/Consumable part cannot be Stocked, Lot Tracked, Auto Issued, or Piece Tracked.</field>
+        </record>
+        <record model="ir.message" id="msg_rule_piece_fabricated">
+            <field name="text">Part "%(part)s" cannot be Piece Tracked and Fabricated.</field>
+        </record>
+        <record model="ir.message" id="msg_rule_piece_lot_auto">
+            <field name="text">Part "%(part)s": piece tracked parts cannot be lot tracked or auto issued.</field>
+        </record>
+        <record model="ir.message" id="msg_rule_lot_auto">
+            <field name="text">Part "%(part)s": lot tracked parts cannot be auto issued.</field>
+        </record>
+        <record model="ir.message" id="msg_rule_issue_from_hold">
+            <field name="text">Part "%(part)s": the Issue From Location cannot be a Hold location.</field>
+        </record>
+        <record model="ir.message" id="msg_rule_location_inactive">
+            <field name="text">Part "%(part)s": the Primary or Issue From location cannot be an Inactive part location.</field>
+        </record>
     </data>
 </tryton>

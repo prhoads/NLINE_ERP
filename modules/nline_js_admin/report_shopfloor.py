@@ -8,7 +8,7 @@ from decimal import Decimal
 from trytond.pool import Pool
 from trytond.transaction import Transaction
 
-from .report_inventory import _products
+from .report_inventory import _part_codes, _products
 from .reports import (
     WORK_ORDER_STATUS, WORK_ORDER_STATUSES, ZERO, attr, code, code_rows,
     dec, f_check, f_dates, f_range, f_status, hours, model, move_cost, name,
@@ -441,7 +441,9 @@ def employee_list(desk, p):
                 'shift': attr(employee, 'shift_no', 'shift') or '',
                 'cost_hour': attr(employee, 'cost_price'),
                 'cost_unit': attr(employee, 'cost_per_unit'),
-                'active': employee.active,
+                # (company.employee has no active field in every setup)
+                'active': attr(employee, 'active') is not False,
+                '_active': attr(employee, 'active') is not False,
                 '_drill': {'type': 'record', 'model': 'company.employee',
                     'id': employee.id},
                 })
@@ -459,7 +461,8 @@ def employee_label(desk, p):
     rows = employee_list(desk, p)
     for row in rows:
         row['barcode'] = '*%s*' % row['clock'] if row['clock'] else ''
-    return [r for r in rows if r['active']]
+    # (the dialog's "For" keeps the active employees by default)
+    return rows
 
 
 def _material_rows(p, states):
@@ -1079,6 +1082,9 @@ def material_netting(desk, p):
                     else event['date']))
         if p.get('short') and not short:
             continue
+        codes = _part_codes(product)
+        for row in part_rows:
+            row.update(codes)
         rows.extend(part_rows)
     return rows
 

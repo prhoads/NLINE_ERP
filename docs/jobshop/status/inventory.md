@@ -113,6 +113,46 @@ against a stand-in Jobshop) — passing; `jscheck.py` OK.
 - [-] Inventory Reports — the admin area builds all Jobshop reports
   (`js-reports/inventory`); the data is available through the RPCs above.
 
+## Second pass (28 Oct 2026): Jobshop's own window definitions
+
+Analysis and gap tables: `docs/jobshop/analysis/inventory.md`. Changes:
+
+- Parts window rebuilt on N-Line's installed layout (Part.txt +
+  PartSubTabs.txt): the Part header (placed fields, Settings and Unit Costs
+  group boxes, Part ID lookup in place, Edit Master) stays above the 18 sub
+  tabs (General, Other, Picture, Specs, Notes, Unit Conv, Locations,
+  Tracking Info, Spec Instr., Quote / SO / RFQ / PO Lines, Work Orders, the
+  four pricing tabs); the Browse tab hides it. Browse: Jobshop's columns and
+  Show All. View / Tools menus in Jobshop's captions and order.
+- New part fields: date_tracked, commissionable, preserve_unit_costs,
+  preserve_unit_price, update_costs_from_po, user_10, user_11 (N-Line's
+  data; no label in Jobshop, shown disabled as "User 10/11"), 7
+  *_instructions, quantity_on_hand / quantity_on_hold, preferred_supplier_2
+  ..5, read-only texts (record_created / modified, account set and expense
+  account, dimensions U/M, supplier names). Part location `inactive`
+  (Locations Show All). stock.move `transaction_note`.
+- Jobshop's part rules (classPartEditor) on save of the fields concerned:
+  R+D/Consumable, piece tracked, lot tracked + auto issue, Issue From on
+  hold, Primary / Issue From an inactive part location. The migration
+  skips them (context `nline_js_no_part_rules`).
+- RPCs (partinfo.py): part_orders (quote, sale, rfq, purchase, production;
+  Jobshop statuses incl. Hold / Firm / Unapproved / All, through the areas'
+  status fields), part_prices, part_tracking, part_lines_setup,
+  wo_material_availability (N-LineAvailability). part_where_used: Quote
+  Master + Jobshop's columns. adjustments_post: last_counted, note.
+- Adjustments: Set Last Counted Date, Transaction Note, Qty Available to
+  Adjust / Qty. Avail. to Transfer, Adjust / Transfer buttons, Jobshop's
+  grid columns. Locations: no Warehouse column.
+- Decisions: Type / Sold / Cost Method / Inventory Cost stay (marked
+  "(ERP)", Tryton needs them). Part IDs are not limited to Jobshop's
+  characters (N-Line has 30+ such parts). The ID lookup no longer lists
+  inactive parts; the Browse Show All does (Jobshop). The "!" button of a
+  user field opens its value as a file link.
+- Left: Edit Tracking Information dialog, the save warnings (need a
+  frame change), piece tracking dimensions (unused), Physical Count's
+  inactive part-location filter / columns, PhysicalCountBC, the PO link
+  columns of Material Availability, the full Reset Material Costs dialog.
+
 ## Models and fields (for the other areas)
 
 - `product.template` (PoolMeta): `inactive` (function on `active`),
@@ -201,3 +241,22 @@ adjustments at the part's unit cost) only with `NLINE_JS_INVENTORY_BALANCES=1`
   inventoryPieces, supplyDemand, materialAvailability, resetMaterialCosts}`
   (template id) for "Open Material Supply and Demand", "Material
   Availability" and "Open Part" (`UI.openScreen('parts/<template id>')`).
+
+## Screenshot review fixes (28 Oct, second pass)
+
+- Part tab: the Edit Master button is the height of the Eng Master Revision
+  field (277,120-351,140; Jobshop's 116-142 is taller than the row).
+- Part Browse: Part ID / Drawing ID on one line; Product Code and Commodity
+  Code show the code's ID only (`product_code.code`), as Jobshop's Browse.
+- Part tab grids (Quote/SO/RFQ/PO lines, Work Orders...): ID / No columns
+  stay on one line (`idColumn` in `dataTable`).
+- SO / PO / RFQ Lines: Line No falls back to the line's place in the order
+  when its sequence is empty (`partinfo._line_no`, as the Sales and
+  Purchasing windows number lines).
+- Adjustments / Transfers: Qty Available to Adjust / Qty. Avail. to
+  Transfer is Jobshop's read-only box (was bare text).
+- Review claims not taken: the Locations grid's Primary / Issue From / Hold /
+  Last Counted On columns are in Jobshop's layout (PartSubTabs.txt
+  GRID PART_LOCATION has 8 columns); the Other tab's unlabelled User N fields
+  stay, disabled, as Jobshop draws them — N-Line's data has values in them
+  (e.g. User 10 on part 332-00582-001-01-2).

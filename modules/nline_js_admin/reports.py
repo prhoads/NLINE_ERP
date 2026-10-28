@@ -136,6 +136,21 @@ def f_date(key, label, default='today'):
     return {'type': 'date', 'key': key, 'label': label, 'default': default}
 
 
+def f_radio(key, label, noun, column, default='yes'):
+    """Jobshop's "For" radio group: Active <noun> Only / Inactive <noun>
+    Only / Both, applied to a boolean column of the rows ('yes' keeps the
+    true ones)"""
+    return {'type': 'radio', 'key': key, 'label': label, 'column': column,
+        'options': [['yes', noun[0]], ['no', noun[1]], ['both', "Both"]],
+        'default': default}
+
+
+def f_active(noun, column='_active', default='yes', key='active'):
+    "For: Active <noun> Only / Inactive <noun> Only / Both"
+    return f_radio(key, "For", ("Active %s Only" % noun,
+            "Inactive %s Only" % noun), column, default=default)
+
+
 class Params(dict):
     "The values of the report dialog, with the gaps the report found"
 
@@ -265,8 +280,29 @@ def apply_filters(definition, rows, params):
     for spec in definition.filters:
         kind = spec['type']
         key, column = spec['key'], spec.get('column')
+        if kind == 'radio':
+            value = params.get(key, spec.get('default'))
+            if value not in ('yes', 'no') or not rows:
+                continue
+            if not any(column in r for r in rows):
+                params.gap("%s %s: not in Tryton for this report." % (
+                        spec['label'], dict(spec['options'])[value]))
+                continue
+            wanted = value == 'yes'
+            rows = [r for r in rows
+                if column not in r or bool(r[column]) == wanted]
+            continue
         if column and column.startswith('_'):
             # Applied by the report function itself
+            continue
+        if kind in {'range', 'dates', 'select'} and rows and not any(
+                column in r for r in rows):
+            # A Jobshop selection Tryton has no data for: not applied
+            used = (params.get(key + '_from') or params.get(key + '_to')) \
+                if kind != 'select' else params.get(key)
+            if used:
+                params.gap("%s: not in Tryton for this report; not "
+                    "applied." % spec['label'])
             continue
         if kind == 'range':
             start, end = params.get(key + '_from'), params.get(key + '_to')
@@ -484,8 +520,10 @@ class DeskReports(metaclass=PoolMeta):
                 if start or end:
                     parts.append('%s: %s - %s' % (spec['label'],
                             start or '', end or ''))
-            elif spec['type'] in {'select', 'option'}:
+            elif spec['type'] in {'select', 'option', 'radio'}:
                 value = params.get(key)
+                if spec['type'] == 'radio' and value in (None, 'both'):
+                    continue
                 labels = dict((str(o[0]), o[1]) for o in spec['options'])
                 if value not in (None, ''):
                     parts.append('%s: %s' % (spec['label'],

@@ -48,7 +48,41 @@ class Sale(metaclass=PoolMeta):
     discount_class = fields.Many2One('nline.discount_class',
         "Discount Class")
     js_specs = fields.Text("Specifications")
+    js_printed_date = fields.Date("Printed Date", readonly=True,
+        help="When the acknowledgement was last printed.")
     charges = fields.One2Many('nline.sale_charge', 'sale', "Charges")
+    # The order's own Sold To / Ship To tabs (Jobshop keeps the address on
+    # the order; empty: the customer's / ship to address shows)
+    js_sold_name = fields.Char("Sold To Name")
+    js_sold_addr_1 = fields.Char("Sold To Address 1")
+    js_sold_addr_2 = fields.Char("Sold To Address 2")
+    js_sold_city = fields.Char("Sold To City")
+    js_sold_state = fields.Char("Sold To State")
+    js_sold_postal = fields.Char("Sold To Postal Code")
+    js_sold_country = fields.Char("Sold To Country")
+    js_sold_etc = fields.Char("Sold To Etc.")
+    js_sold_contact = fields.Char("Sold To Contact")
+    js_sold_title = fields.Char("Sold To Contact Title")
+    js_sold_phone = fields.Char("Sold To Contact Phone")
+    js_sold_fax = fields.Char("Sold To Contact Fax")
+    js_sold_email = fields.Char("Sold To Contact E-mail")
+    js_sold_mobile = fields.Char("Sold To Contact Mobile")
+    js_ship_name = fields.Char("Ship To Name")
+    js_ship_addr_1 = fields.Char("Ship To Address 1")
+    js_ship_addr_2 = fields.Char("Ship To Address 2")
+    js_ship_city = fields.Char("Ship To City")
+    js_ship_state = fields.Char("Ship To State")
+    js_ship_postal = fields.Char("Ship To Postal Code")
+    js_ship_country = fields.Char("Ship To Country")
+    js_ship_etc = fields.Char("Ship To Etc.")
+    js_ship_contact = fields.Char("Ship To Contact")
+    js_ship_title = fields.Char("Ship To Contact Title")
+    js_ship_phone = fields.Char("Ship To Contact Phone")
+    js_ship_fax = fields.Char("Ship To Contact Fax")
+    js_ship_email = fields.Char("Ship To Contact E-mail")
+    js_ship_mobile = fields.Char("Ship To Contact Mobile")
+    js_copy_notes = fields.Boolean("Copy Notes to Shipper",
+        help="The order's notes go on its shippers when shipped.")
     js_last_shipped_date = fields.Function(fields.Date("Last Shipped"),
         'get_js_shipped')
     js_shipped_amount = fields.Function(fields.Numeric("Shipped Amount",
@@ -156,6 +190,7 @@ class Sale(metaclass=PoolMeta):
         default = default.copy() if default is not None else {}
         for name in ['js_hold', 'js_closed']:
             default.setdefault(name, False)
+        default.setdefault('js_printed_date', None)
         return super().copy(sales, default=default)
 
     def create_invoice(self):
@@ -182,6 +217,23 @@ class SaleLine(metaclass=PoolMeta):
         "Commodity Code")
     line_tax_group = fields.Many2One('nline.sales_tax_group', "Tax Group")
     js_line_specs = fields.Text("Specifications")
+    # The Order Line window's other fields N-Line's orders use
+    js_desired_date = fields.Date("Line Desired Ship Date",
+        help="The line's own desired ship date (else the order's).")
+    drawing_id = fields.Char("Drawing ID")
+    drawing_rev = fields.Char("Drawing Rev")
+    commissionable = fields.Boolean("Commissionable")
+    commission_percent = fields.Numeric("Commission Percent",
+        digits=(6, 3))
+    js_ship_via = fields.Many2One('nline.ship_via', "Ship Via",
+        help="The line's own ship via (else the order's).")
+    quote_line_no = fields.Integer("Quote Line No",
+        help="The line of the quote the order was made from.")
+    # Jobshop's user defined fields N-Line fills (Other tab): the drawing
+    # file, its revision and who released it
+    user_0 = fields.Char("User 0")
+    user_1 = fields.Char("User 1")
+    user_2 = fields.Char("User 2")
     js_line_closed = fields.Boolean("Closed by hand", readonly=True)
     js_return_of = fields.Many2One('sale.line', "Return Of", readonly=True,
         ondelete='SET NULL',
@@ -198,6 +250,22 @@ class SaleLine(metaclass=PoolMeta):
     @staticmethod
     def default_trade_discount():
         return Decimal(0)
+
+    @staticmethod
+    def default_commissionable():
+        return True
+
+    @property
+    @fields.depends('js_desired_date', 'product', 'quantity', 'company',
+        'sale', '_parent_sale.sale_date', '_parent_sale.shipping_date')
+    def planned_shipping_date(self):
+        "Jobshop: the line's desired ship date comes before the order's"
+        if getattr(self, 'js_desired_date', None):
+            return self.js_desired_date
+        return self._js_planned_shipping_date()
+
+    def _js_planned_shipping_date(self):
+        return super().planned_shipping_date
 
     @classmethod
     def get_js_shipped(cls, lines, names):
@@ -247,6 +315,25 @@ class SaleLine(metaclass=PoolMeta):
         default.setdefault('js_return_of', None)
         default.setdefault('js_returns', None)
         return super().copy(lines, default=default)
+
+
+class Invoice(metaclass=PoolMeta):
+    __name__ = 'account.invoice'
+
+    js_printed_date = fields.Date("Invoice Printed Date", readonly=True,
+        help="When the invoice was last printed (Invoicing window).")
+
+    @classmethod
+    def __setup__(cls):
+        super().__setup__()
+        # Printing a posted invoice still sets it
+        cls._check_modify_exclude.add('js_printed_date')
+
+    @classmethod
+    def copy(cls, invoices, default=None):
+        default = default.copy() if default is not None else {}
+        default.setdefault('js_printed_date', None)
+        return super().copy(invoices, default=default)
 
 
 class InvoiceLine(metaclass=PoolMeta):

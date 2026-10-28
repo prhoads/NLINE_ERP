@@ -37,6 +37,13 @@ class Move(metaclass=PoolMeta):
             'readonly': Eval('state').in_(['done', 'cancelled']),
             },
         help="Overrides the account of the part for this adjustment.")
+    transaction_note = fields.Text(
+        "Transaction Note",
+        states={
+            'invisible': ~Eval('adjustment'),
+            'readonly': Eval('state').in_(['done', 'cancelled']),
+            },
+        help="Jobshop's note of the adjustment or transfer.")
 
     @classmethod
     def do(cls, moves):

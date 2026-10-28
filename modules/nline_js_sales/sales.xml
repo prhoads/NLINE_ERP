@@ -209,5 +209,17 @@ this repository contains the full copyright notices and license terms. -->
         <record model="ir.message" id="msg_credit_memo_posted">
             <field name="text">A credit memo is issued for a posted customer invoice; &quot;%(invoice)s&quot; is not one.</field>
         </record>
+        <record model="ir.message" id="msg_no_quotes">
+            <field name="text">The Estimating quotes (module nline_js_engineering) are not installed.</field>
+        </record>
+        <record model="ir.message" id="msg_quote_no_customer">
+            <field name="text">Quote &quot;%(quote)s&quot; has no customer: choose one on the quote first.</field>
+        </record>
+        <record model="ir.message" id="msg_quote_used">
+            <field name="text">Quote &quot;%(quote)s&quot; was already made into sales order &quot;%(sale)s&quot;.</field>
+        </record>
+        <record model="ir.message" id="msg_quote_no_lines">
+            <field name="text">Include at least one line of quote &quot;%(quote)s&quot;.</field>
+        </record>
     </data>
 </tryton>

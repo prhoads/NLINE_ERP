@@ -7,6 +7,7 @@ from decimal import Decimal
 from trytond.pool import Pool
 from trytond.transaction import Transaction
 
+from .report_inventory import _part_codes
 from .reports import (
     ORDER_STATUSES, SALE_STATUS, ZERO, attr, code, code_rows, dec,
     f_dates, f_option, f_range, f_status, first_model, move_cost, name,
@@ -87,6 +88,10 @@ def _line_values(line):
         'amount': line.amount,
         'backlog': (dec(due) * price).quantize(CENT),
         'due_date': line.shipping_date,
+        'product_code': _part_codes(line.product)['product_code']
+        if line.product else '',
+        'commodity_code': _part_codes(line.product)['commodity_code']
+        if line.product else '',
         }
 
 
@@ -138,7 +143,10 @@ def line_backlog(desk, p):
     totals=['backlog'], landscape=True)
 def backlog(desk, p):
     _order_gaps(p)
-    return [r for r in line_backlog(desk, p)]
+    horizon = p.date('horizon')
+    # Jobshop's "Desired Ship Date On or Before"
+    return [r for r in line_backlog(desk, p) if not horizon
+        or (r.get('desired_ship') and r['desired_ship'] <= horizon)]
 
 
 @report('sales_order_list', "Sales Order List", 'sales',
@@ -250,7 +258,9 @@ def party_rows(kind):
         if field in Party._fields:
             ids |= {pa.id for pa in Party.search([(field, '=', True)])}
     rows = []
-    for party in Party.browse(sorted(ids)):
+    with Transaction().set_context(active_test=False):
+        parties = Party.browse(sorted(ids))
+    for party in parties:
         address = party.addresses[0] if party.addresses else None
         contacts = getattr(party, 'relations', None) or []
         contact = contacts[0].to if contacts else None
@@ -273,6 +283,7 @@ def party_rows(kind):
                 'phone': party.phone or '',
                 'fax': party.fax or '',
                 'email': party.email or '',
+                '_active': party.active,
                 '_drill': {'type': 'record', 'model': 'party.party',
                     'id': party.id},
                 })

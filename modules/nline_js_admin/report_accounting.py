@@ -206,6 +206,18 @@ def journal_batch_detail(desk, p):
                             'model': 'account.move', 'id': move.id},
                         })
                 rows.append(row)
+    if p.get('expanded') is False:
+        # Not expanded: one line per batch and account (Jobshop's summary)
+        rolled = {}
+        for row in rows:
+            key = (row['batch'], row['account'])
+            if key not in rolled:
+                rolled[key] = {k: row[k] for k in ('batch', 'posting_date',
+                        'period', 'sub_ledger', 'account')}
+                rolled[key].update(debit=0, credit=0)
+            rolled[key]['debit'] += row['debit'] or 0
+            rolled[key]['credit'] += row['credit'] or 0
+        rows = list(rolled.values())
     return rows
 
 

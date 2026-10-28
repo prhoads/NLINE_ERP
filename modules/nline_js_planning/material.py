@@ -11,6 +11,7 @@ card bought by a purchase line (nline_js_purchasing's nline.purchase.link,
 Jobshop's PURCHASING_ORDER_LINK: work order, seq no and piece no)."""
 import datetime as dt
 import re
+from decimal import Decimal
 from collections import defaultdict
 
 from trytond.i18n import gettext
@@ -90,6 +91,16 @@ def so_changes(sale):
     return [c for c in changes if c != current]
 
 
+# Jobshop's status of a material card (its stock move's state)
+MATERIAL_STATUS = {
+    'staging': "Unreleased",
+    'draft': "Released",
+    'assigned': "Released",
+    'done': "Closed",
+    'cancelled': "Cancelled",
+    }
+
+
 # Firm and Released: the open sales orders of Material Planning
 SO_OPEN = ['quotation', 'confirmed', 'processing']
 PO_OPEN = ['draft', 'quotation', 'confirmed', 'processing']
@@ -134,6 +145,11 @@ def _code(record):
     return record.rec_name
 
 
+def _qty(value):
+    "A quantity as Jobshop shows it in a text (no trailing zeros)"
+    return ('%f' % (value or 0)).rstrip('0').rstrip('.')
+
+
 def split_number(production):
     """Jobshop's Work ID, Lot ID, Split ID and Sub ID of a work order or leg:
     the number is <work id>[/<lot>][.<split>] (as imported) and a leg is
@@ -162,7 +178,7 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
         super().__setup__()
         for name in ['js_planning_link', 'js_planning_unlink',
                 'js_planning_create_work_order', 'js_planning_sale_status',
-                'js_planning_purchase']:
+                'js_planning_purchase', 'js_planning_rfq']:
             cls.__rpc__[name] = RPC(readonly=False)
         for name in ['js_planning_access', 'js_planning_sales',
                 'js_planning_non_stocked', 'js_planning_outside',
@@ -191,6 +207,8 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
                 'purchase.line', 'create'),
             'request': may('purchase.request', 'create'),
             'sale_status': may('sale.sale', 'write'),
+            'rfq': may('nline.rfq', 'create') and may(
+                'nline.rfq.line', 'create'),
             'schedule': may('nline.js.schedule.operation', 'create'),
             'calendar': may('nline.js.calendar.week', 'write'),
             'move': may('production', 'write'),
@@ -208,7 +226,27 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
             return {p.id: p.quantity for p in Product.browse(products)}
 
     @classmethod
-    def _js_order_point(cls, product):
+    def _js_prefetch_points(cls, products, cache):
+        "Read the order points of many parts at once (into the cache)"
+        try:
+            OrderPoint = Pool().get('stock.order_point')
+        except KeyError:
+            return
+        ids = list({p.id for p in products if p})
+        points = cache.setdefault('_points', {})
+        for i in range(0, len(ids), 1000):
+            for point in OrderPoint.search([
+                        ('product', 'in', ids[i:i + 1000]),
+                        ('type', 'in', ['purchase', 'production']),
+                        ]):
+                points.setdefault(point.product.id, point)
+        for pid in ids:
+            points.setdefault(pid, None)
+
+    @classmethod
+    def _js_order_point(cls, product, cache=None):
+        if cache is not None and product.id in cache.get('_points', {}):
+            return cache['_points'][product.id]
         pool = Pool()
         try:
             OrderPoint = pool.get('stock.order_point')
@@ -232,10 +270,14 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
             'safety_stock': None, 'target': None, 'product_code': '',
             'commodity_code': '', 'supplier': None, 'supplier_id': '',
             'supplier_part_id': '', 'mfg_name': '', 'mfg_part_id': '',
-            'stock_um': '', 'active': True, 'point_type': None}
+            'stock_um': '', 'active': True, 'point_type': None,
+            'eng_id': '', 'drawing_id': '', 'drawing_rev': '',
+            'primary_loc_id': '', 'unit_mat_cost': None,
+            'restocking_level': None, 'minimum_order_qty': None,
+            'multiple_order_qty': None, 'pref_suppliers': ['', '', '', '', '']}
         if product:
             template = product.template
-            point = cls._js_order_point(product)
+            point = cls._js_order_point(product, cache)
             suppliers = list(product.product_suppliers_used()) if hasattr(
                 product, 'product_suppliers_used') else []
             supplier = suppliers[0] if suppliers else None
@@ -281,11 +323,79 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
                     'mfg_name': _field(template, 'mfg_name') or '',
                     'mfg_part_id': _field(template, 'mfg_part_id') or '',
                     'stock_um': product.default_uom.symbol,
-                    'active': bool(product.active and template.active),
+                    'active': bool(product.active and template.active)
+                    and not _field(template, 'inactive'),
+                    'eng_id': _field(template, 'engineering_revision') or '',
+                    'drawing_id': _field(template, 'drawing_number') or '',
+                    'drawing_rev': _field(template, 'drawing_revision')
+                    or '',
+                    'primary_loc_id': _code(_field(template,
+                            'primary_location')),
+                    'unit_mat_cost': _field(template, 'unit_material_cost'),
+                    'restocking_level': _field(template,
+                        'maximum_stock_qty') or (point.max_quantity
+                        if point and getattr(point, 'max_quantity', None)
+                        else None),
+                    'minimum_order_qty': _field(template,
+                        'minimum_order_qty'),
+                    'multiple_order_qty': _field(template,
+                        'multiple_order_qty'),
+                    'pref_suppliers': [_code(_field(template, name))
+                        for name in ('preferred_supplier',
+                            'preferred_supplier_2', 'preferred_supplier_3',
+                            'preferred_supplier_4', 'preferred_supplier_5')],
                     })
+            if not info['pref_suppliers'][0]:
+                info['pref_suppliers'][0] = info['supplier_id']
         if cache is not None:
             cache[product] = info
         return info
+
+    @classmethod
+    def _js_projected(cls, rows, key, qty_key, date_key):
+        """Jobshop's Projected Available of the rows: the part's available
+        quantity less the running demand of its rows by date"""
+        running = {}
+        for row in sorted(rows, key=lambda r: (r[date_key] or dt.date.max,
+                    r.get('sort', 0))):
+            if not row.get(key):
+                row['projected'] = None
+                continue
+            left = running.get(row[key], row['qty_available'] or 0)
+            left -= row[qty_key] or 0
+            running[row[key]] = left
+            row['projected'] = left
+
+    @classmethod
+    def _js_rfq_quantities(cls, productions):
+        """The quantity of the open requests for quote linked to each
+        (production, seq no, piece no) and (production, work)"""
+        pool = Pool()
+        result = defaultdict(float)
+        try:
+            Link = pool.get('nline.rfq.link')
+        except KeyError:
+            return result
+        if not cls._js_may('nline.rfq.link', 'read'):
+            return result
+        for link in Link.search([
+                    ('production', 'in', [p.id for p in productions]),
+                    ('line.rfq.status', 'in', ['unreleased', 'active']),
+                    ]):
+            if link.work:
+                result[(link.production.id, 'work', link.work.id)] += (
+                    link.quantity or 0)
+            else:
+                result[(link.production.id, link.operation or 0,
+                        link.piece or 0)] += link.quantity or 0
+        return result
+
+    @staticmethod
+    def _js_reference(production):
+        "The work order's Project/Reference/Other (Jobshop OTHER_INFO)"
+        root = production.root or production if production else None
+        return _field(root, 'other_info', 'project_reference',
+            'reference') or ''
 
     @classmethod
     def _js_order_by(cls, date, lead):
@@ -395,10 +505,18 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
                     'name': sale.party.name,
                     'description': part['description'] or line.description
                     or '',
+                    'eng_id': _code(_field(line, 'master', 'bom'))
+                    if _field(line, 'master', 'bom') else part['eng_id'],
+                    'link_shipped_qty': min(r['linked'],
+                        max(line.quantity - r['due'], 0))
+                    if r['links'] and sale.state != 'quotation' else 0,
+                    'pref_supplier_id': part['pref_suppliers'][0],
                     'message': ', '.join(messages),
                     'fully_linked': bool(r['links'])
                     and r['linked'] >= r['due'],
+                    'sort': len(result),
                     })
+        cls._js_projected(result, 'product', 'qty_due', 'desired_ship_date')
         return result
 
     @classmethod
@@ -407,17 +525,32 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
         cls._check_read('production')
         Production = Pool().get('production')
         result = []
+        Coverage = Pool().get('production.job.coverage')
         for p in Production.search([
                     ('product', '=', product),
                     ('state', 'in', WO_OPEN),
                     ('parent', '=', None),
                     ], order=[('planned_date', 'ASC'), ('id', 'ASC')]):
+            # Linked: its sales order line (origin) or the lines it covers
+            linked = sum(c.quantity or 0 for c in Coverage.search([
+                        ('job', '=', p.id), ('sale_line', '!=', None)]))
+            origin = getattr(p, 'origin', None)
+            if origin and getattr(origin, '__name__', '') == 'sale.line':
+                linked += p.quantity or 0
+            number = split_number(p)
             result.append({
                     'id': p.id,
                     'number': p.number or str(p.id),
+                    'work_id': number['work_id'],
+                    'lot_id': number['lot_id'],
+                    'split_id': number['split_id'],
                     'status': wo_status(p),
+                    'release_date': p.planned_start_date,
                     'quantity': p.quantity,
+                    'available': max((p.quantity or 0) - linked, 0),
                     'want_date': p.planned_date,
+                    'part_id': p.product.code or p.product.rec_name,
+                    'description': p.product.name,
                     'job': bool(getattr(p, 'job', False)),
                     })
         return result
@@ -470,6 +603,9 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
         if 'forward_schedule' in Production._fields and values.get(
                 'forward'):
             production.forward_schedule = True
+        if ('global_rank' in Production._fields
+                and values.get('global_rank') not in (None, '')):
+            production.global_rank = int(values['global_rank'])
         if number:
             production.number = number
         if values.get('origin'):
@@ -523,6 +659,7 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
             'want_date': want,
             'quantity': quantity,
             'status': 'Firm',
+            'global_rank': 50,
             }
 
     @classmethod
@@ -752,10 +889,12 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
         return (production.planned_start_date or production.planned_date)
 
     @classmethod
-    def js_planning_non_stocked(cls, view='exclude'):
+    def js_planning_non_stocked(cls, view='exclude', include_stocked=False):
         """The Non-Stocked Parts section: the material cards of the open
         work orders for parts not stocked (or without part), with their
-        purchase order links; view 'exclude' leaves out the fully linked"""
+        purchase order links; view 'exclude' leaves out the fully linked;
+        include_stocked: Planning > Include Material Demand for Stocked
+        Parts"""
         cls._check_read('production')
         pool = Pool()
         Card = pool.get('production.material_card')
@@ -767,9 +906,12 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
                 ('move.state', 'not in', ['cancelled']),
                 ('supply', '!=', 'leg'),
                 ])
-        cards = [c for c in cards
-            if not cls._planning_part(c.product, cache)['stocked']]
+        cls._js_prefetch_points([c.product for c in cards], cache)
+        if not include_stocked:
+            cards = [c for c in cards
+                if not cls._planning_part(c.product, cache)['stocked']]
         card_links = cls._js_card_links(cards)
+        rfqs = cls._js_rfq_quantities({c.production for c in cards})
         received = cls._js_link_received(
             [l for ls in card_links.values() for l in ls])
         dates = cls._js_required_dates({c.production for c in cards})
@@ -840,14 +982,24 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
                     'mfg_name': _field(card, 'mfg_name') or part['mfg_name'],
                     'mfg_part_id': _field(card, 'mfg_part_id')
                     or part['mfg_part_id'],
-                    'material_status': card.move.state,
+                    'material_status': MATERIAL_STATUS.get(card.move.state,
+                        card.move.state),
                     'order_status': wo_status(production),
                     'description': card.move.product.name,
                     'specifications': _field(card, 'specifications') or '',
+                    'eng_id': part['eng_id'] if part['fabricated'] else '',
+                    'stocked': part['stocked'],
+                    'linked_rfq_qty': rfqs.get((production.id,
+                            card.operation or 0, card.piece or 0), 0),
+                    'primary_loc_id': part['primary_loc_id'],
+                    'reference': cls._js_reference(production),
                     'fully_linked': fully,
                     })
         rows.sort(key=lambda r: (r['required_date'] or dt.date.max,
                 r['work_id'], r['seq_no'] or 0))
+        for i, row in enumerate(rows):
+            row['sort'] = i
+        cls._js_projected(rows, 'product', 'net_qty', 'required_date')
         return rows
 
     # ---- Outside Services ------------------------------------------------
@@ -868,6 +1020,7 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
                 ('routing_step.supplier', '!=', None),
                 ])
         dates = cls._js_required_dates({w.production for w in works})
+        rfqs = cls._js_rfq_quantities({w.production for w in works})
         for work in works:
             step = work.routing_step
             production = work.production
@@ -925,6 +1078,11 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
                     'purchase': line.purchase.id if line else None,
                     'usage_um': line.unit.symbol if line and line.unit
                     else '',
+                    'part_description': production.product.name
+                    if production.product else '',
+                    'linked_rfq_qty': rfqs.get((production.id, 'work',
+                            work.id), 0),
+                    'reference': cls._js_reference(production),
                     'fully_linked': bool(line),
                     })
         rows.sort(key=lambda r: (r['required_date'] or dt.date.max,
@@ -934,10 +1092,12 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
     # ---- Stocked Parts ---------------------------------------------------
 
     @classmethod
-    def _js_demand_supply(cls, products, horizon=None):
+    def _js_demand_supply(cls, products, horizon=None, release=False):
         """Net demand (open work order cards and sales order lines) and
         total supply (open purchase order lines and work orders) of the
-        products, in their stock unit, up to the horizon date"""
+        products, in their stock unit, up to the horizon date; release:
+        a card's demand date is its work order's release date (Use Work
+        Order Release Date for Material Demand Date), else its want date"""
         pool = Pool()
         Card = pool.get('production.material_card')
         SaleLine = pool.get('sale.line')
@@ -958,8 +1118,9 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
                     ('supply', '!=', 'leg'),
                     ]):
             production = card.production
-            if within(production.planned_start_date
-                    or production.planned_date):
+            if within(production.planned_start_date if release
+                    and production.planned_start_date
+                    else production.planned_date):
                 demand[card.product.id] += Uom.compute_qty(
                     card.unit, card.quantity, card.product.default_uom)
         for line in SaleLine.search([
@@ -1007,15 +1168,41 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
         Product = pool.get('product.product')
         filters = filters or {}
         cache = {}
-        activity = filters.get('activity') or 'active'
-        domain = [('template.type', '=', 'goods')]
-        if activity == 'inactive':
-            domain.append(('active', '=', False))
-        elif activity == 'both':
-            domain.append(('active', 'in', [True, False]))
-        products = [p for p in Product.search(domain, order=[
-                    ('code', 'ASC'), ('id', 'ASC')])
-            if cls._planning_part(p, cache)['stocked']]
+        # For: all active parts and the inactive ones with demand (Jobshop's
+        # default), active only, inactive only, inactive with demand, all
+        activity = {'active': 'active_only', 'inactive': 'inactive_only',
+            'both': 'all'}.get(filters.get('activity'),
+            filters.get('activity') or 'active_demand')
+        kind = filters.get('fabricated') or 'both'
+        domain = [('template.type', '=', 'goods'),
+            ('active', 'in', [True, False])]
+        # Only the stocked parts are read (thousands of parts otherwise)
+        if 'stocked' in pool.get('product.template')._fields:
+            domain.append(('template.stocked', '=', True))
+        else:
+            try:
+                OrderPoint = pool.get('stock.order_point')
+            except KeyError:
+                OrderPoint = None
+            domain.append(('id', 'in', [p.product.id
+                        for p in OrderPoint.search([])] if OrderPoint
+                    else []))
+        products = []
+        for p in Product.search(domain, order=[('code', 'ASC'),
+                    ('id', 'ASC')]):
+            part = cls._planning_part(p, cache)
+            if not part['stocked']:
+                continue
+            if activity == 'active_only' and not part['active']:
+                continue
+            if activity in ('inactive_only', 'inactive_demand') \
+                    and part['active']:
+                continue
+            if kind == 'fabricated' and not part['fabricated']:
+                continue
+            if kind == 'purchased' and not part['purchased']:
+                continue
+            products.append(p)
 
         def in_range(value, low, high):
             value = (value or '').upper()
@@ -1040,12 +1227,32 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
                     filters.get('supplier_to')):
                 continue
             keep.append(product)
+        today = dt.date.today()
         horizon = _date(filters.get('horizon'))
-        demand, supply = cls._js_demand_supply(keep, horizon)
+        horizons = {}
+        if filters.get('use_leadtime'):
+            # Use Part Leadtime (+ days) as Horizon
+            plus = int(filters.get('plus_days') or 0)
+            for product in keep:
+                lead = cls._planning_part(product, cache)['lead_time'] or 0
+                horizons[product.id] = today + dt.timedelta(days=lead + plus)
+        by_horizon = defaultdict(list)
+        for product in keep:
+            by_horizon[horizons.get(product.id, horizon)].append(product)
+        demand, supply = defaultdict(float), defaultdict(float)
+        for date, products_ in by_horizon.items():
+            d, s_ = cls._js_demand_supply(products_, date,
+                release=bool(filters.get('use_release_date')))
+            demand.update(d)
+            supply.update(s_)
         stock = cls._js_stock(keep)
+        purchases = cls._js_open_purchases(keep)
         rows = []
         for product in keep:
             part = cls._planning_part(product, cache)
+            if (activity == 'inactive_demand' or (activity == 'active_demand'
+                        and not part['active'])) and not demand[product.id]:
+                continue
             on_hand = stock.get(product.id, 0)
             projected = on_hand + supply[product.id] - demand[product.id]
             order_point = part['order_point'] or 0
@@ -1061,9 +1268,21 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
                 continue
             target = part['target'] or order_point
             suggested = max(target - projected, 0) or order_point or 1
+            if part['purchased'] and not part['fabricated']:
+                suggested = cls._js_round_quantity(product, None, suggested)
+            cost = float(part['unit_mat_cost'] or 0)
+            date = horizons.get(product.id, horizon)
             rows.append(dict(part, **{
+                    'inactive': not part['active'],
+                    'rfq_exists': purchases[product.id]['rfq'],
+                    'po_exists': purchases[product.id]['po'],
+                    'horizon_date': date,
+                    'unit_mat_cost': cost,
+                    'order_qty': suggested,
+                    'estimated_cost': cost * suggested,
                     'on_hold': 0,
                     'on_hand': on_hand,
+                    'qty_available': on_hand,
                     'net_demand': demand[product.id],
                     'total_supply': supply[product.id],
                     'projected': projected,
@@ -1073,6 +1292,32 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
                     }))
         return rows
 
+    @classmethod
+    def _js_open_purchases(cls, products):
+        """Whether an open request for quote / purchase order line exists
+        for each product (the RFQ(s) Exists and PO(s) Exist columns)"""
+        pool = Pool()
+        PurchaseLine = pool.get('purchase.line')
+        ids = [p.id for p in products]
+        result = defaultdict(lambda: {'rfq': False, 'po': False})
+        for line in PurchaseLine.search([
+                    ('product', 'in', ids),
+                    ('type', '=', 'line'),
+                    ('purchase.state', 'in', PO_OPEN),
+                    ]):
+            result[line.product.id]['po'] = True
+        try:
+            RfqLine = pool.get('nline.rfq.line')
+        except KeyError:
+            RfqLine = None
+        if RfqLine and cls._js_may('nline.rfq.line', 'read'):
+            for line in RfqLine.search([
+                        ('product', 'in', ids),
+                        ('rfq.status', 'in', ['unreleased', 'active']),
+                        ]):
+                result[line.product.id]['rfq'] = True
+        return result
+
     # ---- Purchase orders -------------------------------------------------
 
     @classmethod
@@ -1081,7 +1326,8 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
         minimum order quantity and the multiple of the supplier, else of
         the part (Inventory's Planning tab)"""
         minimum = multiple = None
-        for ps in product.product_suppliers_used(party=party.id):
+        for ps in (product.product_suppliers_used(party=party.id)
+                if party else []):
             minimum = _field(ps, 'minimum_quantity', 'minimal_quantity')
             multiple = _field(ps, 'quantity_rounding', 'multiple_quantity')
             break
@@ -1184,7 +1430,14 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
                 quantities[product], product.purchase_uom or
                 product.default_uom)
             quantity = cls._js_round_quantity(product, party, quantity)
-            lines.append({'product': product.id, 'quantity': quantity})
+            line = {'product': product.id, 'quantity': quantity}
+            price = (values.get('unit_prices') or {}).get(str(product.id))
+            if kind == 'stocked' and price not in (None, '', 0):
+                # The Unit Material Cost of the grid (per stock unit)
+                line['unit_price'] = Uom.compute_price(product.default_uom,
+                    Decimal(str(price)), product.purchase_uom
+                    or product.default_uom)
+            lines.append(line)
         result = cls.purchase_order_save({
                 'party': party.id,
                 'purchase_date': dt.date.today(),
@@ -1206,9 +1459,11 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
     # ---- Supply & Demand -------------------------------------------------
 
     @classmethod
-    def js_supply_demand(cls, product):
-        """The Supply & Demand dialog of a part: its sales orders, work
-        orders and purchase orders, with the running supply and demand"""
+    def js_supply_demand(cls, product, horizon=None):
+        """The Supply & Demand dialog of a part (Jobshop's
+        dlgStockedPartNetting): its sales orders, work orders and purchase
+        orders up to the horizon date, the running demand / supply of each
+        tab and the projected available quantity after each line"""
         cls._check_read('production')
         pool = Pool()
         Product = pool.get('product.product')
@@ -1221,6 +1476,10 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
         product = Product(product)
         unit = product.default_uom
         part = cls._planning_part(product)
+        horizon = _date(horizon)
+
+        def within(date):
+            return not horizon or not date or date <= horizon
 
         sales, demand = [], 0
         for line in SaleLine.search([
@@ -1230,20 +1489,30 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
                     ], order=[('sale.sale_date', 'ASC'), ('id', 'ASC')]):
             due = (line.quantity if line.sale.state == 'quotation'
                 else line._get_move_quantity('out'))
-            if due <= 0:
+            ship = line.shipping_date or line.sale.sale_date
+            if due <= 0 or not within(ship):
                 continue
             qty = Uom.compute_qty(line.unit, due, unit)
             demand += qty
             sale_lines = [l for l in line.sale.lines if l.type == 'line']
+            links = cls._js_sale_links(line)
+            master = _field(line, 'master', 'bom')
             sales.append({
                     'sale': line.sale.id,
                     'order_id': line.sale.number or str(line.sale.id),
                     'line_no': sale_lines.index(line) + 1,
                     'status': so_status(line.sale),
-                    'ship_date': line.shipping_date,
+                    'ship_date': ship,
                     'demand_qty': qty,
-                    'links': sum(q for _, q in cls._js_sale_links(line)),
+                    'drawing_id': part['drawing_id'],
+                    'drawing_rev': part['drawing_rev'],
+                    'eng_id': _code(master) if master else part['eng_id'],
+                    'links': ', '.join('%s (%s)' % (p.number or p.id,
+                            _qty(q)) for p, q in links),
+                    'linked_qty': sum(q for _, q in links),
                     'demand': demand,
+                    '_date': ship,
+                    '_delta': -qty,
                     })
 
         works, events = [], []
@@ -1254,45 +1523,58 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
             remaining = sum(o.internal_quantity for o in production.outputs
                 if o.product == product and o.state not in (
                     'done', 'cancelled'))
-            events.append((production.planned_date or dt.date.max,
-                    production, None, remaining, 0))
+            if within(production.planned_date):
+                events.append((production.planned_date or dt.date.max,
+                        production, None, remaining, 0))
         for card in Card.search([
                     ('product', '=', product.id),
                     ('production.state', 'in', WO_OPEN),
                     ('move.state', 'in', ['staging', 'draft', 'assigned']),
                     ]):
-            events.append((card.production.planned_start_date
-                    or card.production.planned_date or dt.date.max,
-                    card.production, card, 0,
-                    Uom.compute_qty(card.unit, card.quantity, unit)))
+            date = (card.production.planned_start_date
+                or card.production.planned_date)
+            if within(date):
+                events.append((date or dt.date.max, card.production, card,
+                        0, Uom.compute_qty(card.unit, card.quantity, unit)))
         events.sort(key=lambda e: (e[0], e[1].id))
+        Operation = pool.get('nline.js.schedule.operation')
+        finishes = {}
+        for op in Operation.search([
+                    ('production', 'in', [e[1].id for e in events]),
+                    ('schedule.code', '=', 'STANDARD'),
+                    ]):
+            if op.finish and (op.production.id not in finishes
+                    or op.finish > finishes[op.production.id]):
+                finishes[op.production.id] = op.finish
         supply, wo_demand = 0, 0
         for date, production, card, s, d in events:
             supply += s
             wo_demand += d
             number = split_number(production)
+            finish = finishes.get(production.id)
             works.append(dict(number, **{
                         'production': (production.root or production).id,
+                        'coproduct': False,
                         'seq_no': card.operation if card else None,
                         'piece_no': card.piece if card else None,
                         'status': wo_status(production),
+                        'release_date': production.planned_start_date,
                         'want_date': production.planned_date,
-                        'finish_date': None,
+                        'finish_date': finish.date() if finish else None,
                         'supply_qty': s,
                         'demand_qty': d,
+                        'drawing_id': _field(production, 'drawing_number')
+                        or part['drawing_id'],
+                        'drawing_rev': _field(production, 'drawing_revision')
+                        or part['drawing_rev'],
+                        'eng_id': (production.bom.rec_name
+                            if production.bom else '') if not card
+                        else '',
                         'supply': supply,
                         'demand': wo_demand,
+                        '_date': date if date != dt.date.max else None,
+                        '_delta': s - d,
                         }))
-        Operation = pool.get('nline.js.schedule.operation')
-        finishes = {}
-        for op in Operation.search([
-                    ('production', 'in', [e[1].id for e in events])]):
-            if op.finish and (op.production.id not in finishes
-                    or op.finish > finishes[op.production.id]):
-                finishes[op.production.id] = op.finish
-        for row, event in zip(works, events):
-            finish = finishes.get(event[1].id)
-            row['finish_date'] = finish.date() if finish else None
 
         purchases, po_supply = [], 0
         for line in PurchaseLine.search([
@@ -1304,28 +1586,156 @@ class DeskMaterialPlanning(metaclass=PoolMeta):
             done = sum(m.internal_quantity for m in line.moves
                 if m.state == 'done')
             qty = Uom.compute_qty(line.unit, line.quantity, unit) - done
-            if qty <= 0:
+            receive = getattr(line, 'delivery_date', None)
+            if qty <= 0 or not within(receive):
                 continue
             po_supply += qty
+            links = Link.search([('purchase_line', '=', line.id)])
             purchases.append({
                     'purchase': line.purchase.id,
                     'order_id': line.purchase.number
                     or str(line.purchase.id),
                     'line_no': line.sequence,
                     'status': PO_STATUS.get(line.purchase.state),
-                    'receive_date': getattr(line, 'delivery_date', None),
+                    'receive_date': receive,
                     'supply_qty': qty,
-                    'links': sum(l.quantity for l in Link.search([
-                                ('purchase_line', '=', line.id)])),
+                    'drawing_id': part['drawing_id'],
+                    'drawing_rev': part['drawing_rev'],
+                    'links': ', '.join('%s/%s/%s (%s)' % (
+                            split_number(l.production)['number']
+                            if l.production else (l.reference or ''),
+                            l.operation or 0, l.piece or 0,
+                            _qty(l.quantity)) for l in links),
+                    'linked_qty': sum(l.quantity or 0 for l in links),
                     'supply': po_supply,
+                    '_date': receive,
+                    '_delta': qty,
                     })
+
+        # Projected available after each line: on hand plus the supply less
+        # the demand of every tab, by date
+        on_hand = cls._js_stock([product]).get(product.id, 0)
+        timeline = sorted(sales + works + purchases, key=lambda r: (
+                r['_date'] or dt.date.max, -r['_delta']))
+        running = on_hand
+        for row in timeline:
+            running += row['_delta']
+            row['projected'] = running
+        for row in timeline:
+            del row['_date'], row['_delta']
         return {
             'product': product.id,
             'part_id': part['part_id'],
             'description': part['description'],
             'stock_um': unit.symbol,
-            'on_hand': cls._js_stock([product]).get(product.id, 0),
+            'drawing_id': part['drawing_id'],
+            'drawing_rev': part['drawing_rev'],
+            'eng_id': part['eng_id'],
+            'masters': [pb.rec_name for pb in product.boms]
+            if product.producible else [],
+            'inactive': not part['active'],
+            'horizon': horizon,
+            'on_hand': on_hand,
+            'demand': demand + wo_demand,
+            'supply': supply + po_supply,
             'sales': sales,
             'work_orders': works,
             'purchases': purchases,
             }
+
+    # ---- Request For Quote -------------------------------------------------
+
+    @classmethod
+    @accept_warnings
+    def js_planning_rfq(cls, values):
+        """Create Request For Quote for Supplier... of the rows of a section:
+        one request to the supplier, one line per part (consolidated) with
+        the quantity to quote, linked to the work orders (nline.rfq.link)
+        values: kind ('material', 'service' or 'stocked'), rows, supplier,
+        quantities ({row id: quantity} for stocked parts)"""
+        cls._check_create('nline.rfq', 'nline.rfq.line')
+        pool = Pool()
+        Card = pool.get('production.material_card')
+        Work = pool.get('production.work')
+        Product = pool.get('product.product')
+        Uom = pool.get('product.uom')
+        kind = values['kind']
+        rows = values.get('rows') or []
+        if not rows:
+            raise ValidationError(gettext('nline_js_planning.msg_no_rows'))
+        lines = []
+
+        def link(production, quantity, operation=None, piece=None,
+                work=None):
+            return {'production': production.id, 'operation': operation,
+                'piece': piece, 'work': work.id if work else None,
+                'quantity': quantity}
+
+        if kind == 'service':
+            for work in Work.browse(rows):
+                step = work.routing_step
+                if not step or not step.service:
+                    continue
+                quantity = work.production.quantity or 0
+                lines.append({
+                        'line_type': 'service',
+                        'service_part': (work.production.product.id
+                            if work.production.product else None),
+                        'description': step.service.rec_name,
+                        'unit': step.service.purchase_uom.id
+                        if step.service.purchase_uom else None,
+                        'prices': [{'quantity': quantity}],
+                        'links': [link(work.production, quantity,
+                                work.sequence, None, work)],
+                        '_product': step.service,
+                        })
+            for line in lines:
+                line['product'] = line.pop('_product').id
+        else:
+            quantities = defaultdict(float)
+            links = defaultdict(list)
+            order = []
+            if kind == 'material':
+                for card in Card.browse(rows):
+                    if not card.product or card.move.state == 'done':
+                        continue
+                    need = Uom.compute_qty(card.unit, card.quantity,
+                        card.product.default_uom)
+                    if card.product not in quantities:
+                        order.append(card.product)
+                    quantities[card.product] += need
+                    links[card.product].append(link(card.production, need,
+                            card.operation, card.piece))
+            else:
+                given = {int(k): v for k, v in (
+                        values.get('quantities') or {}).items()}
+                for product in Product.browse(rows):
+                    quantity = float(given.get(product.id) or 0)
+                    if quantity > 0:
+                        order.append(product)
+                        quantities[product] += quantity
+            for product in order:
+                part = cls._planning_part(product)
+                lines.append({
+                        'line_type': 'part',
+                        'product': product.id,
+                        'description': product.name,
+                        'unit': product.default_uom.id,
+                        'mfg_name': part['mfg_name'] or None,
+                        'mfg_part_id': part['mfg_part_id'] or None,
+                        'drawing': part['drawing_id'] or None,
+                        'drawing_revision': part['drawing_rev'] or None,
+                        'prices': [{'quantity': quantities[product]}],
+                        'links': links[product],
+                        })
+        if not lines:
+            raise ValidationError(gettext(
+                    'nline_js_planning.msg_lines_linked'))
+        if any(l['links'] for l in lines):
+            cls._check_create('nline.rfq.link')
+        rfq = cls.js_rfq_save({
+                'status': 'unreleased',
+                'supplier_1': values['supplier'],
+                'lines': lines,
+                })
+        return {'rfq': rfq['id'], 'number': rfq['number'] or str(rfq['id'])}

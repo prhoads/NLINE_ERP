@@ -19,6 +19,13 @@ CREDIT = {'APPROVED': 'approved', 'HOLD ORDERS': 'hold_orders',
     'HOLD_ORDERS': 'hold_orders', 'HOLDORDERS': 'hold_orders',
     'HOLD SHIPMENTS': 'hold_shipments', 'HOLD_SHIPMENTS': 'hold_shipments',
     'HOLDSHIPMENTS': 'hold_shipments'}
+# The order's address block (SALES_ORDER.NAME... and SHIPTO_NAME...)
+ADDRESS_COLUMNS = [('name', 'NAME'), ('addr_1', 'ADDR_1'),
+    ('addr_2', 'ADDR_2'), ('city', 'CITY'), ('state', 'STATE'),
+    ('postal', 'POSTAL_CODE'), ('country', 'COUNTRY'), ('etc', 'ADDR_ETC'),
+    ('contact', 'CONTACT_NAME'), ('title', 'CONTACT_TITLE'),
+    ('phone', 'CONTACT_PHONE'), ('fax', 'CONTACT_FAX'),
+    ('email', 'CONTACT_EMAIL'), ('mobile', 'CONTACT_MOBILE')]
 QUOTE_TYPE = {'BREAK': 'break', 'UPTO': 'up_to', 'UP_TO': 'up_to',
     'UP-TO': 'up_to'}
 
@@ -204,6 +211,10 @@ def customers(m, codes):
             'credit_limit': dec(row['CREDIT_LIMIT']),
             'our_supplier_id': text(row['OUR_SUPPLIER_ID']),
             'contact_title': text(row['CONTACT_TITLE']),
+            'customer_contact': text(row['CONTACT_NAME']),
+            'customer_inactive': flag(row['INACTIVE']),
+            'customer_exported': flag(row['POSTED']),
+            'customer_exported_date': day(row['POSTED_DATE']),
             'customer_open_date': day(row['OPEN_DATE'])
             or day(row['RECORD_CREATED']),
             'quote_instructions': text(row['QUOTE_INSTRUCTIONS']),
@@ -214,6 +225,11 @@ def customers(m, codes):
             'invoice_footer': text(row['INV_FOOTER']),
             'customer_specs': text(row['SPECIFICATIONS']),
             }
+        # The numbers the parties step left out (it keeps phone, e-mail)
+        for name, column in [('customer_fax', 'CONTACT_FAX'),
+                ('customer_mobile', 'CONTACT_MOBILE')]:
+            if text(row[column]):
+                values[name] = text(row[column])
         if update(party, values):
             m.count('js_sales customers updated')
         notes = text(row['NOTES'])
@@ -351,11 +367,18 @@ def orders(m, codes):
             'promise_date': day(head['PROMISE_DATE']),
             'js_quote': text(head['QUOTE_ID']),
             'js_specs': text(head['SPECIFICATIONS']),
+            'js_copy_notes': flag(head.get('COPY_NOTES')),
             }
+        # The order's own Sold To / Ship To tabs
+        for prefix, column in [('js_sold_', ''), ('js_ship_', 'SHIPTO_')]:
+            for part, name in ADDRESS_COLUMNS:
+                values[prefix + part] = text(head.get(column + name))
+        printed = day(head['PRINTED_DATE'])
         if head.get('DESIRED_SHIP_DATE') and sale.state == 'draft':
             values['shipping_date'] = day(head['DESIRED_SHIP_DATE'])
         flags = {'js_hold': status == 'HOLD',
-            'js_closed': status == 'CLOSED' and sale.state != 'done'}
+            'js_closed': status == 'CLOSED' and sale.state != 'done',
+            'js_printed_date': printed}
         changed = update(sale, values)
         if any(getattr(sale, k) != v for k, v in flags.items()):
             # Read-only on the form: written as the importer
@@ -381,7 +404,19 @@ def orders(m, codes):
                     row['COMMODITY_CODE']),
                 'line_tax_group': codes['group'].get(row['TAX_GROUP_ID']),
                 'js_line_specs': text(row['SPECIFICATIONS']),
+                'js_desired_date': day(row['DESIRED_SHIP_DATE']),
+                'drawing_id': text(row['DRAWING_ID']),
+                'drawing_rev': text(row['DRAWING_REV_NO']),
+                'commissionable': flag(row['COMMISSIONABLE']),
+                'commission_percent': dec(row['COMMISSION_PERCENT'])
+                if row.get('COMMISSION_PERCENT') is not None else None,
+                'js_ship_via': codes['via'].get(row.get('SHIP_VIA')),
+                'user_0': text(row['USER_0']),
+                'user_1': text(row['USER_1']),
+                'user_2': text(row['USER_2']),
                 }
+            if row['QUOTE_LINE_NO'] is not None:
+                line_values['quote_line_no'] = int(row['QUOTE_LINE_NO'])
             discount = line_values['trade_discount']
             if sale.state == 'draft' and discount:
                 line_values['unit_price'] = (

@@ -12,7 +12,7 @@ on rows shaped like Jobshop's) — `test.ps1 nline_js_sales`: 25 tests OK.
   - [x] What are Sales Orders? / Field Level Descriptions (`VSalesSalesOrder`, `VSalesSalesLine`)
   - [x] Sales Order Maintenance
     - [x] Maintaining Sales Orders — route `orders/new`, `orders/<id>` (takes over the desk's Customer Order Entry: lines, Quote/Confirm (now Change Status > Firm / Released), Print, links to work orders and New WO all kept).
-    - [~] Creating Sales Orders from Quotes — "New From Quote" copies a Tryton quotation (state draft/quotation) into a new order with Quote ID = the quote's number. Decision: until the Estimating area has its own quote model, a Jobshop quote is a Tryton sale in quotation. The quote is left as it is (Jobshop marks it Won: no such state). Quote-master work orders are not created on copy (New WO on the Links does it after release).
+    - [x] Creating Sales Orders from Quotes — "New From Quote" opens Jobshop's Create Sales Order from Quote dialog on an Estimating quote (`nline.quote`, Active/Ready): lines to include, quantities, desired dates, status, Sales Order ID; the quote becomes Won and points to the order. Quote-master work orders are not created on copy (New Work Order on the line's Links after release).
     - [x] Creating Sales Orders from Existing Sales Orders — "Copy" (Edit > Copy Document): a new unreleased order with the lines, details and charges; the Order ID is given on save (typed or automatic).
     - [x] Entering Sales Order Lines — Part, Description, Customer Part ID, Order Qty, Unit Price, Disc %, Extension; right-click a line: Line Overrides and Specs (Customer PO Line #, Promise Date, Product Code, Commodity Code, Tax Group, Specifications), Reset Unit Price from Customer.
     - [x] Editing and Viewing Sales Orders — a released order keeps its lines read-only (Tryton) but its Details, Specs, Charges, PO number, desired ship date and the lines' overrides/specs still change, as in Jobshop.
@@ -40,8 +40,8 @@ on rows shaped like Jobshop's) — `test.ps1 nline_js_sales`: 25 tests OK.
     - [x] Prices Tab
     - [x] Notes Tab (Tryton notes; the Jobshop NOTES text is imported as a note)
     - [x] Sales Orders Tab (Released by default, right-click: other statuses / Show All; double-click opens the order)
-    - [~] Quotes Tab — the customer's Tryton quotations (draft / quotation); Jobshop's Lost/Won/Ready statuses, lead time and won/loss reason belong to the Estimating area's quotes.
-    - [~] Browse Tab — no "Show All" check box (UI.master browses active records).
+    - [x] Quotes Tab — the customer's Estimating quotes (`nline.quote`) with Jobshop's columns and popup.
+    - [~] Browse Tab — Jobshop's columns; "Show All" needs the frame's browseShowAll to filter `customer_inactive` (see analysis C17).
 - [x] Service Charges — route `service-charges` (ID, Description, Amount, Revenue Account).
 - [x] Tax Groups — route `sales-tax-groups`: tax group with its Taxes lines (Tax Name, Description, Effective, Account, Tax Percent). Each line with an account is kept as a Tryton tax (`account.tax`, percentage, the account on invoices and credit notes, start date = Effective), made / updated on save; a line can also point to an existing Tryton tax. The group gives the taxes effective at the order date (latest effective per tax name).
 - [x] Sales Reps — route `sales-reps` (ID, Name, Commission %).
@@ -54,7 +54,7 @@ on rows shaped like Jobshop's) — `test.ps1 nline_js_sales`: 25 tests OK.
   - [x] Accessing the Shipping Window
   - [x] Shipping Parts — Ship (button, or right-click Ship on the activity list): ship quantities per line; less than ordered back-orders the rest on a new shipper (0 = the whole line); stock is assigned when there is, forced otherwise (Jobshop ships whatever the quantity on hand); asks to print the packing list. Hold / closed orders are not shipped; credit status Hold Shipments asks to accept.
   - [x] Returning Parts — right-click a shipped order > Mark for Return… (or Return… on its shipper): return quantities per line → a return order (Tryton's return sale, linked line by line to the shipped lines) and its return shipper, received with "Receive Return".
-  - [~] Entering Shipper Lines — ship quantity per line on the Shipper tab; carton count, shipping weight, location override, tracking (lot) numbers are not emulated (no N-Line use; Tryton's stock_package / lots modules are not installed).
+  - [~] Entering Shipper Lines — ship quantity and Close Short per line on the Shipper Lines sub-tab; carton count, shipping weight (2884 N-Line lines have one), location override, tracking (lot) numbers are not emulated (Tryton's stock_package / lots modules are not installed).
   - [x] Shipping Window Tab Information: Shipping Activity, Shipper, Sold To, Ship To, Details (Order Date, Shipped Date, FOB, Ship Via, Carrier, Tracking Number, Freight Terms, Tax Group, Terms, Discount Class, Invoice IDs/dates), Specs (printed note on the shipper), Charges (the order's charges still to invoice: amount and Apply).
 - [x] Invoicing — route `invoicing` (and `invoicing/<id>`), takes over the desk's window (draft list, Post Selected with printing kept).
   - [x] What is Invoicing? / Invoicing Field Level Descriptions (`VSalesInvoicing`)
@@ -64,6 +64,66 @@ on rows shaped like Jobshop's) — `test.ps1 nline_js_sales`: 25 tests OK.
   - [x] Issuing Credit Memos — return orders' credit notes wait on the Invoicing Activity tab (type Return); "Credit Memo" on a posted invoice makes a draft credit note (Tryton's credit).
   - [x] Invoicing Window Tab Information: Invoicing Activity, Invoice (lines with Ship Qty / Unit Price editable while draft, totals Charge / Tax / Total), Bill To, Ship To, Details, Specs (the invoice's comment), Charges (add / change / remove on the draft invoice), Taxes.
 - [-] Sales Reports — the admin area builds all Jobshop reports (`js-reports/sales`).
+
+## Second pass (28 Oct 2026): Jobshop's own layouts
+
+Analysis and gap tables: `docs/jobshop/analysis/sales.md`. Changed:
+
+- Customers: the ID lookup is the first field of the Customers tab
+  (`idAt`), Customers / General / Specs / Special Instructions placed as in
+  Jobshop with descriptions beside the codes; new Inactive, Exported (+
+  date), Contact, Phone / Fax / E-mail / Mobile (the first contact mechanism
+  of the type); Quotes tab on Estimating's `nline.quote`; Sales Orders tab
+  with Jobshop's columns and popup (status submenu, Sales Order Lines
+  window); Browse Address 1 / 2. Tryton's Active is no longer on the window
+  (Jobshop's Inactive is `customer_inactive`; the party stays active for
+  purchasing).
+- Sales Orders: placed header (Status list, Promised Date, Printed Date,
+  Quote ID, Created / Modified, Sold to / Ship to blocks), sub-tabs in
+  Jobshop's order (Notes added), details and totals under them; the Order
+  Line window (General / Other / Specs / Links) on double-click and Add /
+  Edit Details; line popup (Copy / Paste Line, Work Order Links, View All
+  Quote / Order / PO Lines for Part ▸, Open Part, Calculate Sales Order Line
+  Price); U/M per line priced in that unit; per-line desired ship date
+  (drives the shipment's planned date), drawing ID / rev, commissionable,
+  quote line no, User 0-2 (N-Line fills them: drawing file, rev, user).
+  New From Quote = Jobshop's Create Sales Order from Quote dialog on
+  `nline.quote` (marks the quote Won). Shippers/Invoices tab per shipper
+  with its Jobshop status and invoice, its popup and Shipper Lines window.
+- Shipping: Activity (horizon date, Some Can Ship, Carrier, Ship To Name,
+  Jobshop's popup), Shipper (placed header with Ship / Return, sub-tabs,
+  details), Close Short, Browse.
+- Invoicing: Activity, Invoice (placed header, sub-tabs incl. Notes, details,
+  totals), Browse; N-Line's Set Shipper Line Unit Price window.
+- Code tables: Service Charges, Sales Reps, Territories, SIC Codes, Carriers
+  are Jobshop's single editable grids (Inactive column); Tax Groups and
+  Discount Classes placed with the ID first.
+
+Decisions: unused at N-Line (data checked) and not built: the Other tabs
+except the order line's User 0-2, alternate currency, commission %, line
+dimensions / ship via, Equip List, Package Types, NMFC, SIC data, price
+tables. Progress billing (11 shippers) left for a decision. Accounting
+fields (Revenue Acct, Account Set, Exported of invoices) stay QuickBooks'.
+
+## Screen review fixes (28 Oct, second pass)
+
+From `SCREEN_REVIEW.md` (details: analysis/sales.md "Screen review fixes"):
+line grids one text line per row (Shipper Lines no longer wrap); Receivables
+Acct ID and Terms ID as code + description box on orders, shipping,
+invoicing; the order's Sold To / Ship To tabs are the order's own editable
+address (new `sale.js_sold_*` / `js_ship_*`, Restore Default Address, Ship
+To lookup / Add New / Clear Address, Export Contact to Outlook as a vCard);
+the Order Lines grid has Jobshop's columns (new `sale.line.commission_percent`,
+`js_ship_via`); Copy Notes to Shipper (copied when shipped); Memo left the
+header; Customers General aligned, who/when texts, Address 1 / 2; shipping
+activity's released orders grid, check boxes, status list, captions;
+invoicing's printed date (`account.invoice.js_printed_date`), Exported,
+read-only lines with Shipped / Applied Billed Amount, no "Open in Tryton";
+code tables show Jobshop's Inactive. Fixed: saving a draft order deleted its
+lines without a part.
+
+Decision: commission % and line ship via are unused at N-Line (data) but
+now shown and stored, as the layout has them (emulate first).
 
 ## Decisions
 
@@ -77,6 +137,7 @@ on rows shaped like Jobshop's) — `test.ps1 nline_js_sales`: 25 tests OK.
 
 ## For the integrator
 
+- 28 Oct: update the module again (new fields on party, sale, sale.line; see `docs/jobshop/analysis/sales.md` "For the integrator") and rerun step `js_sales`.
 - `nline_js_sales/tryton.cfg` depends now also on `account`, `account_invoice`, `country`, `party`, `product`, `sale`, `stock` (all already installed with nline_desk). Update the module (`trytond-admin -u nline_js_sales`) — new tables and columns on party, address, sale, sale line, shipment.
 - Data: step `js_sales` after `js_common` (it makes FOB points / ship vias / product and commodity codes a customer or order uses that the common step did not import) and after `sales` (orders by number). It only updates customers already imported as parties (by Jobshop ID = party code).
 - `nline_desk`'s `sale_order_get` / `sale_order_save` are extended (super() kept): the old screen's calls still work; `sale_order_save` now accepts warnings (`accept_warnings`).

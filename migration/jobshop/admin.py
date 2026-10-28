@@ -49,6 +49,78 @@ FIELDS = {
 def run(m):
     account_sets(m)
     calendar(m)
+    settings(m)
+
+
+# Jobshop's LSA_SETTINGS -> nline.desk.configuration (System Settings)
+SETTINGS = {
+    'ALLOW_NEGATIVE_INVENTORY': 'js_allow_negative',
+    'SET_RECEIVER_STATUS_APPROVED_UPON_RECEIPT': 'js_receiver_approved',
+    'PREVENT_LABOR_WHEN_PREV_OPER_NOT_COMPLETED': 'js_prevent_run_labor',
+    'LOCK_LDC_CLOCK_FIELDS': 'js_lock_clock_in',
+    'LOG_AUTOMATED_COST_CHANGE': 'js_log_cost_changes',
+    'LOG_ADJUSTMENTS_TRANSFERS': 'js_log_adjustments',
+    'DisplayNotesOnInactivePartEntered': 'js_inactive_part_notes',
+    'LOG_PLANNING_VARIABLE_CHANGES': 'js_log_planning_changes',
+    'ShipEarlyNumberDays': 'js_ship_early_days',
+    'ALLOW_LABOR_AGAINST_CLOSED_WO': 'js_labor_closed_wo',
+    'WARN_LABOR_EXCEEDS_ESTIMATE': 'js_warn_labor_estimate',
+    'DISALLOW_MULTIPLE_CLOCKINS': 'js_single_clock_in',
+    'CLOSE_OP_ONLY_ON_RUN_COMPLETE_CHECKED': 'js_close_op_run_complete',
+    'TA_REASON_CODES_REQ': 'js_ta_reason_required',
+    'ASK_TO_ADJUST_TO_SHIFT_START_END': 'js_adjust_to_shift',
+    'DO_NOT_ALLOW_INACTIVE_ITEMS': 'js_no_inactive_items',
+    'CHROMA_CODE_WORK_ORDER_LATE_WANT': 'js_color_late_want',
+    'CHROMA_CODE_WORK_ORDER_LATE_RELEASE': 'js_color_late_release',
+    'DoNotAutoMarkShipperLinesForDeletion': 'js_no_auto_mark_shipper',
+    'DoNotAutoCheckCreateWOWhenCostFromEngMaster': 'js_no_auto_create_wo',
+    'SyncUDefsBetweenSalesLineAndLinkedWorkOrder': 'js_sync_udefs',
+    'UPDATE_PART_COSTS_FROM_RECEIVER': 'js_update_cost',
+    }
+UPDATE_COST = {'0': 'never', '1': 'prompt', '2': 'always'}
+ADJUST = {'0': 'ask', '1': 'always', '2': 'keep'}
+
+
+def settings(m):
+    """The settings of Jobshop's System Settings (LSA_SETTINGS and the
+    shift grace minutes of SHOPFLOOR_OBJECT_GLOBAL): Jobshop's values are
+    copied while Jobshop is the system of record"""
+    Configuration = m.get('nline.desk.configuration')
+    config = Configuration(1)
+    values = {r['NAME']: r['SETTING_VALUE'] for r in m.js.rows(
+            "select NAME, SETTING_VALUE from LSA_SETTINGS")}
+    changed = []
+    for name, field in SETTINGS.items():
+        if field not in Configuration._fields or name not in values:
+            continue
+        raw = (values[name] or '').strip()
+        kind = Configuration._fields[field]['type']
+        if field == 'js_update_cost':
+            value = UPDATE_COST.get(raw)
+        elif field == 'js_adjust_to_shift':
+            value = ADJUST.get(raw)
+        elif kind == 'boolean':
+            value = raw.lower() in ('true', '-1', '1')
+        elif kind == 'integer':
+            value = int(raw) if raw.lstrip('-').isdigit() else None
+        else:
+            value = raw
+        if value is None or getattr(config, field, None) == value:
+            continue
+        setattr(config, field, value)
+        changed.append(field)
+    rows = m.js.rows("select SHIFT_START_GRACE, SHIFT_END_GRACE "
+        "from SHOPFLOOR_OBJECT_GLOBAL")
+    for column, field in [('SHIFT_START_GRACE', 'js_shift_start_grace'),
+            ('SHIFT_END_GRACE', 'js_shift_end_grace')]:
+        if rows and field in Configuration._fields and (
+                getattr(config, field, None) is None) and (
+                rows[0].get(column) is not None):
+            setattr(config, field, int(rows[0][column]))
+            changed.append(field)
+    if changed:
+        config.save()
+        log("system settings: %s" % ', '.join(changed))
 
 
 def _accounts(m):

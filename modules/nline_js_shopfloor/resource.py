@@ -85,6 +85,9 @@ class WorkCenter(metaclass=PoolMeta):
         help="The resource is reported complete automatically.")
     special_instructions = fields.Text("Special Instructions",
         help="Shown when the resource is used on an operation card.")
+    # Jobshop's Inactive check box: Tryton's Active the other way round
+    inactive = fields.Function(fields.Boolean("Inactive"),
+        'get_inactive', setter='set_inactive', searcher='search_inactive')
     # Costs tab: the estimated labor rates and the burden, estimated and
     # actual (Jobshop's ACT_BUR_*)
     setup_per_hr = cost_field("Setup/Hr")
@@ -134,6 +137,22 @@ class WorkCenter(metaclass=PoolMeta):
     @classmethod
     def default_shift_1_capacity(cls):
         return 1
+
+    def get_inactive(self, name):
+        return not self.active
+
+    @classmethod
+    def set_inactive(cls, centers, name, value):
+        cls.write(centers, {'active': not value})
+
+    @classmethod
+    def search_inactive(cls, name, clause):
+        _, operator, value = clause
+        if operator in {'=', '!='}:
+            if operator == '!=':
+                value = not value
+            return [('active', '=', not value)]
+        return []
 
     @classmethod
     def default_auto_reporting(cls):

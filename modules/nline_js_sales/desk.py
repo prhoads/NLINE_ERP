@@ -12,7 +12,7 @@ from trytond.model.exceptions import ValidationError
 from trytond.modules.nline_desk.desk import _date, _decimal, accept_warnings
 from trytond.pool import Pool, PoolMeta
 from trytond.rpc import RPC
-from trytond.transaction import Transaction
+from trytond.transaction import Transaction, without_check_access
 
 # The Jobshop fields of the order header the window sends (many2one: id)
 HEADER_M2O = {
@@ -24,14 +24,32 @@ HEADER_M2O = {
     'tax_group': 'nline.sales_tax_group',
     'discount_class': 'nline.discount_class',
     }
-HEADER_OTHER = ['freight_terms', 'js_specs', 'js_quote', 'promise_date']
+# The order's own Sold To / Ship To tabs (Jobshop's NAME, ADDR_1, ...)
+ADDRESS_PARTS = ['name', 'addr_1', 'addr_2', 'city', 'state', 'postal',
+    'country', 'etc', 'contact', 'title', 'phone', 'fax', 'email', 'mobile']
+ADDRESS_FIELDS = ['js_sold_' + p for p in ADDRESS_PARTS] + [
+    'js_ship_' + p for p in ADDRESS_PARTS]
+HEADER_OTHER = ['freight_terms', 'js_specs', 'js_quote', 'promise_date',
+    'js_copy_notes'] + ADDRESS_FIELDS
+HEADER_BOOLEAN = {'js_copy_notes'}
 LINE_M2O = {
     'product_code': 'nline.product_code',
     'commodity_code': 'nline.commodity_code',
     'line_tax_group': 'nline.sales_tax_group',
+    'unit': 'product.uom',
+    'js_ship_via': 'nline.ship_via',
     }
 LINE_OTHER = ['customer_part', 'customer_po_line', 'gross_unit_price',
-    'trade_discount', 'promise_date', 'js_line_specs']
+    'trade_discount', 'promise_date', 'js_line_specs', 'js_desired_date',
+    'drawing_id', 'drawing_rev', 'commissionable', 'commission_percent',
+    'user_0', 'user_1', 'user_2']
+LINE_BOOLEAN = {'commissionable'}
+# What a released order's lines keep (Jobshop: price, quantity, part, unit)
+LINE_LOCKED = {'gross_unit_price', 'trade_discount', 'unit'}
+# Jobshop's shipper statuses (SHIPPER_STATUS) from the invoice of the
+# shipment: Unapproved until it is invoiced (posted), Approved after
+SHIPPER_STATUS = {'unapproved': 'Unapproved', 'approved': 'Approved',
+    'cancelled': 'Cancelled'}
 CHARGE_FIELDS = ['service_charge', 'description', 'amount', 'tax_group',
     'apply', 'account']
 SHIPPER_M2O = {
@@ -43,6 +61,19 @@ SHIPPER_M2O = {
 
 def _ref(record):
     return {'id': record.id, 'rec_name': record.rec_name} if record else None
+
+
+def _who(record):
+    "Jobshop's Created by / Last Modified by: user and date"
+    def text(user, date):
+        if not date:
+            return ''
+        return '%s %s' % (user.rec_name if user else '',
+            date.strftime('%m/%d/%Y %H:%M'))
+    return {
+        'created_by': text(record.create_uid, record.create_date),
+        'modified_by': text(record.write_uid, record.write_date),
+        }
 
 
 def _address(address, party=None):
@@ -80,11 +111,17 @@ class Desk(metaclass=PoolMeta):
         for name in ['sales_order_copy', 'sales_order_status',
                 'sales_order_delete', 'sales_ship', 'sales_return',
                 'sales_return_receive', 'sales_invoice_save',
-                'sales_credit_memo']:
+                'sales_credit_memo', 'sales_order_from_quote',
+                'sales_order_printed', 'sales_unpriced_save',
+                'sales_invoice_printed']:
             cls.__rpc__[name] = RPC(readonly=False)
         for name in ['sales_order_defaults', 'sales_price',
                 'sales_shipping_activity', 'sales_shipper_get',
-                'sales_invoicing_activity', 'sales_invoice_get']:
+                'sales_invoicing_activity', 'sales_invoice_get',
+                'sales_quote_get', 'sales_order_lines',
+                'sales_shipper_lines', 'sales_unpriced_lines',
+                'sales_part_lines', 'sales_shipper_browse',
+                'sales_invoice_browse']:
             cls.__rpc__[name] = RPC()
 
     # ---- Sales Orders -----------------------------------------------------
@@ -102,10 +139,40 @@ class Desk(metaclass=PoolMeta):
         with Transaction().set_context(
                 locations=cls._warehouse_ids(), with_childs=True):
             available = {p.id: p.quantity for p in Product.browse(products)}
+        quoted = cls._quoted_products(products)
         for number, data in enumerate(result['lines'], 1):
             line = lines[data['id']]
+            productions = getattr(line, 'productions', []) or []
             data.update({
                     'line_no': number,
+                    'unit': _ref(line.unit),
+                    'unit_category': line.unit.category.id if line.unit
+                    else None,
+                    'js_desired_date': line.js_desired_date,
+                    'drawing_id': line.drawing_id or '',
+                    'drawing_rev': line.drawing_rev or '',
+                    'commissionable': bool(line.commissionable),
+                    'commission_percent': line.commission_percent,
+                    'js_ship_via': _ref(line.js_ship_via),
+                    'quotes_exist': bool(line.product
+                        and line.product.id in quoted),
+                    'quote_line_no': line.quote_line_no,
+                    'user_0': line.user_0 or '',
+                    'user_1': line.user_1 or '',
+                    'user_2': line.user_2 or '',
+                    'shipped_amount': (Decimal(str(
+                                line.js_shipped_quantity or 0))
+                        * (line.unit_price or Decimal(0))).quantize(
+                        Decimal('0.01')),
+                    'link_details': [{
+                            'id': p.id, 'number': p.number or str(p.id),
+                            'state': p.state, 'quantity': p.quantity,
+                            'description': p.product.rec_name
+                            if p.product else '',
+                            'planned_date': p.planned_date,
+                            'planned_end_date': getattr(
+                                p, 'planned_end_date', None),
+                            } for p in productions],
                     'customer_part': line.customer_part or '',
                     'customer_po_line': line.customer_po_line or '',
                     'gross_unit_price': line.gross_unit_price
@@ -123,7 +190,16 @@ class Desk(metaclass=PoolMeta):
                     if line.product else None,
                     })
         party = sale.party
+        result.update(_who(sale))
         result.update({
+                'customer_code': party.code or '',
+                'customer_name': party.name or '',
+                'js_printed_date': sale.js_printed_date,
+                'payment_term_ref': _ref(sale.payment_term),
+                'payment_term_descr': (getattr(sale.payment_term,
+                        'description', None) or sale.payment_term.rec_name)
+                if sale.payment_term else '',
+                'receivable': cls._receivable(party),
                 'js_status': sale.js_status,
                 'js_hold': sale.js_hold,
                 'js_quote': sale.js_quote or '',
@@ -140,13 +216,66 @@ class Desk(metaclass=PoolMeta):
                     or party.address_get(type='invoice'), party),
                 'ship_to': _address(sale.shipment_address, party),
                 'credit_status': party.credit_status,
+                'customer_mobile': getattr(party, 'customer_mobile', '')
+                or '',
+                'js_copy_notes': bool(sale.js_copy_notes),
                 'charges': [cls._charge(c) for c in sale.charges],
                 'taxes': cls._sale_taxes(sale),
                 'shippers': cls._sale_documents(sale),
                 })
         for name in HEADER_M2O:
             result[name] = _ref(getattr(sale, name))
+        for name in ADDRESS_FIELDS:
+            result[name] = getattr(sale, name) or ''
         return result
+
+    @classmethod
+    def _quoted_products(cls, products):
+        "The parts with quote lines (the line grid's Quote(s) Exist)"
+        try:
+            Line = Pool().get('nline.quote.line')
+        except KeyError:
+            return set()
+        if not products:
+            return set()
+        with without_check_access():
+            return {l.product.id for l in Line.search([
+                        ('product', 'in', [p.id for p in products]),
+                        ]) if l.product}
+
+    @classmethod
+    def _receivable(cls, party):
+        "The Receivables Acct ID shown read-only (accounting's account)"
+        try:
+            account = party.account_receivable_used
+        except Exception:
+            account = None
+        return account.rec_name if account else ''
+
+    @classmethod
+    def sales_order_printed(cls, sale):
+        "The acknowledgement was printed: Jobshop's Printed Date"
+        pool = Pool()
+        Sale = pool.get('sale.sale')
+        Date = pool.get('ir.date')
+        cls._check_read('sale.sale')
+        sale = Sale(sale)
+        # Read-only on the form: any user who may print the order sets it
+        with without_check_access():
+            Sale.write([sale], {'js_printed_date': Date.today()})
+        return True
+
+    @classmethod
+    def sales_invoice_printed(cls, invoices):
+        "The invoices were printed: Jobshop's Invoice Printed Date"
+        pool = Pool()
+        Invoice = pool.get('account.invoice')
+        Date = pool.get('ir.date')
+        cls._check_read('account.invoice')
+        invoices = Invoice.browse([int(i) for i in invoices])
+        with without_check_access():
+            Invoice.write(invoices, {'js_printed_date': Date.today()})
+        return True
 
     @classmethod
     def _charge(cls, charge):
@@ -190,33 +319,115 @@ class Desk(metaclass=PoolMeta):
 
     @classmethod
     def _sale_documents(cls, sale):
-        "The Shippers/Invoices tab"
-        rows = []
-        for shipment in sale.shipments:
+        """The Shippers/Invoices tab: a row per shipper (or return) with its
+        Jobshop status and its invoice, then the invoices of no shipper"""
+        rows, seen = [], set()
+        shipments = [(s, False) for s in sale.shipments] + [
+            (s, True) for s in sale.shipment_returns]
+        # The return orders made from this order have the returns
+        for returned in Pool().get('sale.sale').search([
+                    ('origin', '=', str(sale))]):
+            shipments += [(s, True) for s in returned.shipment_returns]
+        for shipment, is_return in shipments:
+            invoices = cls._shipment_invoices(shipment)
+            seen.update(i.id for i in invoices)
+            amount = cls._moves_amount(shipment.incoming_moves if is_return
+                else shipment.outgoing_moves)
             rows.append({
                     'model': shipment.__name__, 'id': shipment.id,
                     'number': shipment.number or str(shipment.id),
-                    'type': 'Shipment', 'state': shipment.state,
+                    'type': 'Return' if is_return else 'Shipment',
+                    'status': cls._shipper_status(shipment),
+                    'state': shipment.state,
                     'date': shipment.effective_date or shipment.planned_date,
-                    'amount': cls._moves_amount(shipment.outgoing_moves),
-                    })
-        for shipment in sale.shipment_returns:
-            rows.append({
-                    'model': shipment.__name__, 'id': shipment.id,
-                    'number': shipment.number or str(shipment.id),
-                    'type': 'Return', 'state': shipment.state,
-                    'date': shipment.effective_date or shipment.planned_date,
-                    'amount': -cls._moves_amount(shipment.incoming_moves),
+                    'shipped_date': shipment.effective_date,
+                    'amount': -amount if is_return else amount,
+                    'invoice': {'id': invoices[0].id,
+                        'number': invoices[0].number or ''}
+                    if invoices else None,
+                    'invoice_number': ', '.join(i.number or '(draft)'
+                        for i in invoices),
+                    'invoiced_date': min((i.invoice_date for i in invoices
+                            if i.invoice_date), default=None),
+                    'credit_applied': sum((i.total_amount - i.amount_to_pay
+                            for i in invoices if i.state in {'posted', 'paid'}
+                            and i.total_amount < 0), Decimal(0)),
+                    'invoiced_amount': sum((i.total_amount for i in invoices),
+                        Decimal(0)),
                     })
         for invoice in sale.invoices:
+            if invoice.id in seen:
+                continue
             rows.append({
                     'model': 'account.invoice', 'id': invoice.id,
-                    'number': invoice.number or '',
+                    'number': '',
                     'type': 'Invoice' if invoice.total_amount >= 0
                     else 'Credit Memo',
+                    'status': 'approved' if invoice.state in {
+                        'posted', 'paid'} else 'cancelled'
+                    if invoice.state == 'cancelled' else 'unapproved',
                     'state': invoice.state, 'date': invoice.invoice_date,
-                    'amount': invoice.total_amount,
+                    'shipped_date': None,
+                    'amount': Decimal(0),
+                    'invoice': {'id': invoice.id,
+                        'number': invoice.number or ''},
+                    'invoice_number': invoice.number or '(draft)',
+                    'invoiced_date': invoice.invoice_date,
+                    'credit_applied': Decimal(0),
+                    'invoiced_amount': invoice.total_amount,
                     })
+        return rows
+
+    @classmethod
+    def sales_shipper_browse(cls, text=None):
+        """The Shipping window's Browse tab: Shipper ID, Sales Order ID,
+        Customer Name, Shipper Status, Shipper Type"""
+        cls._check_read('stock.shipment.out')
+        pool = Pool()
+        rows = []
+        for model, kind in [('stock.shipment.out', 'Shipment'),
+                ('stock.shipment.out.return', 'Return')]:
+            Shipment = pool.get(model)
+            domain = []
+            if text:
+                domain = ['OR', ('number', 'ilike', text),
+                    ('customer.name', 'ilike', text),
+                    ('reference', 'ilike', text)]
+            for shipment in Shipment.search(domain,
+                    order=[('id', 'DESC')], limit=300):
+                sales = cls._shipment_sales(shipment)
+                rows.append({
+                        'id': shipment.id, 'model': model,
+                        'number': shipment.number or str(shipment.id),
+                        'sales': ', '.join(s.number or str(s.id)
+                            for s in sales),
+                        'customer': shipment.customer.rec_name,
+                        'status': cls._shipper_status(shipment),
+                        'type': kind,
+                        })
+        rows.sort(key=lambda r: r['number'], reverse=True)
+        return rows
+
+    @classmethod
+    def sales_invoice_browse(cls, text=None):
+        """The Invoicing window's Browse tab: Invoice ID, Shipper ID, Sales
+        Order ID, Customer Name, Shipper Status, Shipper Type, Posted"""
+        cls._check_read('account.invoice')
+        Invoice = Pool().get('account.invoice')
+        domain = [('type', '=', 'out')]
+        if text:
+            domain.append(['OR', ('number', 'ilike', text),
+                    ('party.name', 'ilike', text),
+                    ('reference', 'ilike', text)])
+        rows = []
+        for invoice in Invoice.search(domain, order=[('id', 'DESC')],
+                limit=300):
+            row = cls._invoice_row(invoice)
+            row['status'] = 'cancelled' if invoice.state == 'cancelled' \
+                else 'approved' if invoice.state in {'posted', 'paid'} \
+                else 'unapproved'
+            row['posted'] = invoice.state in {'posted', 'paid'}
+            rows.append(row)
         return rows
 
     @classmethod
@@ -247,6 +458,7 @@ class Desk(metaclass=PoolMeta):
             'credit_status': party.credit_status,
             'credit_limit': party.credit_limit,
             'tax_exempt': party.customer_tax_exempt,
+            'customer_mobile': getattr(party, 'customer_mobile', '') or '',
             'sold_to': _address(party.address_get(type='invoice'), party),
             'ship_to': _address(sale.shipment_address, party),
             }
@@ -255,15 +467,18 @@ class Desk(metaclass=PoolMeta):
         return result
 
     @classmethod
-    def sales_price(cls, party, product, quantity=1, date=None):
+    def sales_price(cls, party, product, quantity=1, date=None, unit=None):
         """Reset unit price from customer: the customer's price break, the
-        discount class's, then the part's price less the class's discount"""
+        discount class's, then the part's price less the class's discount;
+        the part's price in the line's selling U/M (unit)"""
         cls._check_read('sale.sale')
         pool = Pool()
         Party = pool.get('party.party')
         Product = pool.get('product.product')
-        price, discount, customer_part, source = Party(party).sale_price(
-            Product(product), float(quantity or 1), _date(date))
+        context = {'uom': int(unit)} if unit else {}
+        with Transaction().set_context(**context):
+            price, discount, customer_part, source = Party(party).sale_price(
+                Product(product), float(quantity or 1), _date(date))
         return {
             'gross_unit_price': price,
             'trade_discount': discount,
@@ -354,8 +569,11 @@ class Desk(metaclass=PoolMeta):
         for name in HEADER_OTHER:
             if name in values:
                 value = values[name]
-                write[name] = _date(value) if name.endswith('date') \
-                    else (value or None)
+                if name in HEADER_BOOLEAN:
+                    write[name] = bool(value)
+                else:
+                    write[name] = _date(value) if name.endswith('date') \
+                        else (value or None)
         if sale.state != 'draft':
             # The documents' references may still change (Jobshop)
             for name in ['reference', 'description']:
@@ -370,18 +588,25 @@ class Desk(metaclass=PoolMeta):
     def _line_values(cls, data, released=False):
         write = {}
         for name in LINE_M2O:
+            if released and name in LINE_LOCKED:
+                continue
             if name in data:
                 value = data[name]
                 write[name] = value.get('id') if isinstance(value, dict) \
                     else value
+        if write.get('unit') is None:
+            write.pop('unit', None)
         for name in LINE_OTHER:
-            if released and name in {'gross_unit_price', 'trade_discount'}:
+            if released and name in LINE_LOCKED:
                 continue
             if name in data:
                 value = data[name]
-                if name.endswith('date'):
+                if name in LINE_BOOLEAN:
+                    value = bool(value)
+                elif name.endswith('date'):
                     value = _date(value) or None
-                elif name in {'gross_unit_price', 'trade_discount'}:
+                elif name in {'gross_unit_price', 'trade_discount',
+                        'commission_percent'}:
                     value = None if value in (None, '') else _decimal(value)
                 else:
                     value = value or None
@@ -508,6 +733,167 @@ class Desk(metaclass=PoolMeta):
         return cls.sale_order_get(sale.id)
 
     @classmethod
+    def _quote_model(cls):
+        "Estimating's quote (module nline_js_engineering), when installed"
+        try:
+            return Pool().get('nline.quote')
+        except KeyError:
+            raise ValidationError(gettext('nline_js_sales.msg_no_quotes'))
+
+    @classmethod
+    def sales_quote_get(cls, quote):
+        """Create Sales Order from Quote: the quote and its lines as the
+        dialog shows them (each line at the quantity in the quote's
+        total, its other quantities to choose from)"""
+        Quote = cls._quote_model()
+        cls._check_read('nline.quote')
+        pool = Pool()
+        Product = pool.get('product.product')
+        quote = Quote(quote)
+        products = list({l.product for l in quote.lines if l.product})
+        with Transaction().set_context(
+                locations=cls._warehouse_ids(), with_childs=True):
+            available = {p.id: p.quantity for p in Product.browse(products)}
+        lines = []
+        for line in quote.lines:
+            price = line.total_price()
+            lines.append({
+                    'id': line.id,
+                    'line_no': line.line_no,
+                    'status': line.status,
+                    'include': line.status == 'open' and price is not None,
+                    'product': _ref(line.product),
+                    'description': line.description or '',
+                    'unit': _ref(line.unit),
+                    'quantity': price.quantity if price else 0,
+                    'unit_price': price.net_price() if price else None,
+                    'trade_discount': price.trade_discount if price else 0,
+                    'leadtime': price.leadtime if price else None,
+                    'cost_from': line.cost_from,
+                    'quote_master': _ref(line.quote_master),
+                    'bom': _ref(line.bom),
+                    'desired_ship_date': line.desired_ship_date,
+                    'available': available.get(line.product.id)
+                    if line.product else None,
+                    'stock_unit': line.product.default_uom.rec_name
+                    if line.product else '',
+                    'prices': [{'quantity': p.quantity,
+                            'unit_price': p.net_price()}
+                        for p in line.prices],
+                    })
+        return {
+            'id': quote.id,
+            'number': quote.number or '',
+            'status': quote.status,
+            'party': _ref(quote.party),
+            'customer_reference': quote.customer_reference or '',
+            'quoted_leadtime': quote.quoted_leadtime,
+            'desired_ship_date': quote.desired_ship_date,
+            'sale': _ref(quote.sale),
+            'lines': lines,
+            }
+
+    @classmethod
+    def sales_order_from_quote(cls, values):
+        """File > New Document From > Quote: a sales order of the chosen
+        lines of an Estimating quote (values: quote, number, sale_date,
+        shipping_date, reference, status, lines [{id, include, quantity,
+        desired_ship_date}]); the quote is Won and points to the order"""
+        Quote = cls._quote_model()
+        pool = Pool()
+        Sale = pool.get('sale.sale')
+        SaleLine = pool.get('sale.line')
+        Date = pool.get('ir.date')
+        cls._check_read('nline.quote')
+        cls._check_create('sale.sale', 'sale.line')
+        quote = Quote(values['quote'])
+        if not quote.party:
+            raise ValidationError(gettext(
+                    'nline_js_sales.msg_quote_no_customer',
+                    quote=quote.rec_name))
+        if quote.status in {'won', 'lost', 'cancelled'} and quote.sale:
+            raise ValidationError(gettext(
+                    'nline_js_sales.msg_quote_used', quote=quote.rec_name,
+                    sale=quote.sale.rec_name))
+        chosen = {l['id']: l for l in values.get('lines') or []}
+        today = Date.today()
+        sale = Sale(company=cls._company(), party=quote.party,
+            sale_date=_date(values.get('sale_date')) or today)
+        sale.on_change_party()
+        sale.reference = values.get('reference') \
+            or quote.customer_reference or None
+        sale.shipping_date = _date(values.get('shipping_date')) or (
+            today + dt.timedelta(days=quote.quoted_leadtime)
+            if quote.quoted_leadtime else quote.desired_ship_date)
+        if quote.payment_term:
+            sale.payment_term = quote.payment_term
+        if quote.specifications:
+            sale.js_specs = quote.specifications
+        sale.js_quote = quote.number
+        lines = []
+        for qline in quote.lines:
+            data = chosen.get(qline.id, {})
+            price = qline.total_price()
+            include = data.get('include', qline.status == 'open'
+                and price is not None)
+            if not include:
+                continue
+            quantity = float(data.get('quantity') or (price.quantity
+                    if price else 1) or 1)
+            # The price of the largest quantity quoted the order reaches
+            unit_price = price.net_price() if price else Decimal(0)
+            for p in sorted(qline.prices, key=lambda p: p.quantity or 0):
+                if quantity >= (p.quantity or 0):
+                    unit_price = p.net_price()
+            line = SaleLine(sale=sale, type='line')
+            if qline.product and qline.product.salable:
+                line.product = qline.product
+                line.quantity = quantity
+                line.on_change_product()
+                if qline.unit and line.unit and \
+                        qline.unit.category == line.unit.category:
+                    line.unit = qline.unit
+            else:
+                line.unit = qline.unit
+            line.quantity = quantity
+            line.gross_unit_price = unit_price
+            line.trade_discount = Decimal(0)
+            line.unit_price = unit_price
+            line.description = qline.description or (
+                qline.product.rec_name if qline.product else '')
+            line.customer_part = qline.customer_part
+            line.drawing_id = qline.drawing_number
+            line.drawing_rev = qline.drawing_revision
+            line.product_code = qline.product_code
+            line.commodity_code = qline.commodity_code
+            line.js_line_specs = qline.specifications
+            line.promise_date = qline.promise_date
+            line.js_desired_date = _date(data.get('desired_ship_date')) \
+                or qline.desired_ship_date
+            line.quote_line_no = qline.line_no
+            line.commissionable = True
+            line.sequence = len(lines) + 1
+            lines.append(line)
+        if not lines:
+            raise ValidationError(gettext(
+                    'nline_js_sales.msg_quote_no_lines', quote=quote.rec_name))
+        sale.lines = lines
+        sale.save()
+        number = (values.get('number') or '').strip()
+        if number:
+            cls._save_order_header(sale, {'number': number})
+        if sale.tax_group or sale.tax_exempt:
+            cls._save_order_lines(sale, [{} for _ in sale.lines])
+        status = values.get('status') or 'unreleased'
+        if status != 'unreleased':
+            cls.sales_order_status(sale.id, status)
+        # Jobshop marks the quote Won (the sales user may not edit quotes)
+        with without_check_access():
+            Quote.write([quote], {'status': 'won', 'won_loss_date': today,
+                    'sale': sale.id})
+        return cls.sale_order_get(sale.id)
+
+    @classmethod
     def sales_order_status(cls, sale, status):
         """Change Status: Jobshop's status from Tryton's states
         (Unreleased: draft, Firm: quotation, Released: confirmed), Hold and
@@ -579,19 +965,226 @@ class Desk(metaclass=PoolMeta):
         Sale.delete([sale])
         return True
 
+    # ---- Lines dialogs (View > Sales Order Lines..., right-click menus) ---
+
+    @classmethod
+    def sales_order_lines(cls, filters):
+        """The Sales Order Lines dialogs (customer's, part's, order's):
+        filters {party, product, sale, statuses: Jobshop order statuses
+        (none: all)} -> rows with Jobshop's columns"""
+        cls._check_read('sale.sale')
+        pool = Pool()
+        Line = pool.get('sale.line')
+        domain = [('type', '=', 'line')]
+        if filters.get('party'):
+            domain.append(('sale.party', '=', int(filters['party'])))
+        if filters.get('product'):
+            domain.append(('product', '=', int(filters['product'])))
+        if filters.get('sale'):
+            domain.append(('sale', '=', int(filters['sale'])))
+        if filters.get('statuses'):
+            domain.append(('sale.js_status', 'in', filters['statuses']))
+        rows = []
+        for line in Line.search(domain, order=[('sale.sale_date', 'DESC'),
+                    ('sale', 'DESC'), ('sequence', 'ASC'), ('id', 'ASC')],
+                limit=int(filters.get('limit') or 500)):
+            sale = line.sale
+            numbers = [l.id for l in sale.lines if l.type == 'line']
+            shipped = line.js_shipped_quantity or 0
+            rows.append({
+                    'id': line.id,
+                    'sale': {'id': sale.id, 'number': sale.number
+                        or str(sale.id)},
+                    'linked': bool(getattr(line, 'productions', None)),
+                    'customer': sale.party.code or sale.party.rec_name,
+                    'ship_to_name': sale.shipment_address.party_name
+                    if sale.shipment_address
+                    and sale.shipment_address.party_name else '',
+                    'sales_rep': sale.sales_rep.code if sale.sales_rep
+                    else '',
+                    'order_date': sale.sale_date,
+                    'order_status': sale.js_status,
+                    'contact': sale.party.customer_contact or '',
+                    'desired_ship_date': sale.shipping_date,
+                    'reference': sale.reference or '',
+                    'po_line': line.customer_po_line or '',
+                    'line_no': numbers.index(line.id) + 1
+                    if line.id in numbers else None,
+                    'line_status': line.js_line_status,
+                    'line_desired_date': line.js_desired_date
+                    or line.shipping_date,
+                    'quantity': line.quantity,
+                    'shipped_quantity': shipped,
+                    'product': _ref(line.product),
+                    'description': line.description or '',
+                    'unit': line.unit.rec_name if line.unit else '',
+                    'unit_price': line.gross_unit_price
+                    if line.gross_unit_price is not None else line.unit_price,
+                    'trade_discount': line.trade_discount or Decimal(0),
+                    'amount': line.amount,
+                    'shipped_amount': (Decimal(str(shipped))
+                        * (line.unit_price or Decimal(0))).quantize(
+                        Decimal('0.01')),
+                    'customer_part': line.customer_part or '',
+                    'product_code': line.product_code.code
+                    if line.product_code else '',
+                    'commodity_code': line.commodity_code.code
+                    if line.commodity_code else '',
+                    'drawing_id': line.drawing_id or '',
+                    'drawing_rev': line.drawing_rev or '',
+                    })
+        return rows
+
+    @classmethod
+    def sales_part_lines(cls, kind, product, statuses=None):
+        """View All Quote / PO Lines for Part by Status of: the quote lines
+        (Estimating) or purchase order lines of the part"""
+        pool = Pool()
+        rows = []
+        if kind == 'quote':
+            cls._quote_model()
+            cls._check_read('nline.quote')
+            Line = pool.get('nline.quote.line')
+            domain = [('product', '=', int(product))]
+            if statuses:
+                domain.append(('quote.status', 'in', statuses))
+            for line in Line.search(domain, order=[('id', 'DESC')],
+                    limit=500):
+                quote = line.quote
+                rows.append({
+                        'id': line.id,
+                        'quote': {'id': quote.id, 'number': quote.number},
+                        'customer': quote.party.code or quote.party.rec_name
+                        if quote.party else '',
+                        'quote_date': quote.quote_date,
+                        'status': quote.status,
+                        'line_no': line.line_no,
+                        'product': _ref(line.product),
+                        'description': line.description or '',
+                        'customer_part': line.customer_part or '',
+                        'product_code': line.product_code.code
+                        if line.product_code else '',
+                        'commodity_code': line.commodity_code.code
+                        if line.commodity_code else '',
+                        'desired_ship_date': line.desired_ship_date,
+                        'quantity': line.quantity,
+                        'unit_price': line.unit_price,
+                        })
+        elif kind == 'purchase':
+            cls._check_read('purchase.purchase')
+            Line = pool.get('purchase.line')
+            domain = [('product', '=', int(product)), ('type', '=', 'line')]
+            if statuses:
+                domain.append(('purchase.state', 'in', statuses))
+            for line in Line.search(domain, order=[('id', 'DESC')],
+                    limit=500):
+                purchase = line.purchase
+                rows.append({
+                        'id': line.id,
+                        'purchase': {'id': purchase.id,
+                            'number': purchase.number or str(purchase.id)},
+                        'supplier': purchase.party.code
+                        or purchase.party.rec_name,
+                        'order_date': purchase.purchase_date,
+                        'status': purchase.state,
+                        'quantity': line.quantity,
+                        'unit': line.unit.rec_name if line.unit else '',
+                        'unit_price': line.unit_price,
+                        'delivery_date': line.delivery_date,
+                        'description': line.description or '',
+                        })
+        return rows
+
+    @classmethod
+    def sales_shipper_lines(cls, sale, statuses=None):
+        """The order's Shippers/Invoices tab: View Shipper Lines... (all the
+        shipped and returned lines), by Jobshop shipper status"""
+        cls._check_read('sale.sale')
+        pool = Pool()
+        Sale = pool.get('sale.sale')
+        sale = Sale(sale)
+        numbers = [l.id for l in sale.lines if l.type == 'line']
+        rows = []
+        shipments = list(sale.shipments) + list(sale.shipment_returns)
+        for shipment in shipments:
+            status = cls._shipper_status(shipment)
+            if statuses and status not in statuses:
+                continue
+            is_return = shipment.__name__ == 'stock.shipment.out.return'
+            moves = shipment.incoming_moves if is_return \
+                else shipment.outgoing_moves
+            for number, move in enumerate(moves, 1):
+                line = move.origin if move.origin and \
+                    move.origin.__name__ == 'sale.line' else None
+                quantity = -move.quantity if is_return else move.quantity
+                rows.append({
+                        'transacted': move.state == 'done',
+                        'shipper': {'id': shipment.id,
+                            'model': shipment.__name__,
+                            'number': shipment.number or str(shipment.id)},
+                        'status': status,
+                        'type': 'Return' if is_return else 'Shipment',
+                        'shipped_date': shipment.effective_date,
+                        'line_no': number,
+                        'sales_line_no': numbers.index(line.id) + 1
+                        if line and line.id in numbers else None,
+                        'product': _ref(move.product),
+                        'description': (line.description if line else '')
+                        or move.product.rec_name,
+                        'quantity': quantity,
+                        'unit': move.unit.rec_name,
+                        'unit_price': move.unit_price,
+                        'amount': (Decimal(str(quantity))
+                            * (move.unit_price or Decimal(0))).quantize(
+                            Decimal('0.01')),
+                        'customer_part': line.customer_part or ''
+                        if line else '',
+                        'product_code': line.product_code.code
+                        if line and line.product_code else '',
+                        'commodity_code': line.commodity_code.code
+                        if line and line.commodity_code else '',
+                        })
+        return rows
+
+    @classmethod
+    def _shipper_status(cls, shipment):
+        """Jobshop's shipper status: Cancelled, Approved (invoiced: its
+        invoice posted) or Unapproved"""
+        if shipment.state == 'cancelled':
+            return 'cancelled'
+        invoices = cls._shipment_invoices(shipment)
+        if invoices and all(i.state in {'posted', 'paid'} for i in invoices):
+            return 'approved'
+        return 'unapproved'
+
+    @classmethod
+    def _shipment_invoices(cls, shipment):
+        invoices = []
+        for move in shipment.moves:
+            for line in getattr(move, 'invoice_lines', []) or []:
+                if line.invoice and line.invoice.state != 'cancelled' \
+                        and line.invoice not in invoices:
+                    invoices.append(line.invoice)
+        return invoices
+
     # ---- Shipping ---------------------------------------------------------
 
     @classmethod
-    def sales_shipping_activity(cls, shipped=False):
+    def sales_shipping_activity(cls, shipped=False, horizon=None,
+            can_ship_only=False):
         """The Shipping Activity tab: the shippers to ship (View Unshipped
         Orders) or shipped in the last 90 days (View Shipped Orders), and
-        the returns to receive"""
+        the returns to receive. horizon: Jobshop's "Show Sales Orders with
+        a Desired Ship Date On or Before"; can_ship_only: "Show Only Orders
+        where 'Some Can Ship'" (a line has stock to ship)"""
         cls._check_read('stock.shipment.out')
         pool = Pool()
         Shipment = pool.get('stock.shipment.out')
         Return = pool.get('stock.shipment.out.return')
+        Product = pool.get('product.product')
         Date = pool.get('ir.date')
         today = Date.today()
+        horizon = _date(horizon)
         if shipped:
             domain = [('state', '=', 'done'),
                 ('effective_date', '>=', today - dt.timedelta(days=90))]
@@ -599,15 +1192,35 @@ class Desk(metaclass=PoolMeta):
         else:
             domain = [('state', 'in',
                     ['draft', 'waiting', 'assigned', 'picked', 'packed'])]
+            if horizon:
+                domain.append(('planned_date', '<=', horizon))
             order = [('planned_date', 'ASC')]
+        shipments = Shipment.search(domain, order=order, limit=500)
+        # The stock of the parts to ship, once: "Some Can Ship"
+        products = list({m.product for s in shipments
+                for m in s.outgoing_moves})
+        with Transaction().set_context(
+                locations=cls._warehouse_ids(), with_childs=True):
+            available = {p.id: p.quantity or 0
+                for p in Product.browse(products)}
         rows = []
-        for shipment in Shipment.search(domain, order=order, limit=500):
-            rows.append(cls._activity_row(shipment, False, today))
-        if not shipped:
+        for shipment in shipments:
+            row = cls._activity_row(shipment, False, today)
+            row['some_can_ship'] = shipment.state != 'done' and (
+                shipment.state in {'assigned', 'picked', 'packed'}
+                or any(available.get(m.product.id, 0) > 0
+                    for m in shipment.outgoing_moves
+                    if m.state not in {'done', 'cancelled'}))
+            if can_ship_only and not row['some_can_ship']:
+                continue
+            rows.append(row)
+        if not shipped and not can_ship_only:
             for shipment in Return.search(
                     [('state', 'in', ['draft', 'received'])],
                     order=[('planned_date', 'ASC')], limit=200):
-                rows.append(cls._activity_row(shipment, True, today))
+                row = cls._activity_row(shipment, True, today)
+                row['some_can_ship'] = False
+                rows.append(row)
         return rows
 
     @classmethod
@@ -622,7 +1235,12 @@ class Desk(metaclass=PoolMeta):
     @classmethod
     def _activity_row(cls, shipment, is_return, today):
         sales = cls._shipment_sales(shipment)
-        planned = shipment.planned_date
+        address = (shipment.delivery_address if not is_return
+            else shipment.contact_address)
+        carrier = getattr(shipment, 'js_carrier', None) or (
+            sales[0].js_carrier if sales else None)
+        planned = shipment.planned_date or (sales[0].shipping_date
+            if sales else None)
         messages = []
         if any(s.js_hold for s in sales):
             messages.append('On hold')
@@ -646,6 +1264,9 @@ class Desk(metaclass=PoolMeta):
             'planned_date': planned,
             'effective_date': shipment.effective_date,
             'message': '; '.join(messages),
+            'carrier': carrier.code if carrier else '',
+            'ship_to_name': (address.party_name or '')
+            if address else '',
             }
 
     @classmethod
@@ -666,17 +1287,43 @@ class Desk(metaclass=PoolMeta):
         with Transaction().set_context(locations=[location.id],
                 with_childs=True):
             available = {p.id: p.quantity for p in Product.browse(products)}
+        Uom = pool.get('product.uom')
         lines = []
         for number, move in enumerate(moves, 1):
             sale_line = move.origin if move.origin and \
                 move.origin.__name__ == 'sale.line' else None
+            numbers = [l.id for l in sale_line.sale.lines
+                if l.type == 'line'] if sale_line else []
+            stock_unit = move.product.default_uom
+            stock_qty = Uom.compute_qty(move.unit, move.quantity, stock_unit)
+            free = available.get(move.product.id) or 0
             lines.append({
                     'move': move.id,
                     'line_no': number,
                     'sale': sale_line.sale.number if sale_line else '',
-                    'so_line_no': sale_line.sequence if sale_line else None,
-                    'desired_date': (sale_line.shipping_date
+                    'so_line_no': numbers.index(sale_line.id) + 1
+                    if sale_line and sale_line.id in numbers else None,
+                    'desired_date': ((sale_line.js_desired_date
+                            or sale_line.shipping_date
+                            or sale_line.sale.shipping_date)
                         if sale_line else move.planned_date),
+                    'ship_via': ((sale_line.js_ship_via
+                            or sale_line.sale.ship_via).rec_name
+                        if sale_line and (sale_line.js_ship_via
+                            or sale_line.sale.ship_via) else ''),
+                    'tracked': bool(getattr(move.product, 'lot_tracked',
+                            None)),
+                    'lot': move.lot.rec_name if getattr(move, 'lot', None)
+                    else '',
+                    'stock_quantity': stock_qty,
+                    'stock_unit': stock_unit.rec_name,
+                    'could_ship': stock_qty if move.state in {
+                        'assigned', 'done'} else max(0, min(stock_qty,
+                            free)),
+                    'linked': bool(getattr(sale_line, 'productions', None))
+                    if sale_line else False,
+                    'user_0': sale_line.user_0 or '' if sale_line else '',
+                    'user_1': sale_line.user_1 or '' if sale_line else '',
                     'product': _ref(move.product),
                     'description': (sale_line.description if sale_line
                         else '') or move.product.rec_name,
@@ -703,15 +1350,33 @@ class Desk(metaclass=PoolMeta):
             invoices += [i for i in s.invoices if i not in invoices]
         address = shipment.delivery_address if not is_return \
             else shipment.contact_address
+        own = cls._shipment_invoices(shipment)
+        due = [l.maturity_date for i in own
+            for l in (getattr(i, 'lines_to_pay', None) or [])
+            if l.maturity_date]
         result = {
             'id': shipment.id,
             'model': model,
             'return': is_return,
+            'js_shipper_status': cls._shipper_status(shipment),
+            'shipped_by': shipment.write_uid.rec_name
+            if shipment.state == 'done' and shipment.write_uid else '',
+            'invoice_id': ', '.join(i.number or '' for i in own),
+            'invoiced_date': min((i.invoice_date for i in own
+                    if i.invoice_date), default=None),
+            'payment_due': min(due, default=None),
+            'printed_date': max((i.js_printed_date for i in own
+                    if getattr(i, 'js_printed_date', None)), default=None),
+            'receivable': cls._receivable(shipment.customer),
             'number': shipment.number or str(shipment.id),
             'state': shipment.state,
             'sales': [{'id': s.id, 'number': s.number or str(s.id),
                     'js_status': s.js_status} for s in sales],
             'customer': _ref(shipment.customer),
+            'customer_code': shipment.customer.code or '',
+            'payment_term_descr': (getattr(sale.payment_term, 'description',
+                    None) or sale.payment_term.rec_name)
+            if sale and sale.payment_term else '',
             'reference': (sale.reference if sale else None)
             or shipment.reference or '',
             'order_date': sale.sale_date if sale else None,
@@ -745,6 +1410,7 @@ class Desk(metaclass=PoolMeta):
                 value = getattr(shipment, name) or (
                     getattr(sale, name) if sale else None)
                 result[name] = _ref(value)
+        result.update(_who(shipment))
         return result
 
     @classmethod
@@ -820,6 +1486,13 @@ class Desk(metaclass=PoolMeta):
                 Shipment.wait([shipment])
             Sale.process(sales)
 
+        # Close Short: the rest of the line is not back ordered, the line
+        # is closed (Jobshop's check box on the shipper line)
+        short = {l['move'] for l in values.get('lines') or []
+            if l.get('move') and l.get('close_short')}
+        if short:
+            cls._close_short(shipment, short)
+
         # The charges applied on this shipment
         for data in values.get('charges') or []:
             charge = Charge(data['id'])
@@ -852,12 +1525,67 @@ class Desk(metaclass=PoolMeta):
             shipment = Shipment(shipment.id)
             if shipment.state == 'packed':
                 Shipment.done([shipment])
+            cls._copy_notes(sales, shipment)
             pending = [c for s in sales for c in s.charges if c.pending]
             if pending:
                 Charge.write(pending, {'shipment': shipment.id})
             Sale.process([Sale(s.id) for s in sales])
             Charge.apply_to_draft_invoices(pending)
         return cls.sales_shipper_get(shipment.id)
+
+    @classmethod
+    def _copy_notes(cls, sales, shipment):
+        "Copy Notes to Shipper (the order's Notes tab check box)"
+        Note = Pool().get('ir.note')
+        resource = str(shipment)
+        with without_check_access():
+            have = {n.message for n in Note.search([
+                        ('resource', '=', resource)])}
+            new = [{'resource': resource, 'message': n.message}
+                for s in sales if s.js_copy_notes
+                for n in Note.search([('resource', '=', str(s))])
+                if n.message not in have]
+            if new:
+                Note.create(new)
+
+    @classmethod
+    def _close_short(cls, shipment, move_ids):
+        """Cancel the back orders of the sale lines of the moves (ignored by
+        the order, so it is not shipped again) and close the lines"""
+        pool = Pool()
+        Move = pool.get('stock.move')
+        SaleLine = pool.get('sale.line')
+        Shipment = pool.get('stock.shipment.out')
+        Sale = pool.get('sale.sale')
+        shipment = Shipment(shipment.id)
+        lines = {m.origin for m in shipment.outgoing_moves
+            if m.id in move_ids and m.origin
+            and m.origin.__name__ == 'sale.line'}
+        others, emptied = [], set()
+        for line in SaleLine.browse(list(lines)):
+            for move in line.moves:
+                if move.shipment != shipment and move.state in {
+                        'staging', 'draft', 'waiting', 'assigned'}:
+                    others.append(move)
+                    if move.shipment:
+                        emptied.add(move.shipment)
+        if others:
+            Move.cancel(others)
+            for line in SaleLine.browse(list(lines)):
+                ignored = [m for m in others if m.origin == line]
+                if ignored:
+                    SaleLine.write([line], {
+                            'moves_ignored': [('add', [m.id
+                                        for m in ignored])]})
+        SaleLine.write(list(lines), {'js_line_closed': True})
+        # A back order shipper left with nothing to ship is cancelled
+        for other in Shipment.browse([s.id for s in emptied]):
+            if other.state in {'draft', 'waiting', 'assigned'} and all(
+                    m.state == 'cancelled' for m in other.outgoing_moves):
+                if other.state != 'draft':
+                    Shipment.draft([other])
+                Shipment.cancel([other])
+        Sale.process(list({l.sale for l in SaleLine.browse(list(lines))}))
 
     @classmethod
     def sales_return(cls, values):
@@ -978,6 +1706,7 @@ class Desk(metaclass=PoolMeta):
         pool = Pool()
         Invoice = pool.get('account.invoice')
         Charge = pool.get('nline.sale_charge')
+        Uom = pool.get('product.uom')
         invoice = Invoice(invoice)
         sales = list(getattr(invoice, 'sales', []) or [])
         sale = sales[0] if sales else None
@@ -1002,6 +1731,15 @@ class Desk(metaclass=PoolMeta):
                     if origin else Decimal(0),
                     'amount': line.amount,
                     'sale': origin.sale.number if origin else '',
+                    'po_line': origin.customer_po_line or ''
+                    if origin else '',
+                    'stock_quantity': Uom.compute_qty(line.unit,
+                        line.quantity, line.product.default_uom)
+                    if line.product and line.unit else line.quantity,
+                    'stock_unit': line.product.default_uom.rec_name
+                    if line.product else '',
+                    'transacted': any(m.state == 'done'
+                        for m in getattr(line, 'stock_moves', []) or []),
                     })
         charges = []
         for charge in Charge.browse(list(charge_lines)):
@@ -1026,8 +1764,21 @@ class Desk(metaclass=PoolMeta):
             'shippers': [{'id': s.id, 'model': s.__name__,
                     'number': s.number or str(s.id),
                     'date': s.effective_date} for s in shipments],
-            'bill_to': _address(invoice.invoice_address, invoice.party),
-            'ship_to': _address(ship_to, invoice.party),
+            'bill_to': _address(invoice.invoice_address
+                or invoice.party.address_get(type='invoice'), invoice.party),
+            'ship_to': _address(ship_to
+                or invoice.party.address_get(type='delivery'), invoice.party),
+            'customer_code': invoice.party.code or '',
+            'customer_mobile': getattr(invoice.party, 'customer_mobile', '')
+            or '',
+            'js_printed_date': invoice.js_printed_date,
+            'exported': invoice.state in {'posted', 'paid'},
+            'exported_date': (invoice.move.post_date
+                if invoice.move and getattr(invoice.move, 'post_date', None)
+                else None),
+            'payment_term_descr': (getattr(invoice.payment_term,
+                    'description', None) or invoice.payment_term.rec_name)
+            if invoice.payment_term else '',
             'lines': lines,
             'charges': charges,
             'taxes': [{
@@ -1051,6 +1802,20 @@ class Desk(metaclass=PoolMeta):
                 'discount_class', 'freight_terms']:
             value = getattr(sale, name, None) if sale else None
             result[name] = value if name == 'freight_terms' else _ref(value)
+        due = [l.maturity_date for l in (getattr(invoice, 'lines_to_pay',
+                    None) or []) if l.maturity_date]
+        result.update(_who(invoice))
+        result.update({
+                'payment_due': min(due, default=None),
+                'paid_amount': (invoice.total_amount or Decimal(0))
+                - (invoice.amount_to_pay or Decimal(0))
+                if invoice.state in {'posted', 'paid'} else Decimal(0),
+                'paid': invoice.state == 'paid',
+                'order_date': sale.sale_date if sale else None,
+                'js_shipper_status': 'cancelled'
+                if invoice.state == 'cancelled' else 'approved'
+                if invoice.state in {'posted', 'paid'} else 'unapproved',
+                })
         return result
 
     @classmethod
@@ -1146,6 +1911,70 @@ class Desk(metaclass=PoolMeta):
                         if i not in kept], {'apply': False})
         Invoice.update_taxes([Invoice(invoice.id)])
         return cls.sales_invoice_get(invoice.id)
+
+    @classmethod
+    def sales_unpriced_lines(cls):
+        """N-Line's Set Shipper Line Unit Price window: the shipped lines
+        waiting on a draft invoice without a unit price"""
+        cls._check_read('account.invoice')
+        pool = Pool()
+        Line = pool.get('account.invoice.line')
+        rows = []
+        for line in Line.search([('invoice.type', '=', 'out'),
+                    ('invoice.state', '=', 'draft'), ('type', '=', 'line'),
+                    ('unit_price', '=', 0),
+                    ('origin', 'like', 'sale.line,%')],
+                order=[('invoice', 'ASC'), ('sequence', 'ASC'),
+                    ('id', 'ASC')], limit=500):
+            origin = line.origin
+            sale = origin.sale
+            numbers = [l.id for l in sale.lines if l.type == 'line']
+            moves = list(getattr(line, 'stock_moves', []) or [])
+            shipment = moves[0].shipment if moves else None
+            rows.append({
+                    'id': line.id,
+                    'invoice': line.invoice.id,
+                    'shipped_date': shipment.effective_date if shipment
+                    else None,
+                    'customer': sale.party.code or sale.party.rec_name,
+                    'sale': {'id': sale.id, 'number': sale.number
+                        or str(sale.id)},
+                    'sales_line_no': numbers.index(origin.id) + 1
+                    if origin.id in numbers else None,
+                    'shipper': shipment.number if shipment else '',
+                    'line_no': line.sequence,
+                    'reference': sale.reference or '',
+                    'po_line': origin.customer_po_line or '',
+                    'quantity': line.quantity,
+                    'unit_price': line.unit_price,
+                    'product': _ref(line.product),
+                    'description': line.description or '',
+                    })
+        return rows
+
+    @classmethod
+    def sales_unpriced_save(cls, lines):
+        "Set Shipper Line Unit Price: lines [{id, unit_price}]"
+        cls._check_write('account.invoice')
+        pool = Pool()
+        Invoice = pool.get('account.invoice')
+        Line = pool.get('account.invoice.line')
+        to_write, invoices = [], set()
+        for data in lines or []:
+            if data.get('unit_price') in (None, ''):
+                continue
+            line = Line(int(data['id']))
+            if line.invoice.state != 'draft':
+                raise ValidationError(gettext(
+                        'nline_js_sales.msg_invoice_not_draft',
+                        invoice=line.invoice.rec_name))
+            to_write.extend([[line], {
+                        'unit_price': _decimal(data['unit_price'])}])
+            invoices.add(line.invoice.id)
+        if to_write:
+            Line.write(*to_write)
+            Invoice.update_taxes(Invoice.browse(list(invoices)))
+        return len(to_write) // 2
 
     @classmethod
     def sales_credit_memo(cls, invoice):

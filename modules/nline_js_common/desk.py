@@ -77,7 +77,8 @@ class Desk(metaclass=PoolMeta):
     def common_alerts(cls, archived=False, limit=100):
         """The user's alert messages, newest first (the unread ones unless
         archived is true): [{id, date, type, change, subject, message,
-        document: [model, id, name] | None, archived}]"""
+        action, recipient, document: [model, id, name] | None,
+        archived}]"""
         pool = Pool()
         Message = pool.get('nline.alert_message')
         cls._check_read('nline.alert_message')
@@ -101,6 +102,9 @@ class Desk(metaclass=PoolMeta):
                     'type_string': message.alert_type_string,
                     'change': message.alert_change,
                     'change_string': message.alert_change_string,
+                    'action': message.alert_action,
+                    'action_string': message.alert_action_string,
+                    'recipient': message.recipient,
                     'subject': message.subject,
                     'message': message.message,
                     'document': document,

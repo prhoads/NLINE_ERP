@@ -512,7 +512,8 @@ class DeskAccounting(metaclass=PoolMeta):
         (accounts payable), the customers, the suppliers
         values: what (gl, ar, ap, customers, suppliers), from_date, to_date,
         reexport (also the batches exported before), batch (only this
-        batch), detail (each move line, else rolled up by account)
+        batch), detail (each move line, else rolled up by account),
+        name_as_id (customers / suppliers: the name in the ID column)
         Returns [{name, content}] (CSV text)"""
         what = values.get('what') or 'gl'
         if what not in cls.EXPORTS:
@@ -649,7 +650,7 @@ class DeskAccounting(metaclass=PoolMeta):
                     cls._invoice_rows('in', values))}]
 
     @classmethod
-    def _party_rows(cls, kind):
+    def _party_rows(cls, kind, name_as_id=False):
         pool = Pool()
         Party = pool.get('party.party')
         Invoice = pool.get('account.invoice')
@@ -659,7 +660,9 @@ class DeskAccounting(metaclass=PoolMeta):
         rows = []
         for party in Party.browse(sorted(ids)):
             address = party.addresses[0] if party.addresses else None
-            rows.append([party.code or '', party.name,
+            # Jobshop's "Substitute ... Name for ... ID"
+            rows.append([party.name if name_as_id else (party.code or ''),
+                    party.name,
                     address.street if address else '',
                     address.city if address else '',
                     address.subdivision.code if address and
@@ -676,9 +679,11 @@ class DeskAccounting(metaclass=PoolMeta):
     @classmethod
     def _export_customers(cls, values):
         return [{'name': 'customers.csv', 'content': cls._csv(
-                    cls.PARTY_HEADER, cls._party_rows('customers'))}]
+                    cls.PARTY_HEADER, cls._party_rows('customers',
+                        values.get('name_as_id')))}]
 
     @classmethod
     def _export_suppliers(cls, values):
         return [{'name': 'suppliers.csv', 'content': cls._csv(
-                    cls.PARTY_HEADER, cls._party_rows('suppliers'))}]
+                    cls.PARTY_HEADER, cls._party_rows('suppliers',
+                        values.get('name_as_id')))}]
