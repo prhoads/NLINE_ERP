@@ -3,5 +3,211 @@
 this repository contains the full copyright notices and license terms. -->
 <tryton>
     <data>
+        <record model="ir.model.access" id="access_sales_rep">
+            <field name="model" search="[('model', '=', 'nline.sales_rep')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_sales_rep_sale">
+            <field name="model" search="[('model', '=', 'nline.sales_rep')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_territory">
+            <field name="model" search="[('model', '=', 'nline.territory')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_territory_sale">
+            <field name="model" search="[('model', '=', 'nline.territory')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_sic_code">
+            <field name="model" search="[('model', '=', 'nline.sic_code')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_sic_code_sale">
+            <field name="model" search="[('model', '=', 'nline.sic_code')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_carrier">
+            <field name="model" search="[('model', '=', 'nline.carrier')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_carrier_sale">
+            <field name="model" search="[('model', '=', 'nline.carrier')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_service_charge">
+            <field name="model" search="[('model', '=', 'nline.service_charge')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_service_charge_sale">
+            <field name="model" search="[('model', '=', 'nline.service_charge')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_sales_tax_group">
+            <field name="model" search="[('model', '=', 'nline.sales_tax_group')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_sales_tax_group_sale">
+            <field name="model" search="[('model', '=', 'nline.sales_tax_group')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_sales_tax_group_line">
+            <field name="model" search="[('model', '=', 'nline.sales_tax_group.line')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_sales_tax_group_line_sale">
+            <field name="model" search="[('model', '=', 'nline.sales_tax_group.line')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_discount_class">
+            <field name="model" search="[('model', '=', 'nline.discount_class')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_discount_class_sale">
+            <field name="model" search="[('model', '=', 'nline.discount_class')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_sale_price">
+            <field name="model" search="[('model', '=', 'nline.sale_price')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_sale_price_sale">
+            <field name="model" search="[('model', '=', 'nline.sale_price')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_sale_price_break">
+            <field name="model" search="[('model', '=', 'nline.sale_price.break')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_sale_price_break_sale">
+            <field name="model" search="[('model', '=', 'nline.sale_price.break')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_sale_charge">
+            <field name="model" search="[('model', '=', 'nline.sale_charge')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_sale_charge_sale">
+            <field name="model" search="[('model', '=', 'nline.sale_charge')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+    </data>
+    <data grouped="1">
+        <record model="ir.message" id="msg_credit_hold_orders">
+            <field name="text">The credit status of customer &quot;%(party)s&quot; is Hold Orders.</field>
+        </record>
+        <record model="ir.message" id="msg_credit_hold_shipments">
+            <field name="text">The credit status of customer &quot;%(party)s&quot; is Hold Shipments.</field>
+        </record>
+        <record model="ir.message" id="msg_credit_limit">
+            <field name="text">The order amount %(amount)s of customer &quot;%(party)s&quot; is over its order limit %(limit)s.</field>
+        </record>
+        <record model="ir.message" id="msg_order_number_used">
+            <field name="text">The Order ID &quot;%(number)s&quot; is already used.</field>
+        </record>
+        <record model="ir.message" id="msg_not_a_quote">
+            <field name="text">Sales order &quot;%(sale)s&quot; is not a quote (unreleased or firm).</field>
+        </record>
+        <record model="ir.message" id="msg_status_refused">
+            <field name="text">Sales order &quot;%(sale)s&quot; can not go to status %(status)s from Tryton state %(state)s.</field>
+        </record>
+        <record model="ir.message" id="msg_order_not_deletable">
+            <field name="text">Sales order &quot;%(sale)s&quot; was released: it can not be deleted (cancel or close it).</field>
+        </record>
+        <record model="ir.message" id="msg_order_on_hold">
+            <field name="text">Sales order &quot;%(sale)s&quot; is on hold or closed: it can not be shipped.</field>
+        </record>
+        <record model="ir.message" id="msg_shipper_quantity_locked">
+            <field name="text">The quantities of shipper &quot;%(shipment)s&quot; can not change any more (it is picked).</field>
+        </record>
+        <record model="ir.message" id="msg_return_nothing">
+            <field name="text">Enter the quantity to return of at least one line.</field>
+        </record>
+        <record model="ir.message" id="msg_return_too_much">
+            <field name="text">More is returned than was shipped on line &quot;%(line)s&quot;.</field>
+        </record>
+        <record model="ir.message" id="msg_invoice_not_draft">
+            <field name="text">Invoice &quot;%(invoice)s&quot; is posted: it can not change.</field>
+        </record>
+        <record model="ir.message" id="msg_credit_memo_posted">
+            <field name="text">A credit memo is issued for a posted customer invoice; &quot;%(invoice)s&quot; is not one.</field>
+        </record>
     </data>
 </tryton>
