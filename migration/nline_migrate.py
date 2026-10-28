@@ -39,6 +39,9 @@ STEPS = ['base', 'parties', 'resources', 'parts', 'masters', 'sales',
 JS_AREAS = ['common', 'inventory', 'sales', 'purchasing', 'engineering',
     'shopfloor', 'planning', 'admin']
 STEPS += ['js_' + a for a in JS_AREAS]
+# The Common tables (terms, FOB points, ship vias...) before the parties use them
+STEPS.remove('js_common')
+STEPS.insert(1, 'js_common')
 OPEN = ('RELEASED', 'UNRELEASED', 'FIRM', 'HOLD')
 # The work center of the work orders: every Jobshop resource is under it
 SHOP = "N-Line Shop"

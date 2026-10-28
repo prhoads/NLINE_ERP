@@ -65,7 +65,7 @@ SCREENS = {
     'quotes': ('Quotes', 'quotes', True, SALE),
     'company_info': ('Company Information', 'company-info', False, None),
     'settings': ('N-Line Settings', 'settings', False, ADMIN),
-    'terms': ('Terms', 'terms', False, ACC),
+    'terms': ('Terms', 'terms', False, None),
     'lists': ('Lists', 'lists', False, None),
     'import': ('Import', 'import', True, ADMIN),
     'closing': ('Set Closing Date', 'closing', True, ACC_ADMIN),

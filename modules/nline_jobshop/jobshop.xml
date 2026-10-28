@@ -278,6 +278,11 @@ this repository contains the full copyright notices and license terms. -->
             <field name="nline_writes" eval="True"/>
             <field name="url">desk/index.html#/alert-messages</field>
         </record>
+        <record model="ir.action.url" id="url_js_currency_codes">
+            <field name="name">Currency Codes</field>
+            <field name="nline_writes" eval="True"/>
+            <field name="url">desk/index.html#/currency-codes</field>
+        </record>
         <record model="ir.action.url" id="url_js_control_panel">
             <field name="name">User Control Panel</field>
             <field name="nline_writes" eval="False"/>
@@ -353,7 +358,7 @@ this repository contains the full copyright notices and license terms. -->
         </record>
 
         <menuitem name="Inventory" sequence="2" id="menu_js_inventory" icon="tryton-stock"/>
-        <menuitem parent="menu_js_inventory" action="nline_desk.url_desk_parts"
+        <menuitem parent="menu_js_inventory" action="nline_desk.url_desk_parts" name="Parts"
             sequence="10" id="menu_js_inventory_parts"/>
         <menuitem parent="menu_js_inventory" action="url_js_units"
             sequence="20" id="menu_js_inventory_units"/>
@@ -371,11 +376,11 @@ this repository contains the full copyright notices and license terms. -->
             <field name="menu" ref="menu_js_inventory_adjustments"/>
             <field name="group" ref="stock.group_stock"/>
         </record>
-        <menuitem parent="menu_js_inventory" action="url_js_reports_inventory"
+        <menuitem parent="menu_js_inventory" action="url_js_reports_inventory" name="Reports"
             sequence="60" id="menu_js_inventory_reports"/>
 
         <menuitem name="Engineering" sequence="3" id="menu_js_engineering" icon="tryton-product"/>
-        <menuitem parent="menu_js_engineering" action="nline_desk.url_desk_masters"
+        <menuitem parent="menu_js_engineering" action="nline_desk.url_desk_masters" name="Masters"
             sequence="10" id="menu_js_engineering_masters"/>
         <record model="ir.ui.menu-res.group" id="menu_js_engineering_masters_group_production">
             <field name="menu" ref="menu_js_engineering_masters"/>
@@ -387,11 +392,11 @@ this repository contains the full copyright notices and license terms. -->
             <field name="menu" ref="menu_js_engineering_operation_templates"/>
             <field name="group" ref="production.group_production"/>
         </record>
-        <menuitem parent="menu_js_engineering" action="url_js_reports_engineering"
+        <menuitem parent="menu_js_engineering" action="url_js_reports_engineering" name="Reports"
             sequence="30" id="menu_js_engineering_reports"/>
 
         <menuitem name="Estimating" sequence="4" id="menu_js_estimating" icon="tryton-sale"/>
-        <menuitem parent="menu_js_estimating" action="nline_desk.url_desk_quotes"
+        <menuitem parent="menu_js_estimating" action="nline_desk.url_desk_quotes" name="Quotes"
             sequence="10" id="menu_js_estimating_quotes"/>
         <record model="ir.ui.menu-res.group" id="menu_js_estimating_quotes_group_sale">
             <field name="menu" ref="menu_js_estimating_quotes"/>
@@ -403,13 +408,13 @@ this repository contains the full copyright notices and license terms. -->
             <field name="menu" ref="menu_js_estimating_quote_masters"/>
             <field name="group" ref="sale.group_sale"/>
         </record>
-        <menuitem parent="menu_js_estimating" action="url_js_reports_estimating"
+        <menuitem parent="menu_js_estimating" action="url_js_reports_estimating" name="Reports"
             sequence="30" id="menu_js_estimating_reports"/>
 
         <menuitem name="Sales" sequence="5" id="menu_js_sales" icon="tryton-sale"/>
-        <menuitem parent="menu_js_sales" action="nline_desk.url_desk_customer_window"
+        <menuitem parent="menu_js_sales" action="nline_desk.url_desk_customer_window" name="Customers"
             sequence="10" id="menu_js_sales_customers"/>
-        <menuitem parent="menu_js_sales" action="nline_desk.url_desk_orders"
+        <menuitem parent="menu_js_sales" action="nline_desk.url_desk_orders" name="Sales Orders"
             sequence="20" id="menu_js_sales_orders"/>
         <record model="ir.ui.menu-res.group" id="menu_js_sales_orders_group_sale">
             <field name="menu" ref="menu_js_sales_orders"/>
@@ -433,7 +438,7 @@ this repository contains the full copyright notices and license terms. -->
             <field name="menu" ref="menu_js_sales_service_charges"/>
             <field name="group" ref="sale.group_sale"/>
         </record>
-        <menuitem parent="menu_js_sales" action="url_js_sales_tax_groups"
+        <menuitem parent="menu_js_sales" action="url_js_sales_tax_groups" name="Tax Groups"
             sequence="60" id="menu_js_sales_tax_groups"/>
         <record model="ir.ui.menu-res.group" id="menu_js_sales_tax_groups_group_sale">
             <field name="menu" ref="menu_js_sales_tax_groups"/>
@@ -469,11 +474,11 @@ this repository contains the full copyright notices and license terms. -->
             <field name="menu" ref="menu_js_sales_discount_classes"/>
             <field name="group" ref="sale.group_sale"/>
         </record>
-        <menuitem parent="menu_js_sales" action="url_js_reports_sales"
+        <menuitem parent="menu_js_sales" action="url_js_reports_sales" name="Reports"
             sequence="120" id="menu_js_sales_reports"/>
 
         <menuitem name="Purchasing" sequence="6" id="menu_js_purchasing" icon="tryton-purchase"/>
-        <menuitem parent="menu_js_purchasing" action="nline_desk.url_desk_supplier_window"
+        <menuitem parent="menu_js_purchasing" action="nline_desk.url_desk_supplier_window" name="Suppliers"
             sequence="10" id="menu_js_purchasing_suppliers"/>
         <menuitem parent="menu_js_purchasing" action="url_js_rfqs"
             sequence="20" id="menu_js_purchasing_rfqs"/>
@@ -481,7 +486,7 @@ this repository contains the full copyright notices and license terms. -->
             <field name="menu" ref="menu_js_purchasing_rfqs"/>
             <field name="group" ref="purchase.group_purchase"/>
         </record>
-        <menuitem parent="menu_js_purchasing" action="nline_desk.url_desk_purchase_orders"
+        <menuitem parent="menu_js_purchasing" action="nline_desk.url_desk_purchase_orders" name="Purchase Orders"
             sequence="30" id="menu_js_purchasing_purchase_orders"/>
         <record model="ir.ui.menu-res.group" id="menu_js_purchasing_purchase_orders_group_purchase">
             <field name="menu" ref="menu_js_purchasing_purchase_orders"/>
@@ -499,13 +504,13 @@ this repository contains the full copyright notices and license terms. -->
             <field name="menu" ref="menu_js_purchasing_services"/>
             <field name="group" ref="purchase.group_purchase"/>
         </record>
-        <menuitem parent="menu_js_purchasing" action="url_js_purchase_tax_groups"
+        <menuitem parent="menu_js_purchasing" action="url_js_purchase_tax_groups" name="Tax Groups"
             sequence="60" id="menu_js_purchasing_tax_groups"/>
         <record model="ir.ui.menu-res.group" id="menu_js_purchasing_tax_groups_group_purchase">
             <field name="menu" ref="menu_js_purchasing_tax_groups"/>
             <field name="group" ref="purchase.group_purchase"/>
         </record>
-        <menuitem parent="menu_js_purchasing" action="url_js_reports_purchasing"
+        <menuitem parent="menu_js_purchasing" action="url_js_reports_purchasing" name="Reports"
             sequence="70" id="menu_js_purchasing_reports"/>
 
         <menuitem name="Planning" sequence="7" id="menu_js_planning" icon="tryton-production"/>
@@ -521,23 +526,23 @@ this repository contains the full copyright notices and license terms. -->
             <field name="menu" ref="menu_js_planning_scheduling"/>
             <field name="group" ref="production.group_production"/>
         </record>
-        <menuitem parent="menu_js_planning" action="url_js_reports_planning"
+        <menuitem parent="menu_js_planning" action="url_js_reports_planning" name="Reports"
             sequence="30" id="menu_js_planning_reports"/>
 
         <menuitem name="Shopfloor" sequence="8" id="menu_js_shopfloor" icon="tryton-production"/>
-        <menuitem parent="menu_js_shopfloor" action="nline_desk.url_desk_work_order"
+        <menuitem parent="menu_js_shopfloor" action="nline_desk.url_desk_work_order" name="Work Orders"
             sequence="10" id="menu_js_shopfloor_work_orders"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_work_orders_group_production">
             <field name="menu" ref="menu_js_shopfloor_work_orders"/>
             <field name="group" ref="production.group_production"/>
         </record>
-        <menuitem parent="menu_js_shopfloor" action="nline_desk.url_desk_issues"
+        <menuitem parent="menu_js_shopfloor" action="nline_desk.url_desk_issues" name="Material Issues/Returns"
             sequence="20" id="menu_js_shopfloor_issues"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_issues_group_production">
             <field name="menu" ref="menu_js_shopfloor_issues"/>
             <field name="group" ref="production.group_production"/>
         </record>
-        <menuitem parent="menu_js_shopfloor" action="nline_desk.url_desk_wo_receipts"
+        <menuitem parent="menu_js_shopfloor" action="nline_desk.url_desk_wo_receipts" name="Work Order Receipts/Returns"
             sequence="30" id="menu_js_shopfloor_wo_receipts"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_wo_receipts_group_production">
             <field name="menu" ref="menu_js_shopfloor_wo_receipts"/>
@@ -579,11 +584,11 @@ this repository contains the full copyright notices and license terms. -->
             <field name="menu" ref="menu_js_shopfloor_employees"/>
             <field name="group" ref="company.group_employee_admin"/>
         </record>
-        <menuitem parent="menu_js_shopfloor" action="url_js_reports_shopfloor"
+        <menuitem parent="menu_js_shopfloor" action="url_js_reports_shopfloor" name="Reports"
             sequence="100" id="menu_js_shopfloor_reports"/>
 
         <menuitem name="Accounting" sequence="9" id="menu_js_accounting" icon="tryton-account"/>
-        <menuitem parent="menu_js_accounting" action="nline_desk.url_desk_accounts"
+        <menuitem parent="menu_js_accounting" action="nline_desk.url_desk_accounts" name="Accounts"
             sequence="10" id="menu_js_accounting_accounts"/>
         <record model="ir.ui.menu-res.group" id="menu_js_accounting_accounts_group_account">
             <field name="menu" ref="menu_js_accounting_accounts"/>
@@ -607,7 +612,7 @@ this repository contains the full copyright notices and license terms. -->
             <field name="menu" ref="menu_js_accounting_account_interface"/>
             <field name="group" ref="account.group_account"/>
         </record>
-        <menuitem parent="menu_js_accounting" action="url_js_reports_accounting"
+        <menuitem parent="menu_js_accounting" action="url_js_reports_accounting" name="Reports"
             sequence="50" id="menu_js_accounting_reports"/>
         <record model="ir.ui.menu-res.group" id="menu_js_accounting_reports_group_account">
             <field name="menu" ref="menu_js_accounting_reports"/>
@@ -629,6 +634,14 @@ this repository contains the full copyright notices and license terms. -->
             <field name="menu" ref="menu_js_common_terms"/>
             <field name="group" ref="account.group_account"/>
         </record>
+        <record model="ir.ui.menu-res.group" id="menu_js_common_terms_group_sale">
+            <field name="menu" ref="menu_js_common_terms"/>
+            <field name="group" ref="sale.group_sale"/>
+        </record>
+        <record model="ir.ui.menu-res.group" id="menu_js_common_terms_group_purchase">
+            <field name="menu" ref="menu_js_common_terms"/>
+            <field name="group" ref="purchase.group_purchase"/>
+        </record>
         <menuitem parent="menu_js_common" action="url_js_product_codes"
             sequence="60" id="menu_js_common_product_codes"/>
         <menuitem parent="menu_js_common" action="url_js_commodity_codes"
@@ -637,10 +650,12 @@ this repository contains the full copyright notices and license terms. -->
             sequence="80" id="menu_js_common_reason_codes"/>
         <menuitem parent="menu_js_common" action="url_js_alert_messages"
             sequence="90" id="menu_js_common_alert_messages"/>
+        <menuitem parent="menu_js_common" action="url_js_currency_codes"
+            sequence="100" id="menu_js_common_currency_codes"/>
         <menuitem parent="menu_js_common" action="url_js_control_panel"
-            sequence="100" id="menu_js_common_control_panel"/>
-        <menuitem parent="menu_js_common" action="url_js_reports_common"
-            sequence="110" id="menu_js_common_reports"/>
+            sequence="110" id="menu_js_common_control_panel"/>
+        <menuitem parent="menu_js_common" action="url_js_reports_common" name="Reports"
+            sequence="120" id="menu_js_common_reports"/>
 
         <menuitem name="Executive Information" sequence="11" id="menu_js_executive" icon="tryton-board"/>
         <menuitem parent="menu_js_executive" action="url_js_exec_sales"

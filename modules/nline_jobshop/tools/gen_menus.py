@@ -87,6 +87,7 @@ SCREENS = {
     'commodity_codes': ('Commodity Codes', 'commodity-codes', True, None),
     'reason_codes': ('Reason Codes', 'reason-codes', True, None),
     'alert_messages': ('Alert Messages', 'alert-messages', True, None),
+    'currency_codes': ('Currency Codes', 'currency-codes', True, None),
     'control_panel': ('User Control Panel', 'control-panel', False, None),
     'reports_common': ('Common Reports', 'js-reports/common', False, None),
     # Executive Information
@@ -104,82 +105,83 @@ SCREENS = {
 # groups of the menu item)]), in Jobshop's order
 GROUPS = [
     ('inventory', 'Inventory', 'tryton-stock', [
-        ('parts', 'desk:parts', []),
+        ('parts', 'desk:parts', [], 'Parts'),
         ('units', 'js:units', []),
         ('unit_conversions', 'js:unit_conversions', []),
         ('locations', 'js:locations', [STOCK]),
         ('adjustments', 'js:adjustments', [STOCK]),
-        ('reports', 'js:reports_inventory', []),
+        ('reports', 'js:reports_inventory', [], 'Reports'),
         ]),
     ('engineering', 'Engineering', 'tryton-product', [
-        ('masters', 'desk:masters', [PROD]),
+        ('masters', 'desk:masters', [PROD], 'Masters'),
         ('operation_templates', 'js:operation_templates', [PROD]),
-        ('reports', 'js:reports_engineering', []),
+        ('reports', 'js:reports_engineering', [], 'Reports'),
         ]),
     ('estimating', 'Estimating', 'tryton-sale', [
-        ('quotes', 'desk:quotes', [SALE]),
+        ('quotes', 'desk:quotes', [SALE], 'Quotes'),
         ('quote_masters', 'js:quote_masters', [SALE]),
-        ('reports', 'js:reports_estimating', []),
+        ('reports', 'js:reports_estimating', [], 'Reports'),
         ]),
     ('sales', 'Sales', 'tryton-sale', [
-        ('customers', 'desk:customer_window', []),
-        ('orders', 'desk:orders', [SALE]),
+        ('customers', 'desk:customer_window', [], 'Customers'),
+        ('orders', 'desk:orders', [SALE], 'Sales Orders'),
         ('shipping', 'desk:shipping', [STOCK]),
         ('invoicing', 'desk:invoicing', [ACC]),
         ('service_charges', 'js:service_charges', [SALE]),
-        ('tax_groups', 'js:sales_tax_groups', [SALE]),
+        ('tax_groups', 'js:sales_tax_groups', [SALE], 'Tax Groups'),
         ('sales_reps', 'js:sales_reps', [SALE]),
         ('territories', 'js:territories', [SALE]),
         ('sic_codes', 'js:sic_codes', [SALE]),
         ('carriers', 'js:carriers', [SALE]),
         ('discount_classes', 'js:discount_classes', [SALE]),
-        ('reports', 'js:reports_sales', []),
+        ('reports', 'js:reports_sales', [], 'Reports'),
         ]),
     ('purchasing', 'Purchasing', 'tryton-purchase', [
-        ('suppliers', 'desk:supplier_window', []),
+        ('suppliers', 'desk:supplier_window', [], 'Suppliers'),
         ('rfqs', 'js:rfqs', [PURCHASE]),
-        ('purchase_orders', 'desk:purchase_orders', [PURCHASE]),
+        ('purchase_orders', 'desk:purchase_orders', [PURCHASE], 'Purchase Orders'),
         ('receiving', 'desk:receiving', [STOCK]),
         ('services', 'js:services', [PURCHASE]),
-        ('tax_groups', 'js:purchase_tax_groups', [PURCHASE]),
-        ('reports', 'js:reports_purchasing', []),
+        ('tax_groups', 'js:purchase_tax_groups', [PURCHASE], 'Tax Groups'),
+        ('reports', 'js:reports_purchasing', [], 'Reports'),
         ]),
     ('planning', 'Planning', 'tryton-production', [
         ('planning', 'desk:planning', [PROD]),
         ('scheduling', 'desk:scheduling', [PROD]),
-        ('reports', 'js:reports_planning', []),
+        ('reports', 'js:reports_planning', [], 'Reports'),
         ]),
     ('shopfloor', 'Shopfloor', 'tryton-production', [
-        ('work_orders', 'desk:work_order', [PROD]),
-        ('issues', 'desk:issues', [PROD]),
-        ('wo_receipts', 'desk:wo_receipts', [PROD]),
+        ('work_orders', 'desk:work_order', [PROD], 'Work Orders'),
+        ('issues', 'desk:issues', [PROD], 'Material Issues/Returns'),
+        ('wo_receipts', 'desk:wo_receipts', [PROD], 'Work Order Receipts/Returns'),
         ('resources', 'desk:resources', [PROD]),
         ('shop_groups', 'js:shop_groups', [PROD]),
         ('shop_views', 'js:shop_views', [PROD]),
         ('labor', 'desk:labor', [PROD]),
         ('labor_collection', 'js:labor_collection', [PROD]),
         ('employees', 'desk:employees', [EMPLOYEE]),
-        ('reports', 'js:reports_shopfloor', []),
+        ('reports', 'js:reports_shopfloor', [], 'Reports'),
         ]),
     ('accounting', 'Accounting', 'tryton-account', [
-        ('accounts', 'desk:accounts', [ACC]),
+        ('accounts', 'desk:accounts', [ACC], 'Accounts'),
         ('account_sets', 'js:account_sets', [ACC]),
         ('accounting_calendar', 'js:accounting_calendar', [ACC]),
         ('account_interface', 'js:account_interface', [ACC]),
-        ('reports', 'js:reports_accounting', [ACC]),
+        ('reports', 'js:reports_accounting', [ACC], 'Reports'),
         ]),
     ('common', 'Common', 'tryton-list', [
         ('fob_points', 'js:fob_points', []),
         ('ship_vias', 'js:ship_vias', []),
         ('states', 'js:states', []),
         ('postal_codes', 'js:postal_codes', []),
-        ('terms', 'desk:terms', [ACC]),
+        ('terms', 'desk:terms', [ACC, SALE, PURCHASE]),
         ('product_codes', 'js:product_codes', []),
         ('commodity_codes', 'js:commodity_codes', []),
         ('reason_codes', 'js:reason_codes', []),
         ('alert_messages', 'js:alert_messages', []),
+        ('currency_codes', 'js:currency_codes', []),
         ('control_panel', 'js:control_panel', []),
-        ('reports', 'js:reports_common', []),
+        ('reports', 'js:reports_common', [], 'Reports'),
         ]),
     ('executive', 'Executive Information', 'tryton-board', [
         ('sales', 'js:exec_sales', [SALE]),
@@ -232,14 +234,17 @@ this repository contains the full copyright notices and license terms. -->
         out.append('''
         <menuitem name="%s" sequence="%d" id="menu_js_%s" icon="%s"/>
 ''' % (gname, seq, gid, icon))
-        for iseq, (iid, target, groups) in enumerate(items, start=1):
+        for iseq, item in enumerate(items, start=1):
+            iid, target, groups = item[:3]
+            # Jobshop's name of the item (default: the action's)
+            label = ' name="%s"' % item[3] if len(item) > 3 else ''
             kind, sid = target.split(':')
             action = ('nline_desk.url_desk_%s' if kind == 'desk'
                 else 'url_js_%s') % sid
             mid = 'menu_js_%s_%s' % (gid, iid)
-            out.append('''        <menuitem parent="menu_js_%s" action="%s"
+            out.append('''        <menuitem parent="menu_js_%s" action="%s"%s
             sequence="%d" id="%s"/>
-''' % (gid, action, iseq * 10, mid))
+''' % (gid, action, label, iseq * 10, mid))
             for g in groups:
                 out.append('''        <record model="ir.ui.menu-res.group" id="%s_%s">
             <field name="menu" ref="%s"/>

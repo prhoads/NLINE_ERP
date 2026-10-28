@@ -43,6 +43,15 @@ class CodeTable(DeactivableMixin, ModelSQL, ModelView):
             ]
 
 
+class MarkupMixin:
+    "Jobshop's MARKUP_PERCENT of the product and commodity codes"
+    __slots__ = ()
+    markup_percent = fields.Numeric(
+        "Markup %", digits=(16, 4),
+        help="The markup applied to the unit cost to get the unit price "
+        "(25 for 25%).")
+
+
 class FOBPoint(CodeTable):
     "FOB Point"
     __name__ = 'nline.fob_point'
@@ -53,22 +62,50 @@ class ShipVia(CodeTable):
     __name__ = 'nline.ship_via'
 
 
-class ProductCode(CodeTable):
+class ProductCode(MarkupMixin, CodeTable):
     "Product Code"
     __name__ = 'nline.product_code'
 
 
-class CommodityCode(CodeTable):
+class CommodityCode(MarkupMixin, CodeTable):
     "Commodity Code"
     __name__ = 'nline.commodity_code'
+
+
+# Jobshop's reason_type (Domains.schema)
+REASON_TYPES = [
+    ('inventory', "Inventory Adjustment"),
+    ('labor', "Labor Entry"),
+    ('calendar', "Calendar Exception"),
+    ('employee', "Employee Absence"),
+    ]
 
 
 class ReasonCode(CodeTable):
     "Status Reason Code"
     __name__ = 'nline.reason_code'
+    reason_type = fields.Selection(
+        [(None, '')] + REASON_TYPES, "Reason Type",
+        help="Where the reason is used: inventory adjustments, labor "
+        "entry, calendar exceptions or employee absences.")
+
+    @classmethod
+    def __setup__(cls):
+        super().__setup__()
+        # Jobshop calls the description of a reason code "Reason"
+        cls.description.string = "Reason"
+
+    @staticmethod
+    def default_reason_type():
+        return 'inventory'
 
 
-# The classes this module registers (see __init__.py)
+# The classes this module registers (see __init__.py); the other files add
+# theirs at the end (they import CodeTable from here)
 MODELS = [FOBPoint, ShipVia, ProductCode, CommodityCode, ReasonCode]
 WIZARDS = []
 REPORTS = []
+
+from . import alert, currency, desk, terms  # noqa: E402
+
+MODELS += terms.MODELS + currency.MODELS + alert.MODELS + desk.MODELS

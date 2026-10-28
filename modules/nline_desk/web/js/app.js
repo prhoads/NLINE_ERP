@@ -156,6 +156,12 @@
     Screens.home = function (main) {
         main = UI.form(main, {title: 'Home'}).body;
         var board = el('div.home');
+        /* The user's unread Jobshop alerts (nothing when there are none) */
+        if (global.JobshopCommon && global.JobshopCommon.alertsPanel) {
+            var alerts = el('div');
+            main.appendChild(alerts);
+            global.JobshopCommon.alertsPanel(alerts, 5);
+        }
         main.appendChild(board);
         Rpc.desk('home', []).then(function (sections) {
             sections.forEach(function (section) {

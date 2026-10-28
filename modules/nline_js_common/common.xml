@@ -6,5 +6,356 @@ this repository contains the full copyright notices and license terms. -->
         <record model="ir.message" id="msg_code_unique">
             <field name="text">The ID must be unique.</field>
         </record>
+        <record model="ir.message" id="msg_alert_unique">
+            <field name="text">You already have this alert.</field>
+        </record>
+        <record model="ir.message" id="msg_table_not_allowed">
+            <field name="text">The table "%(model)s" is not a Jobshop table.</field>
+        </record>
+    </data>
+    <data>
+        <!-- The code tables: everyone reads them; the groups that use them in Jobshop and the administrators change them -->
+        <record model="ir.model.access" id="access_fob_point">
+            <field name="model" search="[('model', '=', 'nline.fob_point')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_fob_point_group_sale">
+            <field name="model" search="[('model', '=', 'nline.fob_point')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_fob_point_group_purchase">
+            <field name="model" search="[('model', '=', 'nline.fob_point')]"/>
+            <field name="group" ref="purchase.group_purchase"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_fob_point_group_stock">
+            <field name="model" search="[('model', '=', 'nline.fob_point')]"/>
+            <field name="group" ref="stock.group_stock"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_fob_point_group_admin">
+            <field name="model" search="[('model', '=', 'nline.fob_point')]"/>
+            <field name="group" ref="res.group_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_ship_via">
+            <field name="model" search="[('model', '=', 'nline.ship_via')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_ship_via_group_sale">
+            <field name="model" search="[('model', '=', 'nline.ship_via')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_ship_via_group_purchase">
+            <field name="model" search="[('model', '=', 'nline.ship_via')]"/>
+            <field name="group" ref="purchase.group_purchase"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_ship_via_group_stock">
+            <field name="model" search="[('model', '=', 'nline.ship_via')]"/>
+            <field name="group" ref="stock.group_stock"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_ship_via_group_admin">
+            <field name="model" search="[('model', '=', 'nline.ship_via')]"/>
+            <field name="group" ref="res.group_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_product_code">
+            <field name="model" search="[('model', '=', 'nline.product_code')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_product_code_group_sale">
+            <field name="model" search="[('model', '=', 'nline.product_code')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_product_code_group_purchase">
+            <field name="model" search="[('model', '=', 'nline.product_code')]"/>
+            <field name="group" ref="purchase.group_purchase"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_product_code_group_product_admin">
+            <field name="model" search="[('model', '=', 'nline.product_code')]"/>
+            <field name="group" ref="product.group_product_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_product_code_group_production">
+            <field name="model" search="[('model', '=', 'nline.product_code')]"/>
+            <field name="group" ref="production.group_production"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_product_code_group_admin">
+            <field name="model" search="[('model', '=', 'nline.product_code')]"/>
+            <field name="group" ref="res.group_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_commodity_code">
+            <field name="model" search="[('model', '=', 'nline.commodity_code')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_commodity_code_group_sale">
+            <field name="model" search="[('model', '=', 'nline.commodity_code')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_commodity_code_group_purchase">
+            <field name="model" search="[('model', '=', 'nline.commodity_code')]"/>
+            <field name="group" ref="purchase.group_purchase"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_commodity_code_group_product_admin">
+            <field name="model" search="[('model', '=', 'nline.commodity_code')]"/>
+            <field name="group" ref="product.group_product_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_commodity_code_group_production">
+            <field name="model" search="[('model', '=', 'nline.commodity_code')]"/>
+            <field name="group" ref="production.group_production"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_commodity_code_group_admin">
+            <field name="model" search="[('model', '=', 'nline.commodity_code')]"/>
+            <field name="group" ref="res.group_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_reason_code">
+            <field name="model" search="[('model', '=', 'nline.reason_code')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_reason_code_group_stock">
+            <field name="model" search="[('model', '=', 'nline.reason_code')]"/>
+            <field name="group" ref="stock.group_stock"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_reason_code_group_production">
+            <field name="model" search="[('model', '=', 'nline.reason_code')]"/>
+            <field name="group" ref="production.group_production"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_reason_code_group_admin">
+            <field name="model" search="[('model', '=', 'nline.reason_code')]"/>
+            <field name="group" ref="res.group_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+
+        <!-- States/Provinces and Postal Codes: also sales and purchasing (addresses) -->
+        <record model="ir.model.access" id="access_subdivision_group_sale">
+            <field name="model" search="[('model', '=', 'country.subdivision')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_subdivision_group_purchase">
+            <field name="model" search="[('model', '=', 'country.subdivision')]"/>
+            <field name="group" ref="purchase.group_purchase"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_postal_code_group_sale">
+            <field name="model" search="[('model', '=', 'country.postal_code')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_postal_code_group_purchase">
+            <field name="model" search="[('model', '=', 'country.postal_code')]"/>
+            <field name="group" ref="purchase.group_purchase"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+
+        <!-- Currency Codes: also the accounting administrators -->
+        <record model="ir.model.access" id="access_currency_account_admin">
+            <field name="model" search="[('model', '=', 'currency.currency')]"/>
+            <field name="group" ref="account.group_account_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_currency_rate_account_admin">
+            <field name="model" search="[('model', '=', 'currency.currency.rate')]"/>
+            <field name="group" ref="account.group_account_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+
+        <!-- Alerts and their messages: each user their own, the
+             administrators everyone's -->
+        <record model="ir.model.access" id="access_user_alert">
+            <field name="model" search="[('model', '=', 'nline.user_alert')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.rule.group" id="rule_group_user_alert">
+            <field name="name">Own alerts</field>
+            <field name="model" search="[('model', '=', 'nline.user_alert')]"/>
+            <field name="global_p" eval="False"/>
+            <field name="default_p" eval="True"/>
+        </record>
+        <record model="ir.rule" id="rule_user_alert">
+            <field name="domain"
+                eval="[('user', '=', Eval('user_id', -1))]" pyson="1"/>
+            <field name="rule_group" ref="rule_group_user_alert"/>
+        </record>
+        <record model="ir.rule.group" id="rule_group_user_alert_admin">
+            <field name="name">Every user's alerts</field>
+            <field name="model" search="[('model', '=', 'nline.user_alert')]"/>
+            <field name="global_p" eval="False"/>
+            <field name="default_p" eval="False"/>
+        </record>
+        <record model="ir.rule.group-res.group"
+            id="rule_group_user_alert_admin_group_admin">
+            <field name="rule_group" ref="rule_group_user_alert_admin"/>
+            <field name="group" ref="res.group_admin"/>
+        </record>
+        <record model="ir.rule" id="rule_user_alert_admin">
+            <field name="domain" eval="[('id', '!=', None)]" pyson="1"/>
+            <field name="rule_group" ref="rule_group_user_alert_admin"/>
+        </record>
+
+        <record model="ir.model.access" id="access_alert_message">
+            <field name="model" search="[('model', '=', 'nline.alert_message')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_alert_message_admin">
+            <field name="model" search="[('model', '=', 'nline.alert_message')]"/>
+            <field name="group" ref="res.group_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.rule.group" id="rule_group_alert_message">
+            <field name="name">Own alert messages</field>
+            <field name="model" search="[('model', '=', 'nline.alert_message')]"/>
+            <field name="global_p" eval="False"/>
+            <field name="default_p" eval="True"/>
+        </record>
+        <record model="ir.rule" id="rule_alert_message">
+            <field name="domain"
+                eval="[('user', '=', Eval('user_id', -1))]" pyson="1"/>
+            <field name="rule_group" ref="rule_group_alert_message"/>
+        </record>
+        <record model="ir.rule.group" id="rule_group_alert_message_admin">
+            <field name="name">Every user's alert messages</field>
+            <field name="model" search="[('model', '=', 'nline.alert_message')]"/>
+            <field name="global_p" eval="False"/>
+            <field name="default_p" eval="False"/>
+        </record>
+        <record model="ir.rule.group-res.group"
+            id="rule_group_alert_message_admin_group_admin">
+            <field name="rule_group" ref="rule_group_alert_message_admin"/>
+            <field name="group" ref="res.group_admin"/>
+        </record>
+        <record model="ir.rule" id="rule_alert_message_admin">
+            <field name="domain" eval="[('id', '!=', None)]" pyson="1"/>
+            <field name="rule_group" ref="rule_group_alert_message_admin"/>
+        </record>
+
+        <!-- The alerts the ERP watches (late orders), every morning -->
+        <record model="ir.cron" id="cron_alert_messages">
+            <field name="method">nline.alert_message|generate_all</field>
+            <field name="interval_number" eval="1"/>
+            <field name="interval_type">days</field>
+            <field name="hour" eval="5"/>
+            <field name="minute" eval="30"/>
+        </record>
     </data>
 </tryton>

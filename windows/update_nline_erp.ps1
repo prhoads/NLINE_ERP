@@ -17,7 +17,11 @@ if (-not $Modules) {
     # Every activated N-Line module (the ones not yet approved stay off)
     $Modules = 'nline_role', 'nline_nlbi', 'nline_engineering', 'nline_work_order', 'nline_job',
         'nline_build_tree', 'nline_sales_cost', 'nline_check_print', 'nline_change_log',
-        'nline_customer_statement', 'nline_account', 'nline_desk'
+        'nline_customer_statement', 'nline_account', 'nline_desk',
+        # The VISUAL Jobshop emulation (docs/jobshop/EMULATION.md)
+        'nline_js_common', 'nline_js_inventory', 'nline_js_sales', 'nline_js_purchasing',
+        'nline_js_engineering', 'nline_js_shopfloor', 'nline_js_planning', 'nline_js_admin',
+        'nline_jobshop'
 }
 # (a comma list passed through -File arrives as one string)
 $Modules = @($Modules | ForEach-Object { $_ -split ',' } | Where-Object { $_ })

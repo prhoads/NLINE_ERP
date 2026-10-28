@@ -344,10 +344,6 @@ this repository contains the full copyright notices and license terms. -->
             <field name="nline_writes" eval="False"/>
             <field name="url">desk/index.html#/terms</field>
         </record>
-        <record model="ir.action-res.group" id="url_desk_terms_group">
-            <field name="action" ref="url_desk_terms"/>
-            <field name="group" ref="account.group_account"/>
-        </record>
         <record model="ir.action.url" id="url_desk_lists">
             <field name="name">Lists</field>
             <field name="nline_writes" eval="False"/>
