@@ -3,5 +3,90 @@
 this repository contains the full copyright notices and license terms. -->
 <tryton>
     <data>
+        <!-- Journal batches of the Account Interface -->
+        <record model="ir.model.access" id="access_journal_batch">
+            <field name="model" search="[('model', '=', 'nline.js.journal_batch')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_journal_batch_account">
+            <field name="model" search="[('model', '=', 'nline.js.journal_batch')]"/>
+            <field name="group" ref="account.group_account"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+
+        <record model="ir.rule.group" id="rule_group_journal_batch_companies">
+            <field name="name">User in companies</field>
+            <field name="model" search="[('model', '=', 'nline.js.journal_batch')]"/>
+            <field name="global_p" eval="True"/>
+        </record>
+        <record model="ir.rule" id="rule_journal_batch_companies">
+            <field name="domain"
+                eval="[('company', 'in', Eval('companies', []))]"
+                pyson="1"/>
+            <field name="rule_group" ref="rule_group_journal_batch_companies"/>
+        </record>
+
+        <record model="ir.sequence.type" id="sequence_type_journal_batch">
+            <field name="name">Journal Batch</field>
+        </record>
+        <record model="ir.sequence.type-res.group"
+            id="sequence_type_journal_batch_group_admin">
+            <field name="sequence_type" ref="sequence_type_journal_batch"/>
+            <field name="group" ref="res.group_admin"/>
+        </record>
+        <record model="ir.sequence.type-res.group"
+            id="sequence_type_journal_batch_group_account">
+            <field name="sequence_type" ref="sequence_type_journal_batch"/>
+            <field name="group" ref="account.group_account"/>
+        </record>
+    </data>
+    <data noupdate="1">
+        <!-- Changed in System Settings > Inventory -->
+        <record model="ir.sequence" id="sequence_journal_batch">
+            <field name="name">Journal Batch</field>
+            <field name="sequence_type" ref="sequence_type_journal_batch"/>
+            <field name="padding" eval="5"/>
+        </record>
+    </data>
+    <data grouped="1">
+        <record model="ir.message" id="msg_batch_number_unique">
+            <field name="text">The Batch ID of a journal batch must be unique.</field>
+        </record>
+        <record model="ir.message" id="msg_unknown_action">
+            <field name="text">Unknown action "%(action)s".</field>
+        </record>
+        <record model="ir.message" id="msg_no_previous_fiscalyear">
+            <field name="text">Create the first fiscal year in Tryton (Financial > Configuration > Fiscal Years): the next ones are made from it.</field>
+        </record>
+        <record model="ir.message" id="msg_fiscalyear_overlaps">
+            <field name="text">A fiscal year already covers part of %(start)s - %(end)s: accounting periods cannot overlap.</field>
+        </record>
+        <record model="ir.message" id="msg_login_required">
+            <field name="text">Enter the User ID (the N-Line BI login of the person).</field>
+        </record>
+        <record model="ir.message" id="msg_role_name_required">
+            <field name="text">Enter the name of the role.</field>
+        </record>
+        <record model="ir.message" id="msg_unknown_screen">
+            <field name="text">This screen is not one of the Authority Manager.</field>
+        </record>
+        <record model="ir.message" id="msg_screen_for_everyone">
+            <field name="text">Every user may open this screen: it has no role to take away.</field>
+        </record>
+        <record model="ir.message" id="msg_last_group_of_screen">
+            <field name="text">This is the only role of the screen: denying it would open the screen to everyone.</field>
+        </record>
+        <record model="ir.message" id="msg_unknown_condition">
+            <field name="text">Unknown filter condition "%(condition)s".</field>
+        </record>
+        <record model="ir.message" id="msg_unknown_report">
+            <field name="text">Unknown Jobshop report "%(report)s".</field>
+        </record>
     </data>
 </tryton>
