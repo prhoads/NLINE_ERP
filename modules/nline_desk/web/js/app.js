@@ -467,6 +467,55 @@
     };
 
     global.addEventListener('hashchange', route);
+
+    /* The mouse wheel scrolls the scroll bars in series: the innermost box
+     * that can still move that way, then the one around it, then the page
+     * (the browser keeps one wheel motion on the box it started in). Ctrl
+     * is the cards' zoom; Shift scrolls sideways. */
+    function canScroll(node, dx, dy, isPage) {
+        var style = global.getComputedStyle(node);
+        /* (the page scrolls whatever its overflow says) */
+        if (isPage) {
+            style = {overflowX: 'auto', overflowY: 'auto'};
+        }
+        var y = /(auto|scroll)/.test(style.overflowY) &&
+            node.scrollHeight > node.clientHeight + 1 && (dy > 0 ?
+                node.scrollTop + node.clientHeight < node.scrollHeight - 1 :
+                dy < 0 && node.scrollTop > 0);
+        var x = /(auto|scroll)/.test(style.overflowX) &&
+            node.scrollWidth > node.clientWidth + 1 && (dx > 0 ?
+                node.scrollLeft + node.clientWidth < node.scrollWidth - 1 :
+                dx < 0 && node.scrollLeft > 0);
+        return y || x;
+    }
+    document.addEventListener('wheel', function (event) {
+        if (event.ctrlKey || event.defaultPrevented) {
+            return;
+        }
+        var unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ?
+            global.innerHeight : 1;
+        var dx = event.deltaX * unit, dy = event.deltaY * unit;
+        if (event.shiftKey && !dx) {
+            dx = dy;
+            dy = 0;
+        }
+        var page = document.scrollingElement || document.documentElement;
+        for (var node = event.target; node && node.nodeType === 1 &&
+                node !== page && node !== document.body;
+                node = node.parentElement) {
+            if (canScroll(node, dx, dy)) {
+                event.preventDefault();
+                node.scrollTop += dy;
+                node.scrollLeft += dx;
+                return;
+            }
+        }
+        if (canScroll(page, dx, dy, true)) {
+            event.preventDefault();
+            page.scrollTop += dy;
+            page.scrollLeft += dx;
+        }
+    }, {passive: false});
     if (EMBED) {
         /* A link to another screen opens it in a new Tryton tab */
         document.addEventListener('click', function (event) {

@@ -700,7 +700,10 @@
 
     var CARD_W = 230, CARD_H = 64, STEP_X = 14, STEP_Y = 20;
     /* The header card is a card like the others (as in Jobshop) */
-    var PROD_W = CARD_W, PROD_H = CARD_H, LEG_GAP = 40, MARGIN = 16;
+    var PROD_W = CARD_W, PROD_H = CARD_H, LEG_GAP = 32, MARGIN = 16;
+    /* Where a leg's line leaves its operation card: below the card stacked
+     * behind it, through the card's visible right edge */
+    var LEG_LINE_Y = CARD_H - 10;
     var STATUS = {unreleased: 'Unreleased', firm: 'Firm', hold: 'Hold',
         released: 'Released', closed: 'Closed', cancelled: 'Cancelled'};
     var LETTER = {unreleased: 'U', firm: 'F', hold: 'H', released: 'R',
@@ -776,6 +779,7 @@
                 nodes.push(item.node);
             });
             var right = x + Math.max(PROD_W, n * STEP_X + CARD_W);
+            var legsRight = -Infinity;
             items.forEach(function (item, i) {
                 if (item.kind !== 'mat' || !item.data.leg) {
                     return;
@@ -789,13 +793,20 @@
                         break;
                     }
                 }
-                var legX = right + LEG_GAP;
+                /* Close to the trunk: the leg climbs parallel to the stack
+                 * just right of the operation; a next leg right of the
+                 * legs already placed */
+                var lineY = op.node.y + LEG_LINE_Y;
+                var legX = Math.max(op.node.x + CARD_W + LEG_GAP,
+                    legsRight + LEG_GAP);
                 var legRight = place(item.data.leg, item.data, legX,
-                    op.node.y);
-                links.push({from: op.node, to: nodes.filter(function (m) {
-                    return m.kind === 'prod' && m.data === item.data.leg;
-                })[0]});
-                right = legRight;
+                    lineY - PROD_H / 2);
+                links.push({from: op.node, to: nodes.filter(
+                    function (m) {
+                        return m.kind === 'prod' && m.data === item.data.leg;
+                    })[0]});
+                legsRight = legRight;
+                right = Math.max(right, legRight);
             });
             return right;
         }
@@ -1807,7 +1818,8 @@
             plan.links.forEach(function (link) {
                 /* Straight: from the operation's top line to the leg's
                  * header card, level with it (layout) */
-                var sx = link.from.x + link.from.w, sy = link.from.y + 10;
+                var sx = link.from.x + link.from.w;
+                var sy = link.from.y + LEG_LINE_Y;
                 var tx = link.to.x;
                 var path = document.createElementNS(svgNS, 'path');
                 path.setAttribute('d', 'M' + sx + ' ' + sy + ' L' + tx + ' ' +
@@ -2184,8 +2196,10 @@
                 {title: 'Details', render: function (pane, r) {
                     details = null;
                     permissions().then(function (p) {
+                        /* (no list of masters beside the cards: the owner
+                         * found it distracting; right-click > Make leg) */
                         details = cards(pane, {kind: 'production', id: r.id,
-                            perm: p, masters: true,
+                            perm: p,
                             onHeader: reloadHeader,
                             onEdit: function () {
                                 showTab(main, 'Work Order');

@@ -519,17 +519,23 @@
 
     jQuery(function () {
         menuEdge();
-        /* After the name: "for" (handwritten), N-Line's logo and its valve */
-        jQuery('#title').after(jQuery('<span/>', {
-            'class': 'nl-marks hidden-xs'
+        /* The name on two lines: "Tryton ERP", under it "for" (handwritten)
+         * and N-Line's logo; N-Line's valve beside them */
+        var title = jQuery('#title');
+        var box = jQuery('<span/>', {'class': 'nl-brandbox'});
+        title.before(box);
+        box.append(title, jQuery('<span/>', {
+            'class': 'nl-sub hidden-xs'
         }).append(jQuery('<span/>', {
             'class': 'nl-for', 'text': 'for'
         }), jQuery('<img/>', {
             'class': 'nl-logo', 'src': 'images/nline-logo.png',
             'alt': 'N-Line Valves'
-        }), jQuery('<img/>', {
-            'class': 'nl-valve', 'src': 'images/nline-valve.png', 'alt': ''
         })));
+        box.after(jQuery('<img/>', {
+            'class': 'nl-valve hidden-xs', 'src': 'images/nline-valve.png',
+            'alt': ''
+        }));
         var apps = jQuery('<div/>', {
             'id': 'nl-apps',
             'class': 'navbar-text nl-apps-slot'
