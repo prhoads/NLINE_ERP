@@ -89,3 +89,16 @@ what exists.)
 2. Walk the owner/team through the Jobshop screens; collect deviations.
 3. Close the gaps above, area by area (status files).
 4. Migration proposal approval still pending (from 27 Oct).
+
+## Live updates without the owner (28 Oct)
+
+- `windows\quick_update_nline_erp.ps1`: copies only the modules / web files whose
+  CONTENT changed; restart only for Python, `trytond-admin -u` only for the modules
+  whose data (xml, cfg, csv, po, view) changed. The full `update_nline_erp.ps1` stays
+  for new standard modules or a damaged install.
+- Watcher: scheduled task `NLINE ERP Update Watcher` on NLVDC01 (every minute, as
+  SYSTEM; SYSTEM is db_owner of the ERP databases), set up once by the owner with
+  `windows\setup_update_watcher.ps1`. From the development PC:
+  `powershell -File C:\NLINE_ERP_dev\scripts\request_live_update.ps1 [-WhatIf]` (push
+  first): pulls `\\NLVDC01\NLINE_ERP\src`, drops `requests\update.request`, waits for
+  `requests\update.result` and prints the log (`requests\logs`).

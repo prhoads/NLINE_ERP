@@ -92,6 +92,7 @@ if ($LASTEXITCODE -ge 8) { throw 'copy of the web client files failed' }
 # The scripts here current
 Copy-Item (Join-Path $Source 'windows\quick_update_nline_erp.ps1') $Root -Force
 Copy-Item (Join-Path $Source 'windows\update_nline_erp.ps1') $Root -Force
+Copy-Item (Join-Path $Source 'windows\update_watcher.ps1') $Root -Force
 
 if ($needDb) {
     $env:TZ = 'UTC'; $env:TRYTOND_TZ = 'America/Chicago'
