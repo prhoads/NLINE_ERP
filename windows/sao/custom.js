@@ -519,14 +519,16 @@
 
     jQuery(function () {
         menuEdge();
-        /* N-Line's marks after the name: the valve and the logo */
+        /* After the name: "for" (handwritten), N-Line's logo and its valve */
         jQuery('#title').after(jQuery('<span/>', {
             'class': 'nl-marks hidden-xs'
-        }).append(jQuery('<img/>', {
-            'class': 'nl-valve', 'src': 'images/nline-valve.svg', 'alt': ''
+        }).append(jQuery('<span/>', {
+            'class': 'nl-for', 'text': 'for'
         }), jQuery('<img/>', {
             'class': 'nl-logo', 'src': 'images/nline-logo.png',
             'alt': 'N-Line Valves'
+        }), jQuery('<img/>', {
+            'class': 'nl-valve', 'src': 'images/nline-valve.png', 'alt': ''
         })));
         var apps = jQuery('<div/>', {
             'id': 'nl-apps',

@@ -250,6 +250,32 @@
 
     /* Autocomplete input on a model: returns {node, value(), set(id, name)}
      * options: domain, placeholder, onselect(record), fields */
+    /* What a field shows of its record, as Jobshop's ID fields: a part its
+     * Part ID ("[332-...] Assy..." -> "332-..."), a master "Part ID / Eng ID",
+     * a code table its ID; the full name in the field's tooltip */
+    var CODE_TABLES = ['nline.fob_point', 'nline.ship_via',
+        'nline.product_code', 'nline.commodity_code', 'nline.reason_code',
+        'nline.sales_rep', 'nline.territory', 'nline.sic_code',
+        'nline.carrier', 'nline.service_charge', 'nline.sales_tax_group',
+        'nline.discount_class'];
+    function shortName(model, name) {
+        name = name || '';
+        var match;
+        if (model === 'product.product' || model === 'product.template') {
+            match = /^\[([^\]]+)\]/.exec(name);
+            return match ? match[1] : name;
+        }
+        if (model === 'production.bom') {
+            match = /^(\S+)[\s\S]*?(?:\sRev\s+(\S+))?$/.exec(name);
+            return match ? match[1] + (match[2] ? ' / ' + match[2] : '') :
+                name;
+        }
+        if (CODE_TABLES.indexOf(model) >= 0 && name.indexOf(' - ') > 0) {
+            return name.slice(0, name.indexOf(' - '));
+        }
+        return name;
+    }
+
     function picker(model, options) {
         options = options || {};
         var selected = null;
@@ -308,9 +334,14 @@
             list.style.display = items.length ? 'block' : 'none';
         }
 
+        function show(name) {
+            input.value = shortName(model, name);
+            input.title = input.value !== (name || '') ? name : '';
+        }
+
         function choose(record) {
             selected = record;
-            input.value = record.rec_name;
+            show(record.rec_name);
             items = [];
             render();
             if (options.onselect) {
@@ -401,7 +432,7 @@
             },
             set: function (id, name) {
                 selected = id ? {id: id, rec_name: name} : null;
-                input.value = name || '';
+                show(name);
             }
         };
     }
@@ -454,6 +485,7 @@
         showError: showError,
         service: service,
         picker: picker,
+        shortName: shortName,
         moneyInput: moneyInput,
         openReport: openReport
     };

@@ -699,7 +699,8 @@
     /* ---- The information cards (Details tab) --------------------------- */
 
     var CARD_W = 230, CARD_H = 64, STEP_X = 14, STEP_Y = 20;
-    var PROD_W = 260, PROD_H = 72, LEG_GAP = 40, MARGIN = 16;
+    /* The header card is a card like the others (as in Jobshop) */
+    var PROD_W = CARD_W, PROD_H = CARD_H, LEG_GAP = 40, MARGIN = 16;
     var STATUS = {unreleased: 'Unreleased', firm: 'Firm', hold: 'Hold',
         released: 'Released', closed: 'Closed', cancelled: 'Cancelled'};
     var LETTER = {unreleased: 'U', firm: 'F', hold: 'H', released: 'R',
@@ -751,49 +752,66 @@
         return result;
     }
 
+    /* The positions of the cards of an order or master and its legs. As in
+     * Jobshop a leg hangs off the OPERATION its material is used at: its
+     * stack stands right beside the parent stack, its header card level with
+     * that operation card, so the line between them is straight. Legs of
+     * legs the same way, each further right. */
     function layout(tree) {
-        var stacks = [];
-        function collect(node, parentCard) {
-            var stack = {node: node, card: parentCard, order: order(node)};
-            stacks.push(stack);
-            stack.order.forEach(function (item) {
-                if (item.kind === 'mat' && item.data.leg) {
-                    item.legStack = collect(item.data.leg, item.data);
-                }
-            });
-            return stack;
-        }
-        collect(tree, null);
-        var tallest = 0;
-        stacks.forEach(function (stack) {
-            tallest = Math.max(tallest, stack.order.length * STEP_Y);
-        });
-        var bottom = MARGIN + tallest + PROD_H;
         var nodes = [], links = [];
-        var x = MARGIN;
-        stacks.forEach(function (stack) {
-            var n = stack.order.length;
+
+        /* Place the stack of node with its header card's top at (x, y);
+         * return the right edge of the stack and of its legs */
+        function place(node, parentCard, x, y) {
+            var items = order(node);
+            var n = items.length;
             var z = n + 2;
-            stack.prod = {kind: 'prod', x: x, y: bottom - PROD_H, w: PROD_W,
-                h: PROD_H, z: z, data: stack.node, card: stack.card};
-            nodes.push(stack.prod);
-            stack.order.forEach(function (item, i) {
+            var prod = {kind: 'prod', x: x, y: y, w: PROD_W, h: PROD_H, z: z,
+                data: node, card: parentCard};
+            nodes.push(prod);
+            items.forEach(function (item, i) {
                 item.node = {kind: item.kind, x: x + (i + 1) * STEP_X,
-                    y: bottom - PROD_H - (i + 1) * STEP_Y, w: CARD_W,
-                    h: CARD_H, z: z - i - 1, data: item.data,
-                    root: stack.node};
+                    y: y - (i + 1) * STEP_Y, w: CARD_W, h: CARD_H,
+                    z: z - i - 1, data: item.data, root: node};
                 nodes.push(item.node);
             });
-            x += Math.max(PROD_W, n * STEP_X + CARD_W) + LEG_GAP;
-        });
-        stacks.forEach(function (stack) {
-            stack.order.forEach(function (item) {
-                if (item.legStack) {
-                    links.push({from: item.node, to: item.legStack.prod});
+            var right = x + Math.max(PROD_W, n * STEP_X + CARD_W);
+            items.forEach(function (item, i) {
+                if (item.kind !== 'mat' || !item.data.leg) {
+                    return;
                 }
+                /* The operation the material is used at: the next operation
+                 * card of the stack (the material itself when none) */
+                var op = item;
+                for (var j = i + 1; j < n; j++) {
+                    if (items[j].kind === 'op') {
+                        op = items[j];
+                        break;
+                    }
+                }
+                var legX = right + LEG_GAP;
+                var legRight = place(item.data.leg, item.data, legX,
+                    op.node.y);
+                links.push({from: op.node, to: nodes.filter(function (m) {
+                    return m.kind === 'prod' && m.data === item.data.leg;
+                })[0]});
+                right = legRight;
             });
+            return right;
+        }
+
+        var right = place(tree, null, 0, 0);
+        /* Into view: the highest card at the top margin */
+        var top = Math.min.apply(null, nodes.map(function (m) {
+            return m.y;
+        }));
+        var bottom = 0;
+        nodes.forEach(function (m) {
+            m.x += MARGIN;
+            m.y += MARGIN - top;
+            bottom = Math.max(bottom, m.y + m.h);
         });
-        return {nodes: nodes, links: links, width: x + MARGIN,
+        return {nodes: nodes, links: links, width: right + 2 * MARGIN,
             height: bottom + MARGIN};
     }
 
@@ -1787,12 +1805,13 @@
             svg.setAttribute('width', plan.width);
             svg.setAttribute('height', plan.height);
             plan.links.forEach(function (link) {
+                /* Straight: from the operation's top line to the leg's
+                 * header card, level with it (layout) */
                 var sx = link.from.x + link.from.w, sy = link.from.y + 10;
-                var tx = link.to.x, ty = link.to.y + link.to.h / 2;
-                var mx = tx - 14;
+                var tx = link.to.x;
                 var path = document.createElementNS(svgNS, 'path');
-                path.setAttribute('d', 'M' + sx + ' ' + sy + ' L' + mx + ' ' +
-                    sy + ' L' + mx + ' ' + ty + ' L' + tx + ' ' + ty);
+                path.setAttribute('d', 'M' + sx + ' ' + sy + ' L' + tx + ' ' +
+                    sy);
                 path.setAttribute('fill', 'none');
                 path.setAttribute('stroke', '#333');
                 path.setAttribute('stroke-width', '1.5');
@@ -2061,7 +2080,10 @@
             title: 'Work Order',
             model: 'production',
             label: 'Work Order ID',
-            order: [['id', 'DESC']],
+            /* The work orders, not their legs (WO-.../1): a leg opens from
+             * its card, as in Jobshop */
+            domain: [['parent', '=', null]],
+            order: [['number', 'DESC']],
             single: true,
             open: params && params[0] ? parseInt(params[0], 10) : null,
             extra: [

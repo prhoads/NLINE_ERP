@@ -1131,7 +1131,9 @@
                     load(ids[to]);
                 }, UI.showError);
         }
-        var nav = options.nav === false ? null : el('span.record-nav',
+        /* (the owner wants no record navigation buttons: options.nav true
+         * to show them) */
+        var nav = !options.nav ? null : el('span.record-nav',
             [['first', '⏮', 'First record'], ['previous', '◀',
                 'Previous record'], ['next', '▶', 'Next record'],
                 ['last', '⏭', 'Last record']].map(function (b) {

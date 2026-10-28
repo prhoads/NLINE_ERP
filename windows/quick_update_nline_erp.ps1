@@ -85,7 +85,7 @@ foreach ($c in $changes) {
 # on the client folder, which also holds the desk)
 robocopy (Join-Path $Source 'modules\nline_desk\web') (Join-Path $Web 'desk') /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw 'copy of the desk screens failed' }
-robocopy (Join-Path $Source 'windows\sao') $Web custom.js custom.css /NFL /NDL /NJH /NJS /NP | Out-Null
+robocopy (Join-Path $Source 'windows\sao') $Web custom.js custom.css index.html /NFL /NDL /NJH /NJS /NP | Out-Null
 robocopy (Join-Path $Source 'windows\sao\images') (Join-Path $Web 'images') /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw 'copy of the web client files failed' }
 

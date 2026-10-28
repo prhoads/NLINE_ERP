@@ -1115,7 +1115,7 @@
             }});
         var status = el('span.jsp-status', '');
         var head = el('div.panel.jsp-head', el('label.field', o.label),
-            id.node, navButtons(o.model, o.domain, o.order, function () {
+            id.node, o.nav && navButtons(o.model, o.domain, o.order, function () {
                 return data ? data.id : null;
             }, load), status, o.headExtra || null);
         body.appendChild(head);

@@ -379,5 +379,6 @@ table.data tr.short td { background: rgba(178, 106, 0, .08); }
 .picture figcaption { font-size: 12px; color: var(--muted); }
 .notes .note { border-bottom: 1px solid var(--line); padding: 6px 0; white-space: pre-wrap; }
 /* N-Line's marks in the header */
-.brand .nl-valve { height: 26px; vertical-align: middle; margin-left: 8px; }
+.brand .nl-for { font-family: 'Segoe Script', 'Bradley Hand', 'Brush Script MT', 'Lucida Handwriting', cursive; font-weight: 400; font-size: 15px; margin-left: 6px; color: var(--muted); }
+.brand .nl-valve { height: 34px; vertical-align: middle; margin-left: 6px; }
 .brand .nl-logo { height: 16px; vertical-align: middle; margin-left: 6px; }
