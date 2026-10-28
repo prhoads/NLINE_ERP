@@ -209,3 +209,23 @@ What each step does:
 | `M:\N-Line_BI\Server\host\nline_bi_host\{app,signin,accounts}.py`, `web/admin.js` | BI Admin per-app options |
 | `M:\N-Line_BI\ERP\erp_web\service\erp_proxy\app.py` | ERP options and sign-in token |
 | `C:\NLINE_ERP_dev\sample\build_local_test.ps1` | Builds the local SQLite nline_test |
+
+---
+
+## 7. Update, 27 Oct evening (commit 26395af998)
+
+- **Owner's rerun confirmed** on live: 16 customer invoices (INV26-00001..16, posted) and 2 checks.
+- **Legs imported** (next step 2 done): `Migration.legs()` reads `SHOPFLOOR_MATERIAL.SUBORD_SUB_ID` and makes each leg through the desk's `make_leg` from the leg part's master, parents first (legs nest), numbered `<WO>/<SUB_ID>` like Jobshop. Local nline_test: 49 legs; 2 skipped (purchased part pulled in as a leg). Backup before the run: `C:\NLINE_ERP_dev\demo\db\nline_test.before_legs.sqlite`.
+- **Right-click menus** (next step 3 done), modelled on Jobshop's (looked at with computer use, read-only):
+  - order / leg card: open work order, part, engineering master, sales order; release; remove leg; issue materials; labor entry; traveler; show details;
+  - operation card: open resource, PO, master; purchase this service; labor entry; show details;
+  - material card: open part, master; supply and demand; go to leg; make / remove leg; issue material; purchase this material; show details.
+  - Items are hidden unless the user's menus allow the screen (`UI.screenAllowed`, same rule as `custom.js`) and `get_access` allows the action. Release / Leg buttons and drop targets follow the same rights.
+  - New routes `parts/<template id>`, `masters/<bom id>`, `resources/<id>`. Build tree nodes now carry `bom_id`, `sale_id`, `template_id`, `master_bom_id`, `work_center_id`, `purchase_id`.
+- **Live:** desk web deployed (`?v=20261101a`). Waiting on the owner to update `nline_build_tree` and import the legs (section 4 command below); until then the menus simply leave out the items that need the new ids.
+  ```
+  powershell -ExecutionPolicy Bypass -File G:\NLINE_ERP\update_nline_erp.ps1 -Modules nline_build_tree
+  $env:TZ='UTC'; $env:TRYTOND_TZ='America/Chicago'; G:\NLINE_ERP\venv\Scripts\python.exe G:\NLINE_ERP\src\migration\nline_migrate.py --config G:\NLINE_ERP\trytond.conf --database nline_test --steps workorders
+  ```
+- Next: step 4 of section 3 (screen-by-screen match), then the migration once approved.
+- Computer use tip: a masked always-on-top window covers the middle of the screen; zoom Jobshop's canvas in so cards fall outside it.
