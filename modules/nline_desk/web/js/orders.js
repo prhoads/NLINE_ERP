@@ -142,7 +142,7 @@
 
     /* ---- Parts window --------------------------------------------------- */
 
-    Screens.parts = function (main) {
+    Screens.parts = function (main, params) {
         function info(render) {
             return function (pane, record) {
                 Rpc.desk('part_info', [record.id]).then(function (data) {
@@ -169,6 +169,7 @@
         UI.master(main, {
             title: 'Parts',
             model: 'product.template',
+            open: params && params[0] ? parseInt(params[0], 10) : null,
             label: 'Part ID',
             order: [['name', 'ASC']],
             tabs: [

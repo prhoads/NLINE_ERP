@@ -33,6 +33,7 @@ class Production(metaclass=PoolMeta):
 
     def _build_tree_node(self):
         bom = self.bom
+        origin = self.origin
         node = {
             'id': self.id,
             'number': self.number,
@@ -40,7 +41,14 @@ class Production(metaclass=PoolMeta):
             'leg_index': self.leg_index,
             'product': self.product.rec_name if self.product else None,
             'product_id': self.product.id if self.product else None,
+            'template_id': (
+                self.product.template.id if self.product else None),
             'revision': bom.revision if bom else None,
+            'bom_id': bom.id if bom else None,
+            # The sales order of the order made for a sale line
+            'sale_id': (origin.sale.id
+                if getattr(origin, '__name__', None) == 'sale.line'
+                else None),
             'quantity': self.quantity,
             'unit': self.unit.symbol if self.unit else None,
             'state': self.state,
@@ -69,6 +77,8 @@ class Production(metaclass=PoolMeta):
             'sequence': step.sequence,
             'operation': step.operation.rec_name,
             'work_center': None,
+            'work_center_id': None,
+            'purchase_id': None,
             'state': 'request',
             'planned_duration': (
                 duration.total_seconds() / 3600 if duration else None),
@@ -106,6 +116,9 @@ class Work(metaclass=PoolMeta):
             'operation': self.operation.rec_name,
             'work_center': (
                 self.work_center.rec_name if self.work_center else None),
+            'work_center_id': (
+                self.work_center.id if self.work_center else None),
+            'purchase_id': None,
             'state': self.state,
             'planned_duration': (
                 self.planned_duration.total_seconds() / 3600
@@ -121,6 +134,7 @@ class Work(metaclass=PoolMeta):
                 self.supplier.rec_name if self.supplier else None)
             node['purchase'] = (
                 self.purchase.rec_name if self.purchase else None)
+            node['purchase_id'] = self.purchase.id if self.purchase else None
             node['expected_date'] = self.expected_date
         return node
 
@@ -164,12 +178,18 @@ class MaterialCard(metaclass=PoolMeta):
     def _build_tree_node(self):
         leg = self.leg
         job = getattr(self, 'job', None)
+        # The engineering master of the part (the pinned revision or the
+        # current one)
+        master = None
+        if self.product.producible and hasattr(self.product, 'get_bom'):
+            master = self.product.get_bom(self.component_revision)
         return {
             'id': self.id,
             'operation': self.operation,
             'piece': self.piece,
             'product': self.product.rec_name,
             'product_id': self.product.id,
+            'template_id': self.product.template.id,
             'revision': self.component_revision,
             'quantity': self.quantity,
             'unit': self.unit.symbol,
@@ -177,6 +197,7 @@ class MaterialCard(metaclass=PoolMeta):
             'state': self.state,
             'short': self.short,
             'producible': self.producible,
+            'master_bom_id': master.bom.id if master else None,
             'job': job.number if job else None,
             'leg': leg._build_tree_node() if leg else None,
             }

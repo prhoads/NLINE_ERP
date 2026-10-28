@@ -1298,7 +1298,121 @@
         };
     }
 
+    /* ---- What the user may do: menus and model rights ----------------- */
+
+    /* The desk screens of the user's menus (ir.ui.menu.nline_allowed),
+     * read once per session */
+    var allowedPrm = null, allowedFor = null;
+    function allowed() {
+        var session = global.Rpc.session();
+        var key = session ? session.session || session.userId || 1 : null;
+        if (!allowedPrm || allowedFor !== key) {
+            allowedFor = key;
+            allowedPrm = global.Rpc.model('ir.ui.menu', 'nline_allowed', [])
+                .catch(function () {
+                    /* A server without module nline_role: no restriction */
+                    return {all: true};
+                });
+        }
+        return allowedPrm;
+    }
+
+    /* Promise of true when a menu of the user opens the screen of the route
+     * ("parts/12" is the Parts screen, "orders/12" Customer Order Entry), as
+     * the Tryton client checks an address typed by hand */
+    function screenAllowed(route) {
+        var family = route.replace(/\?.*$/, '').split('/')[0];
+        return allowed().then(function (allow) {
+            return Boolean(allow.all || (allow.urls || []).some(function (url) {
+                var at = url.indexOf('#/');
+                return at >= 0 && url.substr(at + 2).replace(/\?.*$/, '')
+                    .split('/')[0] === family;
+            }));
+        });
+    }
+
+    /* Promise of {model: {read, write, create, delete}} */
+    function access(models) {
+        return global.Rpc.model('ir.model.access', 'get_access', [models])
+            .catch(function () {
+                return {};
+            });
+    }
+
+    /* ---- Right-click menu ------------------------------------------- */
+
+    /* contextMenu(event, items): items are {label, onclick} or '-' (a
+     * separator); the menu closes on a choice, a click elsewhere or Esc */
+    var openMenu = null;
+    function closeMenu() {
+        if (openMenu) {
+            openMenu.remove();
+            openMenu = null;
+        }
+    }
+    function contextMenu(event, items) {
+        event.preventDefault();
+        closeMenu();
+        items = items.filter(function (item, i) {
+            /* No separator first, last or twice */
+            return item !== '-' || (i > 0 && i < items.length - 1 &&
+                items[i - 1] !== '-');
+        });
+        if (!items.length) {
+            return;
+        }
+        var menu = el('div.ctx-menu', {role: 'menu'}, items.map(
+            function (item) {
+                if (item === '-') {
+                    return el('div.ctx-sep', {role: 'separator'});
+                }
+                return el('button.ctx-item', {type: 'button', role: 'menuitem',
+                    onclick: function () {
+                        closeMenu();
+                        item.onclick();
+                    }}, item.label);
+            }));
+        document.body.appendChild(menu);
+        var x = event.clientX, y = event.clientY;
+        var box = menu.getBoundingClientRect();
+        menu.style.left = Math.max(0, Math.min(x, global.innerWidth -
+            box.width - 4)) + 'px';
+        menu.style.top = Math.max(0, Math.min(y, global.innerHeight -
+            box.height - 4)) + 'px';
+        openMenu = menu;
+        var first = menu.querySelector('.ctx-item');
+        if (first) {
+            first.focus();
+        }
+        menu.addEventListener('keydown', function (e) {
+            var buttons = Array.prototype.slice.call(
+                menu.querySelectorAll('.ctx-item'));
+            var at = buttons.indexOf(document.activeElement);
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                buttons[(at + (e.key === 'ArrowDown' ? 1 : -1) +
+                    buttons.length) % buttons.length].focus();
+            }
+        });
+    }
+    document.addEventListener('mousedown', function (event) {
+        if (openMenu && !openMenu.contains(event.target)) {
+            closeMenu();
+        }
+    }, true);
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            closeMenu();
+        }
+    });
+    global.addEventListener('blur', closeMenu);
+    global.addEventListener('hashchange', closeMenu);
+
     Object.assign(UI, {
+        screenAllowed: screenAllowed,
+        access: access,
+        contextMenu: contextMenu,
+        closeMenu: closeMenu,
         master: master,
         fieldControl: fieldControl,
         report: report,

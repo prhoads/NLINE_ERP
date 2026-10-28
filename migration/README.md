@@ -34,6 +34,10 @@ years. Anything dated before it stays in Jobshop and QuickBooks (section 5).
 These become normal ERP documents that people keep working on:
 
 - **Open work orders** with their material and operations, released ones released.
+  Their Jobshop legs (`SUB_ID` > 0, fed through `SUBORD_SUB_ID`) become legs
+  of the order, made from the master of the leg part and numbered as in Jobshop
+  (`<work order>/<SUB_ID>`); a purchased part Jobshop pulled in as a leg stays
+  supplied from stock.
 - **Open sales orders** (remaining quantities) and **open purchase orders**.
 - **Inventory on hand** per part and location, at Jobshop's cost (one stock count).
 - **WIP**: the issued material and posted operations of the open work orders

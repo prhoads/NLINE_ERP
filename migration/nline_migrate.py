@@ -821,6 +821,8 @@ class Migration:
                         production.work_center = self.shop
                         production.save()
                     self.release(production, number)
+                if production:
+                    self.legs(production, row)
                 continue
             product = self.product(row['PART_ID'])
             if not product or not product.template.producible:
@@ -847,9 +849,112 @@ class Migration:
             production.save()
             if row['ORDER_STATUS'] == 'RELEASED':
                 self.release(production, number)
+            self.legs(production, row)
             done.add(number)
             self.count('work orders')
-        log("work orders: %s" % self.counts['work orders'])
+        log("work orders: %s, legs: %s" % (self.counts['work orders'],
+                self.counts['legs']))
+
+    def wip_location(self, warehouse):
+        "The location legs deliver to their parent through (nline_wip)"
+        if warehouse.production_wip_location:
+            return warehouse.production_wip_location
+        Location = self.get('stock.location')
+        wip = Location(name="Production WIP", type='production',
+            parent=warehouse)
+        wip.save()
+        warehouse.production_wip_location = wip
+        warehouse.save()
+        return wip
+
+    def legs(self, production, row):
+        """The legs of a Jobshop work order as legs of the production.
+
+        A Jobshop leg is the SUB_ID of its operations and materials; the
+        material it feeds (in the main leg or another leg) has its number in
+        SUBORD_SUB_ID. Each is made from the master of its part, as the desk
+        does when a master is dropped on the card, and keeps its Jobshop
+        number (<work order>/<SUB_ID>)."""
+        feeds = self.js.rows("select SUB_ID, SEQ_NO, PIECE_NO, SUBORD_SUB_ID, "
+            "SUBORD_PART_ID, SUBORD_ENG_ID from SHOPFLOOR_MATERIAL where "
+            "WORK_ID = ? and LOT_ID = ? and SPLIT_ID = ? and "
+            "SUBORD_SUB_ID is not null and SUBORD_PART_ID is not null",
+            row['WORK_ID'], row['LOT_ID'], row['SPLIT_ID'])
+        if not feeds:
+            return
+        Production = self.get('production')
+        Card = self.get('production.material_card')
+        Desk = self.get('nline.desk')
+        production.reload()
+        if production.state not in ('request', 'draft', 'waiting'):
+            return
+        self.wip_location(production.warehouse)
+        made = {'0': production}
+        for leg in Production.find([
+                    ('parent', 'child_of', [production.id], 'parent'),
+                    ('id', '!=', production.id)]):
+            made[str(leg.leg_index)] = leg
+        todo = sorted(feeds, key=lambda r: int(r['SUBORD_SUB_ID']))
+        while todo:
+            # A leg can feed another leg: make its parent first
+            ready = [r for r in todo if r['SUB_ID'] in made]
+            if not ready:
+                log("work order %s: legs %s feed no leg imported" % (
+                        production.number,
+                        ', '.join(r['SUBORD_SUB_ID'] for r in todo)))
+                break
+            for feed in ready:
+                todo.remove(feed)
+                sub = feed['SUBORD_SUB_ID']
+                if sub in made:
+                    continue
+                parent = made[feed['SUB_ID']]
+                leg = self.make_leg(production, parent, feed, Card, Desk)
+                if leg:
+                    made[sub] = leg
+                    self.count('legs')
+
+    def make_leg(self, root, parent, feed, Card, Desk):
+        Production = self.get('production')
+        part = feed['SUBORD_PART_ID']
+        product = self.product(part)
+        where = "work order %s leg %s (%s)" % (root.number,
+            feed['SUBORD_SUB_ID'], part)
+        if not product or not product.template.producible:
+            log("%s: not a fabricated part, left on stock" % where)
+            return None
+        bom = self.master(part, feed.get('SUBORD_ENG_ID')
+            or product.template.engineering_revision)
+        product = self.get('product.product')(product.id)
+        link = next((l for l in product.boms if bom and l.bom.id == bom.id),
+            None)
+        if not link:
+            log("%s: no engineering master, left on stock" % where)
+            return None
+        cards = [c for c in Card.find([
+                    ('production', '=', parent.id),
+                    ('supply', '=', 'stock')])
+            if c.product.id == product.id]
+        if not cards:
+            log("%s: no material card of the part on %s" % (where,
+                    parent.number))
+            return None
+        card = next((c for c in cards if c.piece == feed['PIECE_NO']),
+            cards[0])
+        try:
+            Desk.make_leg(card.id, link.id, self.context)
+        except Exception as error:
+            log("%s: not made: %s" % (where, error))
+            return None
+        card.reload()
+        leg = Production(card.leg.id)
+        # Jobshop's leg number, whatever the order they were made in
+        index = int(feed['SUBORD_SUB_ID'])
+        if leg.leg_index != index:
+            Production.write([leg.id], {'leg_index': index,
+                    'number': '%s/%s' % (root.number, index)}, self.context)
+            leg.reload()
+        return leg
 
     def release(self, production, number):
         try:

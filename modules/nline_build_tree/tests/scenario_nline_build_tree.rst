@@ -109,6 +109,19 @@ The build tree flags the short bolts::
     >>> leg['number'], leg['revision'], leg['cards'][0]['product']
     ('WO-261400-01/1', 'B', 'Casting')
 
+The nodes carry the records the right-click menu opens::
+
+    >>> tree['bom_id'] == work_order.bom.id
+    True
+    >>> body = tree['cards'][0]
+    >>> body['template_id'] == body_card.product.template.id
+    True
+    >>> body['master_bom_id'] == leg['bom_id']
+    True
+    >>> all('work_center_id' in w and 'purchase_id' in w
+    ...     for w in tree['works'])
+    True
+
 Print the traveler, the leg is under the body card after the assembly::
 
     >>> traveler = Report('production.traveler')

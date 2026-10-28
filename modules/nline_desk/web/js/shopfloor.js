@@ -376,10 +376,11 @@
         {name: 'piece', label: 'Piece', type: 'integer'}].concat(IO_FIELDS,
         [{name: 'component_revision', label: 'Pinned rev', type: 'char'}]);
 
-    Screens.engineeringMaster = function (main) {
+    Screens.engineeringMaster = function (main, params) {
         UI.master(main, {
             title: 'Engineering Master',
             model: 'production.bom',
+            open: params && params[0] ? parseInt(params[0], 10) : null,
             label: 'Master ID',
             order: [['name', 'ASC']],
             tabs: [
@@ -455,10 +456,11 @@
 
     /* ---- Shop Resources and Employees -------------------------------------- */
 
-    Screens.resources = function (main) {
+    Screens.resources = function (main, params) {
         UI.master(main, {
             title: 'Shop Resources',
             model: 'production.work.center',
+            open: params && params[0] ? parseInt(params[0], 10) : null,
             label: 'Resource ID',
             order: [['name', 'ASC']],
             tabs: [{title: 'Resource', fields: [

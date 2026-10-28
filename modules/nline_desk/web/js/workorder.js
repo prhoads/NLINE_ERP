@@ -279,6 +279,205 @@
             }, UI.showError);
         }
 
+        /* What the user may open and do: a menu item or button they may
+         * not use is not shown (no error popups) */
+        var SCREENS = ['work-orders', 'parts', 'masters', 'resources',
+            'orders', 'purchase-orders', 'issues', 'labor', 'planning'];
+        var MODELS = ['production', 'production.material_card'];
+        var perm = {screens: {}, access: {}};
+        Promise.all([Promise.all(SCREENS.map(UI.screenAllowed)),
+            UI.access(MODELS)]).then(function (result) {
+            SCREENS.forEach(function (screen, i) {
+                perm.screens[screen] = result[0][i];
+            });
+            perm.access = result[1] || {};
+            if (tree) {
+                render();
+            }
+        });
+        function can(model, mode) {
+            var a = perm.access[model];
+            return Boolean(a && a[mode]);
+        }
+        function opener(screen, path, label) {
+            return perm.screens[screen] ? {label: label, onclick: function () {
+                UI.openScreen(path);
+            }} : null;
+        }
+        function mayRelease() {
+            return can('production', 'write');
+        }
+        function mayMakeLeg() {
+            return can('production', 'create') &&
+                can('production.material_card', 'create');
+        }
+        function mayRemoveLeg() {
+            return can('production', 'delete') &&
+                can('production.material_card', 'write');
+        }
+
+        /* Jobshop's right-click menus of the cards */
+        function prodMenu(n) {
+            var d = n.data;
+            var leg = n.card;
+            var open = d.state === 'request' || d.state === 'draft';
+            var running = ['waiting', 'assigned', 'running'].indexOf(
+                d.state) >= 0;
+            return [
+                opener('work-orders', 'work-orders/' + d.id,
+                    'Open work order' + (leg ? ' (leg)' : '')),
+                d.template_id ? opener('parts', 'parts/' + d.template_id,
+                    'Open part') : null,
+                d.bom_id ? opener('masters', 'masters/' + d.bom_id,
+                    'Open engineering master') : null,
+                d.sale_id ? opener('orders', 'orders/' + d.sale_id,
+                    'Open sales order') : null,
+                '-',
+                !leg && open && mayRelease() ? {label:
+                    'Release with its legs', onclick: release} : null,
+                leg && open && mayRemoveLeg() ? {label: 'Remove leg',
+                    onclick: function () {
+                        removeLeg(leg);
+                    }} : null,
+                running ? opener('issues', 'issues', 'Issue materials…') :
+                    null,
+                running ? opener('labor', 'labor', 'Labor entry…') : null,
+                {label: 'Print traveler', onclick: traveler},
+                '-',
+                {label: 'Show details', onclick: function () {
+                    details(d.number, [
+                        ['Part', d.product],
+                        ['Revision', d.revision],
+                        ['Quantity', d.quantity + ' ' + (d.unit || '')],
+                        ['Status', d.state],
+                        ['Start', UI.date(d.planned_start_date)],
+                        ['Due', UI.date(d.planned_date)],
+                        ['For', d.origin],
+                        ['Cost', d.cost !== null && d.cost !== undefined ?
+                            UI.money(d.cost) : ''],
+                        ['Short', d.shortage ? 'Yes' : 'No']]);
+                }}];
+        }
+
+        function opMenu(n) {
+            var w = n.data;
+            var done = w.state === 'done' || w.state === 'finished';
+            var running = ['waiting', 'assigned', 'running'].indexOf(
+                n.root.state) >= 0;
+            return [
+                w.work_center_id ? opener('resources', 'resources/' +
+                    w.work_center_id, 'Open resource') : null,
+                w.purchase_id ? opener('purchase-orders', 'purchase-orders/' +
+                    w.purchase_id, 'Open purchase order') : null,
+                w.outside && !w.purchase_id && !done ? opener(
+                    'purchase-orders', 'purchase-orders/new',
+                    'Purchase this service…') : null,
+                n.root.bom_id ? opener('masters', 'masters/' + n.root.bom_id,
+                    'Open engineering master') : null,
+                '-',
+                w.id && running && !done ? opener('labor', 'labor',
+                    'Labor entry…') : null,
+                '-',
+                {label: 'Show details', onclick: function () {
+                    details((w.sequence !== null ? w.sequence + ' - ' : '') +
+                        w.operation, [
+                        ['Work order', n.root.number],
+                        ['Resource', w.work_center],
+                        ['Status', w.state],
+                        ['Planned hours', w.planned_duration ?
+                            w.planned_duration.toFixed(2) : ''],
+                        ['Outside', w.outside ? 'Yes' : 'No'],
+                        ['Supplier', w.supplier],
+                        ['Purchase order', w.purchase],
+                        ['Expected', UI.date(w.expected_date)],
+                        ['Cost', w.cost !== null && w.cost !== undefined ?
+                            UI.money(w.cost) : '']]);
+                }}];
+        }
+
+        function matMenu(n, editable) {
+            var c = n.data;
+            var draft = !c.leg || c.leg.state === 'request' ||
+                c.leg.state === 'draft';
+            var running = ['waiting', 'assigned', 'running'].indexOf(
+                n.root.state) >= 0;
+            return [
+                c.template_id ? opener('parts', 'parts/' + c.template_id,
+                    'Open part') : null,
+                c.master_bom_id ? opener('masters', 'masters/' +
+                    c.master_bom_id, 'Open engineering master') : null,
+                opener('planning', 'planning', 'Supply and demand'),
+                c.leg ? {label: 'Go to leg ' + c.leg.number, onclick:
+                    function () {
+                        goTo(c.leg.id);
+                    }} : null,
+                '-',
+                editable && c.producible && c.supply === 'stock' &&
+                    mayMakeLeg() ? {label: 'Make leg…', onclick: function () {
+                        askLeg(c, null);
+                    }} : null,
+                c.supply === 'leg' && draft && mayRemoveLeg() ? {label:
+                    'Remove leg', onclick: function () {
+                        removeLeg(c);
+                    }} : null,
+                running && c.supply !== 'leg' && c.state !== 'done' ?
+                    opener('issues', 'issues', 'Issue material…') : null,
+                c.supply === 'stock' && c.state !== 'done' ? opener(
+                    'purchase-orders', 'purchase-orders/new',
+                    'Purchase this material…') : null,
+                '-',
+                {label: 'Show details', onclick: function () {
+                    details(c.product, [
+                        ['Work order', n.root.number],
+                        ['Operation', c.operation],
+                        ['Piece', c.piece],
+                        ['Quantity', c.quantity + ' ' + c.unit],
+                        ['Pinned revision', c.revision],
+                        ['Supply', c.supply === 'leg' ? 'Leg ' +
+                            (c.leg ? c.leg.number : '') : c.supply === 'job'
+                            ? 'Job ' + (c.job || '') : 'Stock'],
+                        ['Status', c.state],
+                        ['Short', c.short ? 'Yes' : 'No']]);
+                }}];
+        }
+
+        function details(heading, rows) {
+            UI.modal(heading, [el('dl.details-grid', rows.filter(
+                function (row) {
+                    return row[1] !== null && row[1] !== undefined &&
+                        row[1] !== '';
+                }).map(function (row) {
+                    return [el('dt', row[0]), el('dd', String(row[1]))];
+                }).reduce(function (a, b) {
+                    return a.concat(b);
+                }, []))], [{label: 'Close', primary: true}]);
+        }
+
+        /* Scroll to the card of a leg and flash it */
+        function goTo(productionId) {
+            var target = shown && shown.nodes.filter(function (n) {
+                return n.kind === 'prod' && n.data.id === productionId;
+            })[0];
+            if (!target || !target.el) {
+                return;
+            }
+            canvasWrap.scrollLeft = Math.max(0, target.x * zoom -
+                canvasWrap.clientWidth / 3);
+            canvasWrap.scrollTop = Math.max(0, (target.y + target.h) * zoom -
+                canvasWrap.clientHeight + 40);
+            target.el.classList.remove('flash');
+            void target.el.offsetWidth;
+            target.el.classList.add('flash');
+        }
+
+        function withMenu(node, n, items) {
+            node.addEventListener('contextmenu', function (event) {
+                UI.contextMenu(event, items(n).filter(Boolean));
+            });
+            n.el = node;
+            return node;
+        }
+
         function mastersOf(productId) {
             for (var i = 0; i < masters.length; i++) {
                 if (masters[i].product === productId) {
@@ -367,14 +566,16 @@
             var parts = code(d.product);
             var buttons = [];
             if (!n.card) {
-                if (d.state === 'request' || d.state === 'draft') {
+                if ((d.state === 'request' || d.state === 'draft') &&
+                        mayRelease()) {
                     buttons.push(el('button', {type: 'button', onclick:
                         release, title: 'Release the order and its legs'},
                         'Release'));
                 }
                 buttons.push(el('button', {type: 'button', onclick:
                     traveler, title: 'Print the traveler'}, 'Traveler'));
-            } else if (d.state === 'request' || d.state === 'draft') {
+            } else if ((d.state === 'request' || d.state === 'draft') &&
+                    mayRemoveLeg()) {
                 buttons.push(el('button', {type: 'button', onclick:
                     function () {
                         removeLeg(n.card);
@@ -423,7 +624,7 @@
                 (c.supply === 'job' ? '.job' : '') + (c.short ? '.short' :
                     '');
             var droppable = editable && c.producible && c.supply !== 'leg' &&
-                c.supply !== 'job';
+                c.supply !== 'job' && mayMakeLeg();
             var tag = c.supply === 'leg' ? 'LEG' : c.supply === 'job' ?
                 'JOB ' + (c.job || '') : c.short ? 'SHORT' : 'STOCK';
             var node = el('div' + classes + (droppable ? '.droppable' : ''),
@@ -514,8 +715,11 @@
             svg.appendChild(defs);
             canvas.appendChild(svg);
             plan.nodes.forEach(function (n) {
-                var node = n.kind === 'prod' ? prodNode(n, editable) :
-                    n.kind === 'op' ? opNode(n) : matNode(n, editable);
+                var node = n.kind === 'prod' ? withMenu(prodNode(n, editable),
+                    n, prodMenu) : n.kind === 'op' ? withMenu(opNode(n), n,
+                    opMenu) : withMenu(matNode(n, editable), n, function (m) {
+                        return matMenu(m, editable);
+                    });
                 canvas.appendChild(node);
             });
             sizer = el('div.canvas-sizer');
@@ -544,6 +748,7 @@
             zoom = Math.min(2.5, Math.max(0.3, value));
             applyZoom();
         }
+        canvasWrap.addEventListener('scroll', UI.closeMenu);
         canvasWrap.addEventListener('wheel', function (event) {
             if (event.ctrlKey) {
                 event.preventDefault();

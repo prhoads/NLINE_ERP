@@ -355,3 +355,14 @@ table.data tr.short td { background: rgba(178, 106, 0, .08); }
 .gantt-bar.running { background: #2f6fb6; }
 .gantt-bar.late { outline: 2px solid var(--bad); }
 .toolbar select, .toolbar input[type=date] { width: auto; }
+
+/* Right-click menu (work order cards) */
+.ctx-menu { position: fixed; z-index: 1000; min-width: 210px; padding: 4px 0; background: var(--paper); color: var(--ink, inherit); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.22); font-size: 13px; }
+.ctx-item { display: block; width: 100%; text-align: left; background: none; border: 0; border-radius: 0; padding: 5px 14px; color: inherit; font: inherit; cursor: pointer; white-space: nowrap; }
+.ctx-item:hover, .ctx-item:focus { background: var(--accent-soft); outline: none; }
+.ctx-sep { height: 1px; margin: 4px 0; background: var(--line); }
+.details-grid { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; font-size: 13px; }
+.details-grid dt { color: var(--muted, #667); }
+.details-grid dd { margin: 0; }
+.node.flash { animation: nl-flash 1.2s ease-out 2; }
+@keyframes nl-flash { 0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,.12); } 50% { box-shadow: 0 0 0 4px var(--leg); } }
