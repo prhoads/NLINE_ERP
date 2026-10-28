@@ -384,7 +384,10 @@
         renderNav(hash);
         var routes = allRoutes();
         for (var i = 0; i < routes.length; i++) {
-            var match = hash.match(routes[i][0]);
+            /* A screen's ?query (e.g. a new document's Clear) does not
+             * change the screen */
+            var match = hash.match(routes[i][0]) ||
+                hash.replace(/\?.*$/, '').match(routes[i][0]);
             if (match) {
                 var screen = Screens[routes[i][1]];
                 try {

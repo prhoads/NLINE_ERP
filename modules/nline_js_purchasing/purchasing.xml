@@ -2,6 +2,195 @@
 <!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
 this repository contains the full copyright notices and license terms. -->
 <tryton>
+    <data grouped="1">
+        <record model="ir.message" id="msg_rfq_number_unique">
+            <field name="text">The RFQ ID must be unique.</field>
+        </record>
+        <record model="ir.message" id="msg_rfq_delete_purchased">
+            <field name="text">Request for quote %(rfq)s has purchase orders: cancel it instead of deleting it.</field>
+        </record>
+        <record model="ir.message" id="msg_rfq_no_supplier">
+            <field name="text">Request for quote %(rfq)s has no supplier %(slot)s.</field>
+        </record>
+        <record model="ir.message" id="msg_rfq_no_quote">
+            <field name="text">Supplier %(supplier)s quoted no open line of request for quote %(rfq)s.</field>
+        </record>
+        <record model="ir.message" id="msg_po_not_editable">
+            <field name="text">Purchase order %(purchase)s is closed or cancelled: it cannot change.</field>
+        </record>
+        <record model="ir.message" id="msg_po_number_used">
+            <field name="text">Order ID %(number)s is used by another purchase order.</field>
+        </record>
+        <record model="ir.message" id="msg_po_status">
+            <field name="text">Purchase order %(purchase)s cannot change to %(status)s.</field>
+        </record>
+        <record model="ir.message" id="msg_po_delete">
+            <field name="text">Purchase order %(purchase)s is released: close or cancel it instead of deleting it.</field>
+        </record>
+        <record model="ir.message" id="msg_return_quantity">
+            <field name="text">Only %(quantity)s of %(product)s are left to return on this receiver.</field>
+        </record>
+        <record model="ir.message" id="msg_tax_account">
+            <field name="text">Choose the account of tax %(tax)s.</field>
+        </record>
+    </data>
     <data>
+        <!-- The Jobshop purchasing tables: everyone reads them, the buyers
+        and the administrators change them -->
+        <record model="ir.model.access" id="access_rfq">
+            <field name="model" search="[('model', '=', 'nline.rfq')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_rfq_group_purchase">
+            <field name="model" search="[('model', '=', 'nline.rfq')]"/>
+            <field name="group" ref="purchase.group_purchase"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_rfq_group_admin">
+            <field name="model" search="[('model', '=', 'nline.rfq')]"/>
+            <field name="group" ref="res.group_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_rfq_line">
+            <field name="model" search="[('model', '=', 'nline.rfq.line')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_rfq_line_group_purchase">
+            <field name="model" search="[('model', '=', 'nline.rfq.line')]"/>
+            <field name="group" ref="purchase.group_purchase"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_rfq_line_group_admin">
+            <field name="model" search="[('model', '=', 'nline.rfq.line')]"/>
+            <field name="group" ref="res.group_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_rfq_line_price">
+            <field name="model" search="[('model', '=', 'nline.rfq.line.price')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_rfq_line_price_group_purchase">
+            <field name="model" search="[('model', '=', 'nline.rfq.line.price')]"/>
+            <field name="group" ref="purchase.group_purchase"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_rfq_line_price_group_admin">
+            <field name="model" search="[('model', '=', 'nline.rfq.line.price')]"/>
+            <field name="group" ref="res.group_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_rfq_link">
+            <field name="model" search="[('model', '=', 'nline.rfq.link')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_rfq_link_group_purchase">
+            <field name="model" search="[('model', '=', 'nline.rfq.link')]"/>
+            <field name="group" ref="purchase.group_purchase"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_rfq_link_group_admin">
+            <field name="model" search="[('model', '=', 'nline.rfq.link')]"/>
+            <field name="group" ref="res.group_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_purchase_link">
+            <field name="model" search="[('model', '=', 'nline.purchase.link')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_purchase_link_group_purchase">
+            <field name="model" search="[('model', '=', 'nline.purchase.link')]"/>
+            <field name="group" ref="purchase.group_purchase"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_purchase_link_group_admin">
+            <field name="model" search="[('model', '=', 'nline.purchase.link')]"/>
+            <field name="group" ref="res.group_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+
+        <record model="ir.rule.group" id="rule_group_rfq_companies">
+            <field name="name">User in companies</field>
+            <field name="model" search="[('model', '=', 'nline.rfq')]"/>
+            <field name="global_p" eval="True"/>
+        </record>
+        <record model="ir.rule" id="rule_rfq_companies">
+            <field name="domain"
+                eval="[('company', 'in', Eval('companies', []))]"
+                pyson="1"/>
+            <field name="rule_group" ref="rule_group_rfq_companies"/>
+        </record>
+
+        <!-- RFQ IDs: 00001, 00002... as Jobshop numbers them -->
+        <record model="ir.sequence.type" id="sequence_type_rfq">
+            <field name="name">Request for Quote</field>
+        </record>
+        <record model="ir.sequence.type-res.group"
+            id="sequence_type_rfq_group_admin">
+            <field name="sequence_type" ref="sequence_type_rfq"/>
+            <field name="group" ref="res.group_admin"/>
+        </record>
+        <record model="ir.sequence.type-res.group"
+            id="sequence_type_rfq_group_purchase_admin">
+            <field name="sequence_type" ref="sequence_type_rfq"/>
+            <field name="group" ref="purchase.group_purchase_admin"/>
+        </record>
+        <record model="ir.sequence" id="sequence_rfq">
+            <field name="name">Request for Quote</field>
+            <field name="sequence_type" ref="sequence_type_rfq"/>
+            <field name="padding" eval="5"/>
+        </record>
+    </data>
+    <data noupdate="1">
+        <!-- The Jobshop purchasing tax groups are the taxes of this group -->
+        <record model="account.tax.group" id="tax_group_purchase">
+            <field name="name">Jobshop Purchasing</field>
+            <field name="code">JS-PURCHASE</field>
+            <field name="kind">purchase</field>
+        </record>
     </data>
 </tryton>

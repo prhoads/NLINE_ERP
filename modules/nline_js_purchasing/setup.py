@@ -51,7 +51,7 @@ tests_require = [get_require_version('proteus')]
 
 setup(name=name,
     version=version,
-    description='N-Line field-level change log of accounting records',
+    description='N-Line VISUAL Jobshop emulation: Purchasing',
     long_description=read('README.rst'),
     author='N-Line Valves',
     author_email='nlinevalves@gmail.com',
@@ -63,7 +63,7 @@ setup(name=name,
         "Forum": 'https://www.tryton.org/forum',
         "Source Code": 'https://code.tryton.org/tryton',
         },
-    keywords='tryton history change log audit',
+    keywords='tryton jobshop purchasing supplier rfq receiving',
     package_dir={'trytond.modules.nline_js_purchasing': '.'},
     packages=(
         ['trytond.modules.nline_js_purchasing']
