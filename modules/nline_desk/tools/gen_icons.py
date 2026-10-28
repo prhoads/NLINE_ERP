@@ -109,17 +109,51 @@ def symbol(name):
     return tryton_paths(name)
 
 
-def svg(area, glyph):
-    top, bottom = AREAS[area]
-    grad = 'g-%s' % area
-    paths = ''.join('<path fill="#ffffff" d="%s"/>' % d for d in symbol(glyph))
+# Each icon its own look (the owner's choice, 28 Oct 2026): a palette of
+# today's interior colours (sage, terracotta, clay, ochre, navy, dusty blue,
+# olive, plum, rose clay, walnut, brass, charcoal) and three tile styles,
+# picked per icon so no two neighbours look alike. AREAS stays for the names.
+PALETTE = ['#8a9a7b', '#c46a4a', '#b5835a', '#c9a04a', '#2f3e5c', '#6e8ca8',
+    '#6b7046', '#6e4a5e', '#c98e86', '#6b4f3a', '#b08d57', '#3d3f42',
+    '#4f6b5e', '#a65d57']
+STYLES = ['solid', 'soft', 'ring']
+
+
+def look(name):
+    "The colour and style of an icon: steady for a name, varied across"
+    order = sorted(ICONS) or [name]
+    index = order.index(name) if name in order else sum(map(ord, name))
+    colour = PALETTE[(index * 5) % len(PALETTE)]
+    style = STYLES[(index // len(PALETTE) + index) % len(STYLES)]
+    return colour, style
+
+
+def tint(colour, amount):
+    "The colour mixed with white (amount 0..1 of white)"
+    rgb = [int(colour[i:i + 2], 16) for i in (1, 3, 5)]
+    return '#%02x%02x%02x' % tuple(round(c + (255 - c) * amount)
+        for c in rgb)
+
+
+def svg(name, glyph):
+    colour, style = look(name)
+    if style == 'solid':
+        tile = ('<rect x="0.5" y="0.5" width="23" height="23" rx="6" '
+            'fill="%s"/>' % colour)
+        ink = '#ffffff'
+    elif style == 'soft':
+        tile = ('<rect x="0.5" y="0.5" width="23" height="23" rx="6" '
+            'fill="%s"/>' % tint(colour, 0.78))
+        ink = colour
+    else:
+        tile = ('<rect x="1.25" y="1.25" width="21.5" height="21.5" rx="6" '
+            'fill="#ffffff" stroke="%s" stroke-width="1.5"/>' % colour)
+        ink = colour
+    paths = ''.join('<path fill="%s" d="%s"/>' % (ink, d)
+        for d in symbol(glyph))
     return ('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" '
-        'viewBox="0 0 24 24"><defs><linearGradient id="%s" x1="0" y1="0" '
-        'x2="0" y2="1"><stop offset="0" stop-color="%s"/><stop offset="1" '
-        'stop-color="%s"/></linearGradient></defs><rect x="0.5" y="0.5" '
-        'width="23" height="23" rx="5.5" fill="url(#%s)"/><g transform='
-        '"translate(4.2 4.2) scale(0.65)">%s</g></svg>\n' % (
-            grad, top, bottom, grad, paths))
+        'viewBox="0 0 24 24">%s<g transform="translate(4.2 4.2) '
+        'scale(0.65)">%s</g></svg>' % (tile, paths)) + chr(10)
 
 
 def icon(area, glyph):
@@ -137,7 +171,7 @@ def generate():
     records = []
     for name, (area, glyph) in sorted(ICONS.items()):
         open(os.path.join(OUT, name + '.svg'), 'w', encoding='utf-8',
-            newline='\n').write(svg(area, glyph))
+            newline='\n').write(svg(name, glyph))
         records.append('''        <record model="ir.ui.icon" id="icon_%s">
             <field name="name">%s</field>
             <field name="path">icons/%s.svg</field>
