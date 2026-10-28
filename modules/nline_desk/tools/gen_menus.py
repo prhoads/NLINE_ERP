@@ -78,34 +78,23 @@ SCREENS = {
 
 # Folders: (id, name, icon, [(item id, 'screen:<id>' or action, groups)])
 FOLDERS = [
+    # The QuickBooks side (accounting). The Jobshop side (Inventory,
+    # Engineering, Estimating, Sales, Purchasing, Planning, Shopfloor...) is
+    # VISUAL Jobshop's group bar, module nline_jobshop
     ('customers', 'Customers', 'tryton-sale', [
         ('customers', 'screen:customers', [ACC]),
         ('income_tracker', 'screen:income_tracker', [ACC]),
-        ('customer_window', 'screen:customer_window', []),
-        ('quotes', 'screen:quotes', [SALE]),
-        ('orders', 'screen:orders', [SALE]),
-        ('shipping', 'screen:shipping', [STOCK]),
-        ('invoicing', 'screen:invoicing', [ACC]),
-        ('sales', 'sale.act_sale_form', [SALE]),
         ('invoices', 'screen:invoices', [ACC]),
         ('sales_receipts', 'screen:sales_receipts', [ACC]),
         ('credits', 'screen:credits', [ACC]),
         ('receive', 'screen:receive', [ACC]),
         ('statements', 'screen:statements', [ACC]),
-        ('shipments_out', 'stock.act_shipment_out_form', [STOCK]),
         ('invoices_out', 'account_invoice.act_invoice_out_form', [ACC]),
         ]),
     ('vendors', 'Vendors', 'tryton-purchase', [
         ('vendors', 'screen:vendors', [ACC]),
         ('bill_tracker', 'screen:bill_tracker', [ACC]),
-        ('supplier_window', 'screen:supplier_window', []),
-        ('purchase_orders', 'screen:purchase_orders', [PURCHASE]),
-        ('receiving', 'screen:receiving', [STOCK]),
         ('bill_receipts', 'screen:bill_receipts', [ACC]),
-        ('purchases', 'purchase.act_purchase_form', [PURCHASE]),
-        ('requests', 'purchase_request.act_purchase_request_form',
-            ['purchase_request.group_purchase_request']),
-        ('shipments_in', 'stock.act_shipment_in_form', [STOCK]),
         ('bills', 'screen:bills', [ACC]),
         ('vendor_credits', 'screen:vendor_credits', [ACC]),
         ('pay_bills', 'screen:pay_bills', [ACC]),
@@ -119,38 +108,6 @@ FOLDERS = [
         ('reconcile', 'screen:reconcile', [ACC]),
         ('statements', 'account_statement.act_statement_form',
             ['account_statement.group_statement']),
-        ]),
-    ('shopfloor', 'Shop Floor', 'tryton-production', [
-        ('workorders', 'screen:workorders', [PROD]),
-        ('work_order', 'screen:work_order', [PROD]),
-        ('labor', 'screen:labor', [PROD]),
-        ('issues', 'screen:issues', [PROD]),
-        ('wo_receipts', 'screen:wo_receipts', [PROD]),
-        ('resources', 'screen:resources', [PROD]),
-        ('employees', 'screen:employees', ['company.group_employee_admin']),
-        ('productions', 'production.act_production_list', [PROD]),
-        ('jobs', 'nline_job.act_job_list', [PROD]),
-        ('works', 'production_work.act_work_list', [PROD]),
-        ]),
-    ('planning', 'Planning', 'tryton-production', [
-        ('planning', 'screen:planning', [PROD]),
-        ('scheduling', 'screen:scheduling', [PROD]),
-        ]),
-    ('engineering', 'Engineering', 'tryton-product', [
-        ('part_window', 'screen:parts', []),
-        ('masters', 'screen:masters', [PROD]),
-        ('parts', 'product.act_template_form', []),
-        ('boms', 'production.act_bom_list', [PROD]),
-        ('routings', 'production_routing.act_routing_list', [PROD]),
-        ('operations', 'production_routing.act_operation_list', [PROD]),
-        ('work_centers', 'production_work.act_work_center_list', [PROD]),
-        ]),
-    ('inventory', 'Inventory', 'tryton-stock', [
-        ('items', 'screen:items', []),
-        ('locations', 'stock.act_location_tree', [STOCK]),
-        ('inventories', 'stock.act_inventory_form', [STOCK]),
-        ('internal', 'stock.act_shipment_internal_form', [STOCK]),
-        ('moves', 'stock.act_move_form', [STOCK]),
         ]),
     ('company', 'Company', 'tryton-account', [
         ('reports', 'screen:reports', []),
@@ -196,7 +153,7 @@ def generate():
         <menuitem action="url_desk_home" sequence="1" id="menu_desk_home"
             icon="tryton-board"/>
 ''')
-    for seq, (fid, fname, icon, items) in enumerate(FOLDERS, start=2):
+    for seq, (fid, fname, icon, items) in enumerate(FOLDERS, start=20):
         out.append('''
         <menuitem name="%s" sequence="%d" id="menu_nl_%s" icon="%s"/>
 ''' % (fname, seq, fid, icon))

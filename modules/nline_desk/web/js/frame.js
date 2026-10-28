@@ -1086,16 +1086,68 @@
             extra = extra.concat([{label: 'Copy', onclick: copy},
                 {label: 'Delete', onclick: remove}]);
         }
+        if (options.print) {
+            /* File > Print: the window's report of the record */
+            extra.unshift({label: 'Print', onclick: function () {
+                if (record) {
+                    global.Rpc.report(options.print, [record.id]).then(
+                        function (r) {
+                            UI.openReport(r, options.title);
+                        }, UI.showError);
+                }
+            }});
+        }
         var form = UI.form(main, {title: options.title, extra: extra,
             onClear: clear, onSave: writes ? function (andNew) {
                 return save(andNew);
             } : null});
         main = form.body;
+
+        /* Browse > First / Previous / Next / Last: through the records in
+         * the window's order */
+        function step(where) {
+            global.Rpc.model(options.model, 'search', [options.domain || [],
+                0, null, options.order || null]).then(function (ids) {
+                    if (!ids.length) {
+                        return;
+                    }
+                    var at = record ? ids.indexOf(record.id) : -1;
+                    var to = where === 'first' ? 0 : where === 'last' ?
+                        ids.length - 1 : where === 'next' ?
+                        Math.min(ids.length - 1, at + 1) :
+                        Math.max(0, at < 0 ? ids.length - 1 : at - 1);
+                    load(ids[to]);
+                }, UI.showError);
+        }
+        var nav = options.nav === false ? null : el('span.record-nav',
+            [['first', '⏮', 'First record'], ['previous', '◀',
+                'Previous record'], ['next', '▶', 'Next record'],
+                ['last', '⏭', 'Last record']].map(function (b) {
+                return el('button', {type: 'button', title: b[2],
+                    'aria-label': b[2], onclick: function () {
+                        step(b[0]);
+                    }}, b[1]);
+            }));
         main.appendChild(el('div.panel.master-head',
-            el('label.field', options.label || 'ID'), id.node, status));
+            el('label.field', options.label || 'ID'), id.node, status, nav));
 
         var customTabs = [];
-        var tabs = (options.tabs || []).concat(options.browse ? [{
+        var tabs = (options.tabs || []).map(function (tab) {
+            /* The tabs every Jobshop window has */
+            if (tab.picture) {
+                return {title: tab.title || 'Picture', render: function (pane,
+                        r) {
+                    pictureTab(pane, options.model, r.id, writes);
+                }};
+            }
+            if (tab.notes) {
+                return {title: tab.title || 'Notes', render: function (pane,
+                        r) {
+                    notesTab(pane, options.model, r.id, writes);
+                }};
+            }
+            return tab;
+        }).concat(options.browse ? [{
             title: 'Browse', browse: options.browse}] : []);
 
         function show(index) {
@@ -1210,6 +1262,100 @@
         return {load: load, record: function () {
             return record;
         }};
+    }
+
+    /* The Picture tab: the images attached to the record (Tryton
+     * attachments), added from a file */
+    function pictureTab(pane, model, id, writes) {
+        var resource = model + ',' + id;
+        var list = el('div.pictures');
+        function load() {
+            global.Rpc.searchRead('ir.attachment', [['resource', '=',
+                resource]], ['name', 'data', 'link', 'type'], {order:
+                [['id', 'ASC']]}).then(function (rows) {
+                    UI.clear(list);
+                    var shown = rows.filter(function (a) {
+                        return /\.(png|jpe?g|gif|bmp|webp|svg)$/i.test(
+                            a.name || '') && a.data;
+                    });
+                    shown.forEach(function (a) {
+                        var type = /\.svg$/i.test(a.name) ? 'image/svg+xml' :
+                            'image/' + a.name.split('.').pop().toLowerCase()
+                            .replace('jpg', 'jpeg');
+                        list.appendChild(el('figure.picture',
+                            el('img', {src: 'data:' + type + ';base64,' +
+                                a.data.base64, alt: a.name}),
+                            el('figcaption', a.name)));
+                    });
+                    if (!shown.length) {
+                        list.appendChild(el('p.muted', 'No picture.'));
+                    }
+                }, UI.showError);
+        }
+        var file = el('input', {type: 'file', accept: 'image/*',
+            'aria-label': 'Add a picture'});
+        file.addEventListener('change', function () {
+            var f = file.files[0];
+            if (!f) {
+                return;
+            }
+            var reader = new FileReader();
+            reader.onload = function () {
+                var data = String(reader.result).split(',')[1];
+                global.Rpc.model('ir.attachment', 'create', [[{name: f.name,
+                    resource: resource, data: {__class__: 'bytes',
+                        base64: data}}]]).then(function () {
+                    file.value = '';
+                    load();
+                }, UI.showError);
+            };
+            reader.readAsDataURL(f);
+        });
+        pane.appendChild(el('div.toolbar', writes ? el('label',
+            'Add picture ', file) : null));
+        pane.appendChild(list);
+        load();
+    }
+
+    /* The Notes tab: the record's notes (Tryton notes), newest first */
+    function notesTab(pane, model, id, writes) {
+        var resource = model + ',' + id;
+        var list = el('div.notes');
+        var text = el('textarea', {rows: 3, 'aria-label': 'New note',
+            placeholder: 'New note'});
+        function load() {
+            global.Rpc.searchRead('ir.note', [['resource', '=', resource]],
+                ['message', 'create_date', 'create_uid.rec_name'], {order:
+                    [['id', 'DESC']]}).then(function (rows) {
+                    UI.clear(list);
+                    rows.forEach(function (n) {
+                        list.appendChild(el('div.note',
+                            el('div.muted', (n['create_uid.'] ?
+                                n['create_uid.'].rec_name + ' · ' : '') +
+                                String(n.create_date || '').slice(0, 16)),
+                            el('div', n.message)));
+                    });
+                    if (!rows.length) {
+                        list.appendChild(el('p.muted', 'No notes.'));
+                    }
+                }, UI.showError);
+        }
+        if (writes) {
+            pane.appendChild(el('div', text, el('div.toolbar', el('button', {
+                type: 'button', onclick: function () {
+                    if (!text.value.trim()) {
+                        return;
+                    }
+                    global.Rpc.model('ir.note', 'create', [[{resource:
+                        resource, message: text.value.trim()}]]).then(
+                        function () {
+                            text.value = '';
+                            load();
+                        }, UI.showError);
+                }}, 'Add note'))));
+        }
+        pane.appendChild(list);
+        load();
     }
 
     /* A tab of related lines (one2many) edited in a grid: their changes as
@@ -1410,6 +1556,8 @@
 
     Object.assign(UI, {
         screenAllowed: screenAllowed,
+        pictureTab: pictureTab,
+        notesTab: notesTab,
         access: access,
         contextMenu: contextMenu,
         closeMenu: closeMenu,

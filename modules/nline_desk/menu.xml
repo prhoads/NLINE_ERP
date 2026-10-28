@@ -408,7 +408,7 @@ this repository contains the full copyright notices and license terms. -->
         <menuitem action="url_desk_home" sequence="1" id="menu_desk_home"
             icon="tryton-board"/>
 
-        <menuitem name="Customers" sequence="2" id="menu_nl_customers" icon="tryton-sale"/>
+        <menuitem name="Customers" sequence="20" id="menu_nl_customers" icon="tryton-sale"/>
         <menuitem parent="menu_nl_customers" action="url_desk_customers"
             sequence="10" id="menu_desk_customers"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_customers_group_account">
@@ -421,82 +421,44 @@ this repository contains the full copyright notices and license terms. -->
             <field name="menu" ref="menu_desk_income_tracker"/>
             <field name="group" ref="account.group_account"/>
         </record>
-        <menuitem parent="menu_nl_customers" action="url_desk_customer_window"
-            sequence="30" id="menu_desk_customer_window"/>
-        <menuitem parent="menu_nl_customers" action="url_desk_quotes"
-            sequence="40" id="menu_desk_quotes"/>
-        <record model="ir.ui.menu-res.group" id="menu_desk_quotes_group_sale">
-            <field name="menu" ref="menu_desk_quotes"/>
-            <field name="group" ref="sale.group_sale"/>
-        </record>
-        <menuitem parent="menu_nl_customers" action="url_desk_orders"
-            sequence="50" id="menu_desk_orders"/>
-        <record model="ir.ui.menu-res.group" id="menu_desk_orders_group_sale">
-            <field name="menu" ref="menu_desk_orders"/>
-            <field name="group" ref="sale.group_sale"/>
-        </record>
-        <menuitem parent="menu_nl_customers" action="url_desk_shipping"
-            sequence="60" id="menu_desk_shipping"/>
-        <record model="ir.ui.menu-res.group" id="menu_desk_shipping_group_stock">
-            <field name="menu" ref="menu_desk_shipping"/>
-            <field name="group" ref="stock.group_stock"/>
-        </record>
-        <menuitem parent="menu_nl_customers" action="url_desk_invoicing"
-            sequence="70" id="menu_desk_invoicing"/>
-        <record model="ir.ui.menu-res.group" id="menu_desk_invoicing_group_account">
-            <field name="menu" ref="menu_desk_invoicing"/>
-            <field name="group" ref="account.group_account"/>
-        </record>
-        <menuitem parent="menu_nl_customers" action="sale.act_sale_form"
-            sequence="80" id="menu_nl_customers_sales"/>
-        <record model="ir.ui.menu-res.group" id="menu_nl_customers_sales_group_sale">
-            <field name="menu" ref="menu_nl_customers_sales"/>
-            <field name="group" ref="sale.group_sale"/>
-        </record>
         <menuitem parent="menu_nl_customers" action="url_desk_invoices"
-            sequence="90" id="menu_desk_invoices"/>
+            sequence="30" id="menu_desk_invoices"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_invoices_group_account">
             <field name="menu" ref="menu_desk_invoices"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_customers" action="url_desk_sales_receipts"
-            sequence="100" id="menu_desk_sales_receipts"/>
+            sequence="40" id="menu_desk_sales_receipts"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_sales_receipts_group_account">
             <field name="menu" ref="menu_desk_sales_receipts"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_customers" action="url_desk_credits"
-            sequence="110" id="menu_desk_credits"/>
+            sequence="50" id="menu_desk_credits"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_credits_group_account">
             <field name="menu" ref="menu_desk_credits"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_customers" action="url_desk_receive"
-            sequence="120" id="menu_desk_receive"/>
+            sequence="60" id="menu_desk_receive"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_receive_group_account">
             <field name="menu" ref="menu_desk_receive"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_customers" action="url_desk_statements"
-            sequence="130" id="menu_desk_statements"/>
+            sequence="70" id="menu_desk_statements"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_statements_group_account">
             <field name="menu" ref="menu_desk_statements"/>
             <field name="group" ref="account.group_account"/>
         </record>
-        <menuitem parent="menu_nl_customers" action="stock.act_shipment_out_form"
-            sequence="140" id="menu_nl_customers_shipments_out"/>
-        <record model="ir.ui.menu-res.group" id="menu_nl_customers_shipments_out_group_stock">
-            <field name="menu" ref="menu_nl_customers_shipments_out"/>
-            <field name="group" ref="stock.group_stock"/>
-        </record>
         <menuitem parent="menu_nl_customers" action="account_invoice.act_invoice_out_form"
-            sequence="150" id="menu_nl_customers_invoices_out"/>
+            sequence="80" id="menu_nl_customers_invoices_out"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_customers_invoices_out_group_account">
             <field name="menu" ref="menu_nl_customers_invoices_out"/>
             <field name="group" ref="account.group_account"/>
         </record>
 
-        <menuitem name="Vendors" sequence="3" id="menu_nl_vendors" icon="tryton-purchase"/>
+        <menuitem name="Vendors" sequence="21" id="menu_nl_vendors" icon="tryton-purchase"/>
         <menuitem parent="menu_nl_vendors" action="url_desk_vendors"
             sequence="10" id="menu_desk_vendors"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_vendors_group_account">
@@ -509,70 +471,38 @@ this repository contains the full copyright notices and license terms. -->
             <field name="menu" ref="menu_desk_bill_tracker"/>
             <field name="group" ref="account.group_account"/>
         </record>
-        <menuitem parent="menu_nl_vendors" action="url_desk_supplier_window"
-            sequence="30" id="menu_desk_supplier_window"/>
-        <menuitem parent="menu_nl_vendors" action="url_desk_purchase_orders"
-            sequence="40" id="menu_desk_purchase_orders"/>
-        <record model="ir.ui.menu-res.group" id="menu_desk_purchase_orders_group_purchase">
-            <field name="menu" ref="menu_desk_purchase_orders"/>
-            <field name="group" ref="purchase.group_purchase"/>
-        </record>
-        <menuitem parent="menu_nl_vendors" action="url_desk_receiving"
-            sequence="50" id="menu_desk_receiving"/>
-        <record model="ir.ui.menu-res.group" id="menu_desk_receiving_group_stock">
-            <field name="menu" ref="menu_desk_receiving"/>
-            <field name="group" ref="stock.group_stock"/>
-        </record>
         <menuitem parent="menu_nl_vendors" action="url_desk_bill_receipts"
-            sequence="60" id="menu_desk_bill_receipts"/>
+            sequence="30" id="menu_desk_bill_receipts"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_bill_receipts_group_account">
             <field name="menu" ref="menu_desk_bill_receipts"/>
             <field name="group" ref="account.group_account"/>
         </record>
-        <menuitem parent="menu_nl_vendors" action="purchase.act_purchase_form"
-            sequence="70" id="menu_nl_vendors_purchases"/>
-        <record model="ir.ui.menu-res.group" id="menu_nl_vendors_purchases_group_purchase">
-            <field name="menu" ref="menu_nl_vendors_purchases"/>
-            <field name="group" ref="purchase.group_purchase"/>
-        </record>
-        <menuitem parent="menu_nl_vendors" action="purchase_request.act_purchase_request_form"
-            sequence="80" id="menu_nl_vendors_requests"/>
-        <record model="ir.ui.menu-res.group" id="menu_nl_vendors_requests_group_purchase_request">
-            <field name="menu" ref="menu_nl_vendors_requests"/>
-            <field name="group" ref="purchase_request.group_purchase_request"/>
-        </record>
-        <menuitem parent="menu_nl_vendors" action="stock.act_shipment_in_form"
-            sequence="90" id="menu_nl_vendors_shipments_in"/>
-        <record model="ir.ui.menu-res.group" id="menu_nl_vendors_shipments_in_group_stock">
-            <field name="menu" ref="menu_nl_vendors_shipments_in"/>
-            <field name="group" ref="stock.group_stock"/>
-        </record>
         <menuitem parent="menu_nl_vendors" action="url_desk_bills"
-            sequence="100" id="menu_desk_bills"/>
+            sequence="40" id="menu_desk_bills"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_bills_group_account">
             <field name="menu" ref="menu_desk_bills"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_vendors" action="url_desk_vendor_credits"
-            sequence="110" id="menu_desk_vendor_credits"/>
+            sequence="50" id="menu_desk_vendor_credits"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_vendor_credits_group_account">
             <field name="menu" ref="menu_desk_vendor_credits"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_vendors" action="url_desk_pay_bills"
-            sequence="120" id="menu_desk_pay_bills"/>
+            sequence="60" id="menu_desk_pay_bills"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_pay_bills_group_account">
             <field name="menu" ref="menu_desk_pay_bills"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_vendors" action="account_invoice.act_invoice_in_form"
-            sequence="130" id="menu_nl_vendors_invoices_in"/>
+            sequence="70" id="menu_nl_vendors_invoices_in"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_vendors_invoices_in_group_account">
             <field name="menu" ref="menu_nl_vendors_invoices_in"/>
             <field name="group" ref="account.group_account"/>
         </record>
 
-        <menuitem name="Banking" sequence="4" id="menu_nl_banking" icon="tryton-bank"/>
+        <menuitem name="Banking" sequence="22" id="menu_nl_banking" icon="tryton-bank"/>
         <menuitem parent="menu_nl_banking" action="url_desk_checks"
             sequence="10" id="menu_desk_checks"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_checks_group_account">
@@ -610,147 +540,7 @@ this repository contains the full copyright notices and license terms. -->
             <field name="group" ref="account_statement.group_statement"/>
         </record>
 
-        <menuitem name="Shop Floor" sequence="5" id="menu_nl_shopfloor" icon="tryton-production"/>
-        <menuitem parent="menu_nl_shopfloor" action="url_desk_workorders"
-            sequence="10" id="menu_desk_workorders"/>
-        <record model="ir.ui.menu-res.group" id="menu_desk_workorders_group_production">
-            <field name="menu" ref="menu_desk_workorders"/>
-            <field name="group" ref="production.group_production"/>
-        </record>
-        <menuitem parent="menu_nl_shopfloor" action="url_desk_work_order"
-            sequence="20" id="menu_desk_work_order"/>
-        <record model="ir.ui.menu-res.group" id="menu_desk_work_order_group_production">
-            <field name="menu" ref="menu_desk_work_order"/>
-            <field name="group" ref="production.group_production"/>
-        </record>
-        <menuitem parent="menu_nl_shopfloor" action="url_desk_labor"
-            sequence="30" id="menu_desk_labor"/>
-        <record model="ir.ui.menu-res.group" id="menu_desk_labor_group_production">
-            <field name="menu" ref="menu_desk_labor"/>
-            <field name="group" ref="production.group_production"/>
-        </record>
-        <menuitem parent="menu_nl_shopfloor" action="url_desk_issues"
-            sequence="40" id="menu_desk_issues"/>
-        <record model="ir.ui.menu-res.group" id="menu_desk_issues_group_production">
-            <field name="menu" ref="menu_desk_issues"/>
-            <field name="group" ref="production.group_production"/>
-        </record>
-        <menuitem parent="menu_nl_shopfloor" action="url_desk_wo_receipts"
-            sequence="50" id="menu_desk_wo_receipts"/>
-        <record model="ir.ui.menu-res.group" id="menu_desk_wo_receipts_group_production">
-            <field name="menu" ref="menu_desk_wo_receipts"/>
-            <field name="group" ref="production.group_production"/>
-        </record>
-        <menuitem parent="menu_nl_shopfloor" action="url_desk_resources"
-            sequence="60" id="menu_desk_resources"/>
-        <record model="ir.ui.menu-res.group" id="menu_desk_resources_group_production">
-            <field name="menu" ref="menu_desk_resources"/>
-            <field name="group" ref="production.group_production"/>
-        </record>
-        <menuitem parent="menu_nl_shopfloor" action="url_desk_employees"
-            sequence="70" id="menu_desk_employees"/>
-        <record model="ir.ui.menu-res.group" id="menu_desk_employees_group_employee_admin">
-            <field name="menu" ref="menu_desk_employees"/>
-            <field name="group" ref="company.group_employee_admin"/>
-        </record>
-        <menuitem parent="menu_nl_shopfloor" action="production.act_production_list"
-            sequence="80" id="menu_nl_shopfloor_productions"/>
-        <record model="ir.ui.menu-res.group" id="menu_nl_shopfloor_productions_group_production">
-            <field name="menu" ref="menu_nl_shopfloor_productions"/>
-            <field name="group" ref="production.group_production"/>
-        </record>
-        <menuitem parent="menu_nl_shopfloor" action="nline_job.act_job_list"
-            sequence="90" id="menu_nl_shopfloor_jobs"/>
-        <record model="ir.ui.menu-res.group" id="menu_nl_shopfloor_jobs_group_production">
-            <field name="menu" ref="menu_nl_shopfloor_jobs"/>
-            <field name="group" ref="production.group_production"/>
-        </record>
-        <menuitem parent="menu_nl_shopfloor" action="production_work.act_work_list"
-            sequence="100" id="menu_nl_shopfloor_works"/>
-        <record model="ir.ui.menu-res.group" id="menu_nl_shopfloor_works_group_production">
-            <field name="menu" ref="menu_nl_shopfloor_works"/>
-            <field name="group" ref="production.group_production"/>
-        </record>
-
-        <menuitem name="Planning" sequence="6" id="menu_nl_planning" icon="tryton-production"/>
-        <menuitem parent="menu_nl_planning" action="url_desk_planning"
-            sequence="10" id="menu_desk_planning"/>
-        <record model="ir.ui.menu-res.group" id="menu_desk_planning_group_production">
-            <field name="menu" ref="menu_desk_planning"/>
-            <field name="group" ref="production.group_production"/>
-        </record>
-        <menuitem parent="menu_nl_planning" action="url_desk_scheduling"
-            sequence="20" id="menu_desk_scheduling"/>
-        <record model="ir.ui.menu-res.group" id="menu_desk_scheduling_group_production">
-            <field name="menu" ref="menu_desk_scheduling"/>
-            <field name="group" ref="production.group_production"/>
-        </record>
-
-        <menuitem name="Engineering" sequence="7" id="menu_nl_engineering" icon="tryton-product"/>
-        <menuitem parent="menu_nl_engineering" action="url_desk_parts"
-            sequence="10" id="menu_desk_parts"/>
-        <menuitem parent="menu_nl_engineering" action="url_desk_masters"
-            sequence="20" id="menu_desk_masters"/>
-        <record model="ir.ui.menu-res.group" id="menu_desk_masters_group_production">
-            <field name="menu" ref="menu_desk_masters"/>
-            <field name="group" ref="production.group_production"/>
-        </record>
-        <menuitem parent="menu_nl_engineering" action="product.act_template_form"
-            sequence="30" id="menu_nl_engineering_parts"/>
-        <menuitem parent="menu_nl_engineering" action="production.act_bom_list"
-            sequence="40" id="menu_nl_engineering_boms"/>
-        <record model="ir.ui.menu-res.group" id="menu_nl_engineering_boms_group_production">
-            <field name="menu" ref="menu_nl_engineering_boms"/>
-            <field name="group" ref="production.group_production"/>
-        </record>
-        <menuitem parent="menu_nl_engineering" action="production_routing.act_routing_list"
-            sequence="50" id="menu_nl_engineering_routings"/>
-        <record model="ir.ui.menu-res.group" id="menu_nl_engineering_routings_group_production">
-            <field name="menu" ref="menu_nl_engineering_routings"/>
-            <field name="group" ref="production.group_production"/>
-        </record>
-        <menuitem parent="menu_nl_engineering" action="production_routing.act_operation_list"
-            sequence="60" id="menu_nl_engineering_operations"/>
-        <record model="ir.ui.menu-res.group" id="menu_nl_engineering_operations_group_production">
-            <field name="menu" ref="menu_nl_engineering_operations"/>
-            <field name="group" ref="production.group_production"/>
-        </record>
-        <menuitem parent="menu_nl_engineering" action="production_work.act_work_center_list"
-            sequence="70" id="menu_nl_engineering_work_centers"/>
-        <record model="ir.ui.menu-res.group" id="menu_nl_engineering_work_centers_group_production">
-            <field name="menu" ref="menu_nl_engineering_work_centers"/>
-            <field name="group" ref="production.group_production"/>
-        </record>
-
-        <menuitem name="Inventory" sequence="8" id="menu_nl_inventory" icon="tryton-stock"/>
-        <menuitem parent="menu_nl_inventory" action="url_desk_items"
-            sequence="10" id="menu_desk_items"/>
-        <menuitem parent="menu_nl_inventory" action="stock.act_location_tree"
-            sequence="20" id="menu_nl_inventory_locations"/>
-        <record model="ir.ui.menu-res.group" id="menu_nl_inventory_locations_group_stock">
-            <field name="menu" ref="menu_nl_inventory_locations"/>
-            <field name="group" ref="stock.group_stock"/>
-        </record>
-        <menuitem parent="menu_nl_inventory" action="stock.act_inventory_form"
-            sequence="30" id="menu_nl_inventory_inventories"/>
-        <record model="ir.ui.menu-res.group" id="menu_nl_inventory_inventories_group_stock">
-            <field name="menu" ref="menu_nl_inventory_inventories"/>
-            <field name="group" ref="stock.group_stock"/>
-        </record>
-        <menuitem parent="menu_nl_inventory" action="stock.act_shipment_internal_form"
-            sequence="40" id="menu_nl_inventory_internal"/>
-        <record model="ir.ui.menu-res.group" id="menu_nl_inventory_internal_group_stock">
-            <field name="menu" ref="menu_nl_inventory_internal"/>
-            <field name="group" ref="stock.group_stock"/>
-        </record>
-        <menuitem parent="menu_nl_inventory" action="stock.act_move_form"
-            sequence="50" id="menu_nl_inventory_moves"/>
-        <record model="ir.ui.menu-res.group" id="menu_nl_inventory_moves_group_stock">
-            <field name="menu" ref="menu_nl_inventory_moves"/>
-            <field name="group" ref="stock.group_stock"/>
-        </record>
-
-        <menuitem name="Company" sequence="9" id="menu_nl_company" icon="tryton-account"/>
+        <menuitem name="Company" sequence="23" id="menu_nl_company" icon="tryton-account"/>
         <menuitem parent="menu_nl_company" action="url_desk_reports"
             sequence="10" id="menu_desk_reports"/>
         <menuitem parent="menu_nl_company" action="url_desk_company_info"

@@ -323,12 +323,19 @@
         [/^#\/company-info$/, 'companyInfo']
     ];
 
+    /* The routes of the Jobshop screens (js/jobshop/*.js push them on
+     * window.NLINE_ROUTES) first: they may replace a screen above */
+    function allRoutes() {
+        return (global.NLINE_ROUTES || []).concat(ROUTES);
+    }
+
     /* The Tryton tab of a screen: a work order card stays in the work
      * orders tab */
     function tabOf(hash) {
-        for (var i = 0; i < ROUTES.length; i++) {
-            if (hash.replace(/\?.*$/, '').match(ROUTES[i][0])) {
-                return ROUTES[i][1].replace(/^workorder$/, 'workorders');
+        var routes = allRoutes();
+        for (var i = 0; i < routes.length; i++) {
+            if (hash.replace(/\?.*$/, '').match(routes[i][0])) {
+                return routes[i][1].replace(/^workorder$/, 'workorders');
             }
         }
         return null;
@@ -369,10 +376,11 @@
         }
         var main = UI.clear(document.getElementById('main'));
         renderNav(hash);
-        for (var i = 0; i < ROUTES.length; i++) {
-            var match = hash.match(ROUTES[i][0]);
+        var routes = allRoutes();
+        for (var i = 0; i < routes.length; i++) {
+            var match = hash.match(routes[i][0]);
             if (match) {
-                var screen = Screens[ROUTES[i][1]];
+                var screen = Screens[routes[i][1]];
                 try {
                     screen(main, match.slice(1));
                 } catch (error) {

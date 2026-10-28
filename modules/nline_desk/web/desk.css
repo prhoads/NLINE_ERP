@@ -366,3 +366,11 @@ table.data tr.short td { background: rgba(178, 106, 0, .08); }
 .details-grid dd { margin: 0; }
 .node.flash { animation: nl-flash 1.2s ease-out 2; }
 @keyframes nl-flash { 0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,.12); } 50% { box-shadow: 0 0 0 4px var(--leg); } }
+/* Jobshop windows: record navigation, Picture and Notes tabs */
+.record-nav { display: inline-flex; gap: 2px; margin-left: 8px; }
+.record-nav button { padding: 2px 7px; }
+.pictures { display: flex; flex-wrap: wrap; gap: 12px; }
+.picture { margin: 0; max-width: 320px; }
+.picture img { max-width: 100%; max-height: 260px; border: 1px solid var(--line); background: #fff; }
+.picture figcaption { font-size: 12px; color: var(--muted); }
+.notes .note { border-bottom: 1px solid var(--line); padding: 6px 0; white-space: pre-wrap; }

@@ -21,6 +21,7 @@ QuickBooks number) is kept, not duplicated. It writes through Tryton (proteus),
 so every rule of the ERP applies. It never writes to Jobshop or QuickBooks.
 """
 import argparse
+import os
 import datetime as dt
 import re
 import sys
@@ -33,6 +34,11 @@ JOBSHOP = 'NLINE_VJS'
 QUICKBOOKS = 'QBLocal'
 STEPS = ['base', 'parties', 'resources', 'parts', 'masters', 'sales',
     'purchases', 'workorders', 'bills', 'invoices', 'checks']
+# The Jobshop emulation's data, area by area (migration/jobshop/<area>.py,
+# def run(m)), after the documents they refer to
+JS_AREAS = ['common', 'inventory', 'sales', 'purchasing', 'engineering',
+    'shopfloor', 'planning', 'admin']
+STEPS += ['js_' + a for a in JS_AREAS]
 OPEN = ('RELEASED', 'UNRELEASED', 'FIRM', 'HOLD')
 # The work center of the work orders: every Jobshop resource is under it
 SHOP = "N-Line Shop"
@@ -1153,6 +1159,17 @@ class Migration:
         sequence.save()
         log("checks: %s" % self.counts['checks'])
 
+    def step_jobshop(self, area):
+        "The data of a Jobshop emulation area (migration/jobshop/<area>.py)"
+        import importlib
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        try:
+            module = importlib.import_module('jobshop.' + area)
+        except ModuleNotFoundError:
+            log("jobshop %s: no data to import yet" % area)
+            return
+        module.run(self)
+
     # ---- run ----------------------------------------------------------------------
 
     def run(self, steps):
@@ -1167,7 +1184,10 @@ class Migration:
         for step in STEPS[1:]:
             if step in steps:
                 started = time.time()
-                getattr(self, 'step_' + step)()
+                if step.startswith('js_'):
+                    self.step_jobshop(step[3:])
+                else:
+                    getattr(self, 'step_' + step)()
                 log("step %s done in %.0f s" % (step, time.time() - started))
         log("made: " + ', '.join('%s %s' % (n, what)
                 for what, n in sorted(self.counts.items())) or 'nothing new')
