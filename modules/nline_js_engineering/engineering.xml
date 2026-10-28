@@ -3,5 +3,230 @@
 this repository contains the full copyright notices and license terms. -->
 <tryton>
     <data>
+        <!-- Operation templates, additional resources and variables: the
+        production group (and sales for the quote masters); quotes: the
+        sales group -->
+        <record model="ir.model.access" id="access_operation_template">
+            <field name="model" search="[('model', '=', 'nline.engineering.operation_template')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_operation_template_production">
+            <field name="model" search="[('model', '=', 'nline.engineering.operation_template')]"/>
+            <field name="group" ref="production.group_production"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_operation_resource">
+            <field name="model" search="[('model', '=', 'nline.engineering.operation_resource')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_operation_resource_production">
+            <field name="model" search="[('model', '=', 'nline.engineering.operation_resource')]"/>
+            <field name="group" ref="production.group_production"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_operation_resource_sale">
+            <field name="model" search="[('model', '=', 'nline.engineering.operation_resource')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_variable">
+            <field name="model" search="[('model', '=', 'nline.engineering.variable')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_variable_production">
+            <field name="model" search="[('model', '=', 'nline.engineering.variable')]"/>
+            <field name="group" ref="production.group_production"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_variable_sale">
+            <field name="model" search="[('model', '=', 'nline.engineering.variable')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_quote">
+            <field name="model" search="[('model', '=', 'nline.quote')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_quote_sale">
+            <field name="model" search="[('model', '=', 'nline.quote')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_quote_line">
+            <field name="model" search="[('model', '=', 'nline.quote.line')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_quote_line_sale">
+            <field name="model" search="[('model', '=', 'nline.quote.line')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_quote_line_price">
+            <field name="model" search="[('model', '=', 'nline.quote.line.price')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_quote_line_price_sale">
+            <field name="model" search="[('model', '=', 'nline.quote.line.price')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_quote_charge">
+            <field name="model" search="[('model', '=', 'nline.quote.charge')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_quote_charge_sale">
+            <field name="model" search="[('model', '=', 'nline.quote.charge')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_bom_quote_master_sale">
+            <field name="model" search="[('model', '=', 'production.bom')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.rule.group" id="rule_group_bom_quote">
+            <field name="name">Quote masters only</field>
+            <field name="model" search="[('model', '=', 'production.bom')]"/>
+            <field name="global_p" eval="False"/>
+            <field name="default_p" eval="True"/>
+            <field name="perm_read" eval="False"/>
+        </record>
+        <record model="ir.rule" id="rule_bom_quote">
+            <field name="domain" eval="[('master_type', '=', 'quote')]" pyson="1"/>
+            <field name="rule_group" ref="rule_group_bom_quote"/>
+        </record>
+        <record model="ir.rule.group" id="rule_group_bom_any">
+            <field name="name">Any master</field>
+            <field name="model" search="[('model', '=', 'production.bom')]"/>
+            <field name="global_p" eval="False"/>
+            <field name="default_p" eval="False"/>
+            <field name="perm_read" eval="False"/>
+        </record>
+        <record model="ir.rule.group-res.group" id="rule_group_bom_any_production_admin">
+            <field name="rule_group" ref="rule_group_bom_any"/>
+            <field name="group" ref="production.group_production_admin"/>
+        </record>
+        <record model="ir.model.access" id="access_bom_input_quote_master_sale">
+            <field name="model" search="[('model', '=', 'production.bom.input')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.rule.group" id="rule_group_bom_input_quote">
+            <field name="name">Quote masters only</field>
+            <field name="model" search="[('model', '=', 'production.bom.input')]"/>
+            <field name="global_p" eval="False"/>
+            <field name="default_p" eval="True"/>
+            <field name="perm_read" eval="False"/>
+        </record>
+        <record model="ir.rule" id="rule_bom_input_quote">
+            <field name="domain" eval="[('bom.master_type', '=', 'quote')]" pyson="1"/>
+            <field name="rule_group" ref="rule_group_bom_input_quote"/>
+        </record>
+        <record model="ir.rule.group" id="rule_group_bom_input_any">
+            <field name="name">Any master</field>
+            <field name="model" search="[('model', '=', 'production.bom.input')]"/>
+            <field name="global_p" eval="False"/>
+            <field name="default_p" eval="False"/>
+            <field name="perm_read" eval="False"/>
+        </record>
+        <record model="ir.rule.group-res.group" id="rule_group_bom_input_any_production_admin">
+            <field name="rule_group" ref="rule_group_bom_input_any"/>
+            <field name="group" ref="production.group_production_admin"/>
+        </record>
+        <record model="ir.model.access" id="access_bom_output_quote_master_sale">
+            <field name="model" search="[('model', '=', 'production.bom.output')]"/>
+            <field name="group" ref="sale.group_sale"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.rule.group" id="rule_group_bom_output_quote">
+            <field name="name">Quote masters only</field>
+            <field name="model" search="[('model', '=', 'production.bom.output')]"/>
+            <field name="global_p" eval="False"/>
+            <field name="default_p" eval="True"/>
+            <field name="perm_read" eval="False"/>
+        </record>
+        <record model="ir.rule" id="rule_bom_output_quote">
+            <field name="domain" eval="[('bom.master_type', '=', 'quote')]" pyson="1"/>
+            <field name="rule_group" ref="rule_group_bom_output_quote"/>
+        </record>
+        <record model="ir.rule.group" id="rule_group_bom_output_any">
+            <field name="name">Any master</field>
+            <field name="model" search="[('model', '=', 'production.bom.output')]"/>
+            <field name="global_p" eval="False"/>
+            <field name="default_p" eval="False"/>
+            <field name="perm_read" eval="False"/>
+        </record>
+        <record model="ir.rule.group-res.group" id="rule_group_bom_output_any_production_admin">
+            <field name="rule_group" ref="rule_group_bom_output_any"/>
+            <field name="group" ref="production.group_production_admin"/>
+        </record>
+        <record model="ir.rule.group" id="rule_group_quote_companies">
+            <field name="name">User in companies</field>
+            <field name="model" search="[('model', '=', 'nline.quote')]"/>
+            <field name="global_p" eval="True"/>
+        </record>
+        <record model="ir.rule" id="rule_quote_companies">
+            <field name="domain"
+                eval="[('company', 'in', Eval('companies', []))]"
+                pyson="1"/>
+            <field name="rule_group" ref="rule_group_quote_companies"/>
+        </record>
     </data>
 </tryton>

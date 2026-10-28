@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
+this repository contains the full copyright notices and license terms. -->
+<tryton>
+    <data grouped="1">
+        <record model="ir.message" id="msg_master_private">
+            <field name="text">The master &quot;%(master)s&quot; is private: it cannot be changed.</field>
+        </record>
+        <record model="ir.message" id="msg_work_order_not_editable">
+            <field name="text">The work order &quot;%(work_order)s&quot; is closed or cancelled: it cannot be changed.</field>
+        </record>
+        <record model="ir.message" id="msg_work_order_not_released">
+            <field name="text">Release the work order &quot;%(work_order)s&quot; first.</field>
+        </record>
+        <record model="ir.message" id="msg_reopen_closed">
+            <field name="text">The work order &quot;%(work_order)s&quot; is closed: it cannot be reopened.</field>
+        </record>
+        <record model="ir.message" id="msg_cancel_started">
+            <field name="text">The work order &quot;%(work_order)s&quot; is started: close it instead of cancelling it.</field>
+        </record>
+        <record model="ir.message" id="msg_no_master">
+            <field name="text">The part &quot;%(part)s&quot; has no engineering master.</field>
+        </record>
+        <record model="ir.message" id="msg_material_issued">
+            <field name="text">The material &quot;%(material)s&quot; is issued: return it first.</field>
+        </record>
+        <record model="ir.message" id="msg_not_outside">
+            <field name="text">The operation &quot;%(operation)s&quot; is not an outside service.</field>
+        </record>
+        <record model="ir.message" id="msg_no_supplier">
+            <field name="text">Choose the supplier of &quot;%(part)s&quot; on its Purchasing tab (or on the part) first.</field>
+        </record>
+        <record model="ir.message" id="msg_dimensions">
+            <field name="text">The dimensions &quot;%(dimensions)s&quot; of &quot;%(material)s&quot; use a variable that is not set or are not a formula.</field>
+        </record>
+        <record model="ir.message" id="msg_part_required">
+            <field name="text">Choose the part the engineering master makes.</field>
+        </record>
+        <record model="ir.message" id="msg_quote_customer">
+            <field name="text">Choose the customer of the quote &quot;%(quote)s&quot; before winning it.</field>
+        </record>
+        <record model="ir.message" id="msg_quote_no_lines">
+            <field name="text">The quote &quot;%(quote)s&quot; has no line with a quantity to order.</field>
+        </record>
+    </data>
+</tryton>

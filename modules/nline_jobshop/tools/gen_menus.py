@@ -39,7 +39,7 @@ SCREENS = {
     'reports_engineering': ('Engineering Reports', 'js-reports/engineering',
         False, None),
     # Estimating
-    'quote_masters': ('Quote Masters', 'quote-masters', True, SALE),
+    'quote_masters': ('Quote Masters', 'quote-masters', True, None),
     'reports_estimating': ('Estimating Reports', 'js-reports/estimating',
         False, None),
     # Sales
@@ -119,7 +119,7 @@ GROUPS = [
         ]),
     ('estimating', 'Estimating', 'tryton-sale', [
         ('quotes', 'desk:quotes', [SALE], 'Quotes'),
-        ('quote_masters', 'js:quote_masters', [SALE]),
+        ('quote_masters', 'js:quote_masters', [SALE, PROD]),
         ('reports', 'js:reports_estimating', [], 'Reports'),
         ]),
     ('sales', 'Sales', 'tryton-sale', [

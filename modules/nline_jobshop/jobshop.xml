@@ -56,10 +56,6 @@ this repository contains the full copyright notices and license terms. -->
             <field name="nline_writes" eval="True"/>
             <field name="url">desk/index.html#/quote-masters</field>
         </record>
-        <record model="ir.action-res.group" id="url_js_quote_masters_group">
-            <field name="action" ref="url_js_quote_masters"/>
-            <field name="group" ref="sale.group_sale"/>
-        </record>
         <record model="ir.action.url" id="url_js_reports_estimating">
             <field name="name">Estimating Reports</field>
             <field name="nline_writes" eval="False"/>
@@ -407,6 +403,10 @@ this repository contains the full copyright notices and license terms. -->
         <record model="ir.ui.menu-res.group" id="menu_js_estimating_quote_masters_group_sale">
             <field name="menu" ref="menu_js_estimating_quote_masters"/>
             <field name="group" ref="sale.group_sale"/>
+        </record>
+        <record model="ir.ui.menu-res.group" id="menu_js_estimating_quote_masters_group_production">
+            <field name="menu" ref="menu_js_estimating_quote_masters"/>
+            <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_estimating" action="url_js_reports_estimating" name="Reports"
             sequence="30" id="menu_js_estimating_reports"/>
