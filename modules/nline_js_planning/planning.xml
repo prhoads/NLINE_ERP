@@ -3,5 +3,70 @@
 this repository contains the full copyright notices and license terms. -->
 <tryton>
     <data>
+        <record model="ir.model.access" id="access_schedule">
+            <field name="model" search="[('model', '=', 'nline.js.schedule')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_schedule_production">
+            <field name="model" search="[('model', '=', 'nline.js.schedule')]"/>
+            <field name="group" ref="production.group_production"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_schedule_operation">
+            <field name="model" search="[('model', '=', 'nline.js.schedule.operation')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_schedule_operation_production">
+            <field name="model" search="[('model', '=', 'nline.js.schedule.operation')]"/>
+            <field name="group" ref="production.group_production"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+    </data>
+    <data noupdate="1">
+        <record model="nline.js.schedule" id="schedule_standard">
+            <field name="code">STANDARD</field>
+            <field name="description">Standard Schedule</field>
+        </record>
+    </data>
+    <data grouped="1">
+        <record model="ir.message" id="msg_schedule_unique">
+            <field name="text">The Schedule ID must be unique.</field>
+        </record>
+        <record model="ir.message" id="msg_work_order_exists">
+            <field name="text">Work order "%(number)s" already exists.</field>
+        </record>
+        <record model="ir.message" id="msg_link_one_part">
+            <field name="text">Only lines of one fabricated part can be linked to one work order.</field>
+        </record>
+        <record model="ir.message" id="msg_lines_linked">
+            <field name="text">The selected lines are fully linked already.</field>
+        </record>
+        <record model="ir.message" id="msg_link_wrong_order">
+            <field name="text">Work order "%(production)s" is not an open work order of the part.</field>
+        </record>
+        <record model="ir.message" id="msg_sale_status">
+            <field name="text">Sales order "%(sale)s" can not be changed to %(status)s.</field>
+        </record>
+        <record model="ir.message" id="msg_no_rows">
+            <field name="text">Select the lines first.</field>
+        </record>
+        <record model="ir.message" id="msg_schedule_past">
+            <field name="text">The schedule can not be run as of a date before today.</field>
+        </record>
+        <record model="ir.message" id="msg_not_schedulable">
+            <field name="text">Work order "%(production)s" is not Firm or Released: it can not be scheduled.</field>
+        </record>
     </data>
 </tryton>
