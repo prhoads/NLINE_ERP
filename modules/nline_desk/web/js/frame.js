@@ -308,10 +308,22 @@
 
         /* Show only what the user may do: canSave false hides the save
          * buttons, hidden the extra buttons of these labels */
+        var hiddenByAllow = {};
         function allow(canSave, hidden) {
             saveNew.hidden = saveClose.hidden = !canSave;
             Object.keys(extraButtons).forEach(function (label) {
-                extraButtons[label].hidden = (hidden || []).indexOf(label) >= 0;
+                var button = extraButtons[label];
+                if ((hidden || []).indexOf(label) >= 0) {
+                    if (!button.hidden) {
+                        hiddenByAllow[label] = true;
+                        button.hidden = true;
+                    }
+                } else if (hiddenByAllow[label]) {
+                    /* Shown again only what this hid: a button the screen
+                     * hid itself stays hidden */
+                    delete hiddenByAllow[label];
+                    button.hidden = false;
+                }
             });
         }
 
@@ -1259,7 +1271,7 @@
             }, function () {
                 /* Unknown: the server still refuses what is not allowed */
             });
-        return {load: load, record: function () {
+        return {load: load, clear: clear, record: function () {
             return record;
         }};
     }

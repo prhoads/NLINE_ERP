@@ -3,5 +3,124 @@
 this repository contains the full copyright notices and license terms. -->
 <tryton>
     <data>
+        <!-- Part locations and unit conversions: everyone reads them, the
+        stock and product administration groups keep them -->
+        <record model="ir.model.access" id="access_part_location">
+            <field name="model" search="[('model', '=', 'nline.js.part_location')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_part_location_stock">
+            <field name="model" search="[('model', '=', 'nline.js.part_location')]"/>
+            <field name="group" ref="stock.group_stock"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_part_location_product">
+            <field name="model" search="[('model', '=', 'nline.js.part_location')]"/>
+            <field name="group" ref="product.group_product_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_unit_conversion">
+            <field name="model" search="[('model', '=', 'nline.js.unit_conversion')]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_delete" eval="False"/>
+        </record>
+        <record model="ir.model.access" id="access_unit_conversion_stock">
+            <field name="model" search="[('model', '=', 'nline.js.unit_conversion')]"/>
+            <field name="group" ref="stock.group_stock"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+        <record model="ir.model.access" id="access_unit_conversion_product">
+            <field name="model" search="[('model', '=', 'nline.js.unit_conversion')]"/>
+            <field name="group" ref="product.group_product_admin"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_delete" eval="True"/>
+        </record>
+    </data>
+    <data grouped="1">
+        <record model="ir.message" id="msg_part_id_unique">
+            <field name="text">Part ID "%(part)s" is already used by another part.</field>
+        </record>
+        <record model="ir.message" id="msg_part_id_required">
+            <field name="text">Enter the new Part ID.</field>
+        </record>
+        <record model="ir.message" id="msg_part_no_variant">
+            <field name="text">Part "%(part)s" has no variant to transact.</field>
+        </record>
+        <record model="ir.message" id="msg_part_used">
+            <field name="text">Part "%(part)s" is used in %(used)s: it cannot be deleted. Mark it Inactive instead.</field>
+        </record>
+        <record model="ir.message" id="msg_lot_tracked_on_hand">
+            <field name="text">Part "%(part)s" has stock on hand: adjust it out before changing Lot Tracked, then adjust it back in with its tracking numbers.</field>
+        </record>
+        <record model="ir.message" id="msg_part_location_unique">
+            <field name="text">The part is already in this location.</field>
+        </record>
+        <record model="ir.message" id="msg_conversion_unique">
+            <field name="text">This unit conversion already exists.</field>
+        </record>
+        <record model="ir.message" id="msg_conversion_factor">
+            <field name="text">The conversion factor of "%(conversion)s" must be greater than zero.</field>
+        </record>
+        <record model="ir.message" id="msg_conversion_same_unit">
+            <field name="text">"%(conversion)s" converts a unit to itself.</field>
+        </record>
+        <record model="ir.message" id="msg_no_warehouse">
+            <field name="text">There is no warehouse.</field>
+        </record>
+        <record model="ir.message" id="msg_no_lost_found">
+            <field name="text">There is no lost and found location to adjust inventory.</field>
+        </record>
+        <record model="ir.message" id="msg_adjustment_type">
+            <field name="text">Choose Adjust In or Adjust Out.</field>
+        </record>
+        <record model="ir.message" id="msg_quantity_positive">
+            <field name="text">Enter a quantity greater than zero for part "%(part)s".</field>
+        </record>
+        <record model="ir.message" id="msg_location_storage">
+            <field name="text">"%(location)s" is not an inventory location.</field>
+        </record>
+        <record model="ir.message" id="msg_lot_required">
+            <field name="text">Part "%(part)s" is lot tracked: enter its tracking number.</field>
+        </record>
+        <record model="ir.message" id="msg_lot_unknown">
+            <field name="text">Tracking number "%(lot)s" does not exist for part "%(part)s".</field>
+        </record>
+        <record model="ir.message" id="msg_not_enough">
+            <field name="text">Only %(quantity)s of part "%(part)s" are in location "%(location)s": the location cannot go negative.</field>
+        </record>
+        <record model="ir.message" id="msg_transfer_same">
+            <field name="text">Transfer to another location than "%(location)s".</field>
+        </record>
+        <record model="ir.message" id="msg_unit_id_required">
+            <field name="text">Enter the ID of the unit of measure.</field>
+        </record>
+        <record model="ir.message" id="msg_unit_used">
+            <field name="text">Unit of measure "%(unit)s" is used: it cannot be deleted. Mark it Inactive instead.</field>
+        </record>
+        <record model="ir.message" id="msg_location_id_required">
+            <field name="text">Enter the Location ID.</field>
+        </record>
+        <record model="ir.message" id="msg_location_id_unique">
+            <field name="text">Location ID "%(location)s" is already used.</field>
+        </record>
+        <record model="ir.message" id="msg_location_used">
+            <field name="text">Location "%(location)s" has inventory transactions: it cannot be deleted. Mark it Inactive instead.</field>
+        </record>
     </data>
 </tryton>
