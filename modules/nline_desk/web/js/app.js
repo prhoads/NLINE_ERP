@@ -329,6 +329,61 @@
         [/^#\/company-info$/, 'companyInfo']
     ];
 
+    /* The colour of each area (as its menu icons, nline_desk/tools/
+     * gen_icons.py) and the screens of each */
+    var AREA_COLORS = {
+        home: '#e8650a', inventory: '#d98a06', engineering: '#1d5fd1',
+        estimating: '#6d3fd0', sales: '#14924a', purchasing: '#0b85a4',
+        planning: '#4248c9', shopfloor: '#c62828', accounting: '#0e7d68',
+        common: '#5c6878', executive: '#b88600', admin: '#39475c',
+        customers: '#18915a', vendors: '#cf6b16', banking: '#244f9e',
+        company: '#2f746f'
+    };
+    var AREA_SCREENS = {
+        inventory: 'parts units unit-conversions locations adjustments items',
+        engineering: 'masters operation-templates',
+        estimating: 'quotes quote-masters',
+        sales: 'customer-window orders shipping invoicing service-charges ' +
+            'sales-tax-groups sales-reps territories sic-codes carriers ' +
+            'discount-classes',
+        purchasing: 'supplier-window rfqs purchase-orders receiving ' +
+            'services purchase-tax-groups',
+        planning: 'planning scheduling',
+        shopfloor: 'work-orders workorders issues wo-receipts resources ' +
+            'shop-groups shop-views labor labor-collection employees',
+        accounting: 'accounts account-sets accounting-calendar ' +
+            'account-interface',
+        common: 'fob-points ship-vias states postal-codes terms ' +
+            'product-codes commodity-codes reason-codes alert-messages ' +
+            'currency-codes control-panel',
+        executive: 'exec',
+        admin: 'users authorities system-settings',
+        customers: 'customers income-tracker invoices sales-receipts ' +
+            'credits payments statements',
+        vendors: 'vendors bill-tracker bill-receipts bills vendor-credits',
+        banking: 'checks deposits cards register reconcile',
+        company: 'reports company-info settings lists list import closing ' +
+            'journal'
+    };
+    function areaOf(hash) {
+        var parts = hash.replace(/^#\/?/, '').replace(/\?.*$/, '')
+            .split('/');
+        if (parts[0] === 'js-reports') {
+            /* A group's reports: that group's colour */
+            return {admin: 'accounting'}[parts[1]] || parts[1] || 'admin';
+        }
+        for (var area in AREA_SCREENS) {
+            if (AREA_SCREENS[area].split(' ').indexOf(parts[0]) >= 0) {
+                return area;
+            }
+        }
+        return 'home';
+    }
+    function showArea(hash) {
+        var color = AREA_COLORS[areaOf(hash)] || AREA_COLORS.home;
+        document.documentElement.style.setProperty('--area', color);
+    }
+
     /* The routes of the Jobshop screens (js/jobshop/*.js push them on
      * window.NLINE_ROUTES) first: they may replace a screen above */
     function allRoutes() {
@@ -382,6 +437,7 @@
         }
         var main = UI.clear(document.getElementById('main'));
         renderNav(hash);
+        showArea(hash);
         var routes = allRoutes();
         for (var i = 0; i < routes.length; i++) {
             /* A screen's ?query (e.g. a new document's Clear) does not

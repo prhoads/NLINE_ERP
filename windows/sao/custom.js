@@ -30,6 +30,10 @@
         '<script src="desk/shared/nline_header.js?v=20261027c"><\/script>');
 
     Sao.config.title = 'Tryton ERP';
+    /* The client paints every icon in its first colour (teal): Tryton's own
+     * icons in slate; the N-Line menu icons keep their colours (their shapes
+     * carry their own fills, nline_desk/tools/gen_icons.py) */
+    Sao.config.icon_colors = ['#3e4a5c', '#3e4a5c', '#e8650a'];
 
     if (BEHIND_NLBI) {
         /* The client's absolute addresses ('/' + database + '/') under /ERP */
@@ -515,10 +519,15 @@
 
     jQuery(function () {
         menuEdge();
+        /* N-Line's marks after the name: the valve and the logo */
         jQuery('#title').after(jQuery('<span/>', {
-            'class': 'nl-tagline hidden-xs',
-            'text': 'For N-Line Valves'
-        }));
+            'class': 'nl-marks hidden-xs'
+        }).append(jQuery('<img/>', {
+            'class': 'nl-valve', 'src': 'images/nline-valve.svg', 'alt': ''
+        }), jQuery('<img/>', {
+            'class': 'nl-logo', 'src': 'images/nline-logo.png',
+            'alt': 'N-Line Valves'
+        })));
         var apps = jQuery('<div/>', {
             'id': 'nl-apps',
             'class': 'navbar-text nl-apps-slot'

@@ -1,8 +1,20 @@
 # This file is part of Tryton.  The COPYRIGHT file at the top level of
 # this repository contains the full copyright notices and license terms.
+from sql import Null
+
 from trytond.model import ModelSQL, ModelView, fields
 from trytond.pool import Pool
 from trytond.transaction import Transaction
+
+# The standard top menus kept: their N-Line icons (tools/gen_menus.py
+# STOCK_TOP_ICONS made them)
+STOCK_TOP_ICONS = {
+    ('company', 'menu_company'): 'nline-company-company',
+    ('currency', 'menu_currency'): 'nline-accounting-currency',
+    ('bank', 'menu_banking'): 'nline-banking-bank',
+    ('account', 'menu_account'): 'nline-accounting-account',
+    ('ir', 'menu_administration'): 'nline-admin-tune',
+    }
 
 
 class SupersededMenu(ModelSQL, ModelView):
@@ -26,6 +38,29 @@ class SupersededMenu(ModelSQL, ModelView):
     def __setup__(cls):
         super().__setup__()
         cls._order.insert(0, ('superseded_by', 'ASC'))
+
+    @classmethod
+    def __register__(cls, module_name):
+        super().__register__(module_name)
+        # A Home menu made by hand on live (27 Oct, while the module's had
+        # been deleted) doubles the module's own: remove every top "Home"
+        # menu no module data owns
+        cursor = Transaction().connection.cursor()
+        pool = Pool()
+        Menu = pool.get('ir.ui.menu')
+        ModelData = pool.get('ir.model.data')
+        menu = Menu.__table__()
+        data = ModelData.__table__()
+        owned = data.select(data.db_id, where=data.model == 'ir.ui.menu')
+        cursor.execute(*menu.delete(where=(menu.name == 'Home')
+                & (menu.parent == Null) & ~menu.id.in_(owned)))
+        # The standard top menus kept get N-Line's coloured icons
+        # (tools/gen_menus.py STOCK_TOP_ICONS; icons.xml registers them)
+        for (module, fs_id), icon in STOCK_TOP_ICONS.items():
+            ids = data.select(data.db_id, where=(data.module == module)
+                & (data.fs_id == fs_id) & (data.model == 'ir.ui.menu'))
+            cursor.execute(*menu.update([menu.icon], [icon],
+                    where=menu.id.in_(ids)))
 
     @classmethod
     def default_hidden(cls):

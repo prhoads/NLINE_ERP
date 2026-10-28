@@ -12,6 +12,7 @@ products, parties) are hidden (Administration > Superseded Menus shows them
 again). Edit GROUPS / SCREENS / HIDE here, never jobshop.xml.
 """
 import os
+import sys
 
 P = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
                 __file__))), 'jobshop.xml')
@@ -209,6 +210,75 @@ HIDE = [
 ]
 
 
+# The icons (nline_desk/tools/gen_icons.py): each group a tile in its area's
+# colour, each item the same colour with its own symbol
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
+                os.path.dirname(os.path.abspath(__file__)))), 'nline_desk',
+        'tools'))
+import gen_icons  # noqa: E402
+
+AREA = {'inventory': 'inventory', 'engineering': 'engineering',
+    'estimating': 'estimating', 'sales': 'sales', 'purchasing': 'purchasing',
+    'planning': 'planning', 'shopfloor': 'shopfloor',
+    'accounting': 'accounting', 'common': 'common', 'executive': 'executive',
+    'administration': 'admin'}
+GROUP_SYMBOL = {'inventory': 'box', 'engineering': 'tree',
+    'estimating': 'calc', 'sales': 'tryton-sale',
+    'purchasing': 'tryton-purchase', 'planning': 'tryton-date',
+    'shopfloor': 'factory', 'accounting': 'tryton-account', 'common': 'list',
+    'executive': 'gauge', 'administration': 'shield'}
+ITEM_SYMBOL = {
+    'inventory': {'parts': 'tryton-product', 'units': 'ruler',
+        'unit_conversions': 'swap', 'locations': 'place',
+        'adjustments': 'tune'},
+    'engineering': {'masters': 'tree', 'operation_templates': 'wrench'},
+    'estimating': {'quotes': 'doc', 'quote_masters': 'calc'},
+    'sales': {'customers': 'people', 'orders': 'tryton-sale',
+        'shipping': 'tryton-shipment-out', 'invoicing': 'tryton-invoice',
+        'service_charges': 'receipt', 'tax_groups': 'percent',
+        'sales_reps': 'person', 'territories': 'map', 'sic_codes': 'list',
+        'carriers': 'tryton-carrier', 'discount_classes': 'tag'},
+    'purchasing': {'suppliers': 'tryton-party', 'rfqs': 'tryton-send',
+        'purchase_orders': 'tryton-purchase',
+        'receiving': 'tryton-shipment-in', 'services': 'wrench',
+        'tax_groups': 'percent'},
+    'planning': {'planning': 'grid', 'scheduling': 'tryton-date'},
+    'shopfloor': {'work_orders': 'factory', 'issues': 'tryton-export',
+        'wo_receipts': 'tryton-import', 'resources': 'tryton-production',
+        'shop_groups': 'grid', 'shop_views': 'list',
+        'labor': 'tryton-timesheet', 'labor_collection': 'touch',
+        'employees': 'person'},
+    'accounting': {'accounts': 'tryton-account', 'account_sets': 'list',
+        'accounting_calendar': 'tryton-date', 'account_interface': 'swap'},
+    'common': {'fob_points': 'flag', 'ship_vias': 'tryton-carrier',
+        'states': 'map', 'postal_codes': 'tryton-email', 'terms': 'doc',
+        'product_codes': 'tag', 'commodity_codes': 'list',
+        'reason_codes': 'tryton-question', 'alert_messages': 'bell',
+        'currency_codes': 'tryton-currency', 'control_panel': 'person'},
+    'executive': {'sales': 'trend', 'purchasing': 'tryton-purchase',
+        'production': 'gauge', 'financials': 'report'},
+    'administration': {'users': 'people', 'authorities': 'shield',
+        'system_settings': 'tune'},
+}
+
+
+def group_icon(gid):
+    return gen_icons.icon(AREA[gid], GROUP_SYMBOL[gid])
+
+
+def item_icon(gid, iid):
+    "Reports are a chart; any other item its own symbol"
+    symbol = 'report' if iid == 'reports' else ITEM_SYMBOL[gid][iid]
+    return gen_icons.icon(AREA[gid], symbol)
+
+
+for _gid, _gname, _icon, _items in GROUPS:
+    group_icon(_gid)
+    for _item in _items:
+        item_icon(_gid, _item[0])
+ICONS_USED = dict(gen_icons.ICONS)
+
+
 def generate():
     out = ['''<?xml version="1.0"?>
 <!-- This file is part of Tryton.  The COPYRIGHT file at the top level of
@@ -233,7 +303,7 @@ this repository contains the full copyright notices and license terms. -->
     for seq, (gid, gname, icon, items) in enumerate(GROUPS, start=2):
         out.append('''
         <menuitem name="%s" sequence="%d" id="menu_js_%s" icon="%s"/>
-''' % (gname, seq, gid, icon))
+''' % (gname, seq, gid, group_icon(gid)))
         for iseq, item in enumerate(items, start=1):
             iid, target, groups = item[:3]
             # Jobshop's name of the item (default: the action's)
@@ -243,8 +313,8 @@ this repository contains the full copyright notices and license terms. -->
                 else 'url_js_%s') % sid
             mid = 'menu_js_%s_%s' % (gid, iid)
             out.append('''        <menuitem parent="menu_js_%s" action="%s"%s
-            sequence="%d" id="%s"/>
-''' % (gid, action, label, iseq * 10, mid))
+            icon="%s" sequence="%d" id="%s"/>
+''' % (gid, action, label, item_icon(gid, iid), iseq * 10, mid))
             for g in groups:
                 out.append('''        <record model="ir.ui.menu-res.group" id="%s_%s">
             <field name="menu" ref="%s"/>

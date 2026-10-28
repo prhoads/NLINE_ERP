@@ -74,7 +74,8 @@ setup(name=name,
     package_data={
         'trytond.modules.nline_desk': (info.get('xml', [])
             + ['tryton.cfg', 'view/*.xml', 'locale/*.po', 'tests/*.rst',
-                'tests/*.csv', 'web/*', 'web/*/*']),
+                'tests/*.csv', 'icons/*.svg', 'web/*', 'web/*/*',
+                'web/*/*/*']),
         },
     classifiers=[
         'Development Status :: 5 - Production/Stable',

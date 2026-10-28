@@ -14,10 +14,10 @@
     --row-hover: #f6f8f6;
     --head: #ffffff;
     --head-ink: #1f2328;
-    --accent: #1d6b55;
-    --accent-dark: #16543f;
-    --accent-soft: #eef4f1;
-    --ok: #1d6b55;
+    --accent: #1f4e8c;
+    --accent-dark: #163a69;
+    --accent-soft: #eaf1fb;
+    --ok: #1e8e4e;
     --warn: #b26a00;
     --bad: #b3261e;
     --check: #eaf4ea;
@@ -30,7 +30,9 @@
     --done: #8fcf91;
     --cancelled: #f4c2c2;
     --leg: #7b55b8;
-    --job: #1c8c8c;
+    --job: #0b85a4;
+    --brand: #e8650a;
+    --area: #e8650a;
     color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -38,8 +40,8 @@
         --ink: #e8e9eb; --muted: #8d939b; --line: #33373d; --line-soft: #2a2e33;
         --paper: #202327; --page: #17191c; --field: #17191c; --button: #2a2e33;
         --button-hover: #33373d; --table-head: #262a2f; --row-hover: #23272b;
-        --head: #202327; --head-ink: #e8e9eb; --accent: #4fb393; --accent-dark: #3f9a7d;
-        --accent-soft: #1f2b27; --ok: #4fb393; --bad: #ff8a80; --leg: #a888dd; --job: #4fc4c4;
+        --head: #202327; --head-ink: #e8e9eb; --accent: #6ea0e8; --accent-dark: #5689d4;
+        --accent-soft: #1c2533; --ok: #4fbf7f; --bad: #ff8a80; --leg: #a888dd; --job: #4fc4c4;
         color-scheme: dark;
     }
 }
@@ -47,8 +49,8 @@
     --ink: #e8e9eb; --muted: #8d939b; --line: #33373d; --line-soft: #2a2e33;
     --paper: #202327; --page: #17191c; --field: #17191c; --button: #2a2e33;
     --button-hover: #33373d; --table-head: #262a2f; --row-hover: #23272b;
-    --head: #202327; --head-ink: #e8e9eb; --accent: #4fb393; --accent-dark: #3f9a7d;
-    --accent-soft: #1f2b27; --ok: #4fb393; --bad: #ff8a80; --leg: #a888dd; --job: #4fc4c4;
+    --head: #202327; --head-ink: #e8e9eb; --accent: #6ea0e8; --accent-dark: #5689d4;
+    --accent-soft: #1c2533; --ok: #4fbf7f; --bad: #ff8a80; --leg: #a888dd; --job: #4fc4c4;
     color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -260,7 +262,9 @@ html.embed #main { padding: 12px 16px; max-width: none; }
 /* ---- Building blocks (js/frame.js) ---------------------------------- */
 /* The ribbon of a form or center: title, Find, ..., Save & New, Save & Close */
 .ribbon { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 10px; margin: -4px 0 12px; background: var(--table-head); border: 1px solid var(--line); border-radius: 6px; position: sticky; top: 0; z-index: 20; }
-.ribbon .ribbon-title { font-size: 17px; font-weight: 600; margin-right: 10px; }
+.ribbon .ribbon-title { font-size: 17px; font-weight: 600; margin-right: 10px; padding-left: 10px; border-left: 4px solid var(--area); }
+/* The window's Jobshop area colour (app.js) on its ribbon */
+.ribbon { box-shadow: inset 0 3px 0 var(--area); }
 .ribbon .spacer { flex: 1; }
 .ribbon button { padding: 5px 12px; }
 /* The form with the history panel on the right, as in QuickBooks */
@@ -374,3 +378,6 @@ table.data tr.short td { background: rgba(178, 106, 0, .08); }
 .picture img { max-width: 100%; max-height: 260px; border: 1px solid var(--line); background: #fff; }
 .picture figcaption { font-size: 12px; color: var(--muted); }
 .notes .note { border-bottom: 1px solid var(--line); padding: 6px 0; white-space: pre-wrap; }
+/* N-Line's marks in the header */
+.brand .nl-valve { height: 26px; vertical-align: middle; margin-left: 8px; }
+.brand .nl-logo { height: 16px; vertical-align: middle; margin-left: 6px; }

@@ -353,53 +353,53 @@ this repository contains the full copyright notices and license terms. -->
             <field name="group" ref="res.group_admin"/>
         </record>
 
-        <menuitem name="Inventory" sequence="2" id="menu_js_inventory" icon="tryton-stock"/>
+        <menuitem name="Inventory" sequence="2" id="menu_js_inventory" icon="nline-inventory-box"/>
         <menuitem parent="menu_js_inventory" action="nline_desk.url_desk_parts" name="Parts"
-            sequence="10" id="menu_js_inventory_parts"/>
+            icon="nline-inventory-product" sequence="10" id="menu_js_inventory_parts"/>
         <menuitem parent="menu_js_inventory" action="url_js_units"
-            sequence="20" id="menu_js_inventory_units"/>
+            icon="nline-inventory-ruler" sequence="20" id="menu_js_inventory_units"/>
         <menuitem parent="menu_js_inventory" action="url_js_unit_conversions"
-            sequence="30" id="menu_js_inventory_unit_conversions"/>
+            icon="nline-inventory-swap" sequence="30" id="menu_js_inventory_unit_conversions"/>
         <menuitem parent="menu_js_inventory" action="url_js_locations"
-            sequence="40" id="menu_js_inventory_locations"/>
+            icon="nline-inventory-place" sequence="40" id="menu_js_inventory_locations"/>
         <record model="ir.ui.menu-res.group" id="menu_js_inventory_locations_group_stock">
             <field name="menu" ref="menu_js_inventory_locations"/>
             <field name="group" ref="stock.group_stock"/>
         </record>
         <menuitem parent="menu_js_inventory" action="url_js_adjustments"
-            sequence="50" id="menu_js_inventory_adjustments"/>
+            icon="nline-inventory-tune" sequence="50" id="menu_js_inventory_adjustments"/>
         <record model="ir.ui.menu-res.group" id="menu_js_inventory_adjustments_group_stock">
             <field name="menu" ref="menu_js_inventory_adjustments"/>
             <field name="group" ref="stock.group_stock"/>
         </record>
         <menuitem parent="menu_js_inventory" action="url_js_reports_inventory" name="Reports"
-            sequence="60" id="menu_js_inventory_reports"/>
+            icon="nline-inventory-report" sequence="60" id="menu_js_inventory_reports"/>
 
-        <menuitem name="Engineering" sequence="3" id="menu_js_engineering" icon="tryton-product"/>
+        <menuitem name="Engineering" sequence="3" id="menu_js_engineering" icon="nline-engineering-tree"/>
         <menuitem parent="menu_js_engineering" action="nline_desk.url_desk_masters" name="Masters"
-            sequence="10" id="menu_js_engineering_masters"/>
+            icon="nline-engineering-tree" sequence="10" id="menu_js_engineering_masters"/>
         <record model="ir.ui.menu-res.group" id="menu_js_engineering_masters_group_production">
             <field name="menu" ref="menu_js_engineering_masters"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_engineering" action="url_js_operation_templates"
-            sequence="20" id="menu_js_engineering_operation_templates"/>
+            icon="nline-engineering-wrench" sequence="20" id="menu_js_engineering_operation_templates"/>
         <record model="ir.ui.menu-res.group" id="menu_js_engineering_operation_templates_group_production">
             <field name="menu" ref="menu_js_engineering_operation_templates"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_engineering" action="url_js_reports_engineering" name="Reports"
-            sequence="30" id="menu_js_engineering_reports"/>
+            icon="nline-engineering-report" sequence="30" id="menu_js_engineering_reports"/>
 
-        <menuitem name="Estimating" sequence="4" id="menu_js_estimating" icon="tryton-sale"/>
+        <menuitem name="Estimating" sequence="4" id="menu_js_estimating" icon="nline-estimating-calc"/>
         <menuitem parent="menu_js_estimating" action="nline_desk.url_desk_quotes" name="Quotes"
-            sequence="10" id="menu_js_estimating_quotes"/>
+            icon="nline-estimating-doc" sequence="10" id="menu_js_estimating_quotes"/>
         <record model="ir.ui.menu-res.group" id="menu_js_estimating_quotes_group_sale">
             <field name="menu" ref="menu_js_estimating_quotes"/>
             <field name="group" ref="sale.group_sale"/>
         </record>
         <menuitem parent="menu_js_estimating" action="url_js_quote_masters"
-            sequence="20" id="menu_js_estimating_quote_masters"/>
+            icon="nline-estimating-calc" sequence="20" id="menu_js_estimating_quote_masters"/>
         <record model="ir.ui.menu-res.group" id="menu_js_estimating_quote_masters_group_sale">
             <field name="menu" ref="menu_js_estimating_quote_masters"/>
             <field name="group" ref="sale.group_sale"/>
@@ -409,227 +409,227 @@ this repository contains the full copyright notices and license terms. -->
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_estimating" action="url_js_reports_estimating" name="Reports"
-            sequence="30" id="menu_js_estimating_reports"/>
+            icon="nline-estimating-report" sequence="30" id="menu_js_estimating_reports"/>
 
-        <menuitem name="Sales" sequence="5" id="menu_js_sales" icon="tryton-sale"/>
+        <menuitem name="Sales" sequence="5" id="menu_js_sales" icon="nline-sales-sale"/>
         <menuitem parent="menu_js_sales" action="nline_desk.url_desk_customer_window" name="Customers"
-            sequence="10" id="menu_js_sales_customers"/>
+            icon="nline-sales-people" sequence="10" id="menu_js_sales_customers"/>
         <menuitem parent="menu_js_sales" action="nline_desk.url_desk_orders" name="Sales Orders"
-            sequence="20" id="menu_js_sales_orders"/>
+            icon="nline-sales-sale" sequence="20" id="menu_js_sales_orders"/>
         <record model="ir.ui.menu-res.group" id="menu_js_sales_orders_group_sale">
             <field name="menu" ref="menu_js_sales_orders"/>
             <field name="group" ref="sale.group_sale"/>
         </record>
         <menuitem parent="menu_js_sales" action="nline_desk.url_desk_shipping"
-            sequence="30" id="menu_js_sales_shipping"/>
+            icon="nline-sales-shipment-out" sequence="30" id="menu_js_sales_shipping"/>
         <record model="ir.ui.menu-res.group" id="menu_js_sales_shipping_group_stock">
             <field name="menu" ref="menu_js_sales_shipping"/>
             <field name="group" ref="stock.group_stock"/>
         </record>
         <menuitem parent="menu_js_sales" action="nline_desk.url_desk_invoicing"
-            sequence="40" id="menu_js_sales_invoicing"/>
+            icon="nline-sales-invoice" sequence="40" id="menu_js_sales_invoicing"/>
         <record model="ir.ui.menu-res.group" id="menu_js_sales_invoicing_group_account">
             <field name="menu" ref="menu_js_sales_invoicing"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_js_sales" action="url_js_service_charges"
-            sequence="50" id="menu_js_sales_service_charges"/>
+            icon="nline-sales-receipt" sequence="50" id="menu_js_sales_service_charges"/>
         <record model="ir.ui.menu-res.group" id="menu_js_sales_service_charges_group_sale">
             <field name="menu" ref="menu_js_sales_service_charges"/>
             <field name="group" ref="sale.group_sale"/>
         </record>
         <menuitem parent="menu_js_sales" action="url_js_sales_tax_groups" name="Tax Groups"
-            sequence="60" id="menu_js_sales_tax_groups"/>
+            icon="nline-sales-percent" sequence="60" id="menu_js_sales_tax_groups"/>
         <record model="ir.ui.menu-res.group" id="menu_js_sales_tax_groups_group_sale">
             <field name="menu" ref="menu_js_sales_tax_groups"/>
             <field name="group" ref="sale.group_sale"/>
         </record>
         <menuitem parent="menu_js_sales" action="url_js_sales_reps"
-            sequence="70" id="menu_js_sales_sales_reps"/>
+            icon="nline-sales-person" sequence="70" id="menu_js_sales_sales_reps"/>
         <record model="ir.ui.menu-res.group" id="menu_js_sales_sales_reps_group_sale">
             <field name="menu" ref="menu_js_sales_sales_reps"/>
             <field name="group" ref="sale.group_sale"/>
         </record>
         <menuitem parent="menu_js_sales" action="url_js_territories"
-            sequence="80" id="menu_js_sales_territories"/>
+            icon="nline-sales-map" sequence="80" id="menu_js_sales_territories"/>
         <record model="ir.ui.menu-res.group" id="menu_js_sales_territories_group_sale">
             <field name="menu" ref="menu_js_sales_territories"/>
             <field name="group" ref="sale.group_sale"/>
         </record>
         <menuitem parent="menu_js_sales" action="url_js_sic_codes"
-            sequence="90" id="menu_js_sales_sic_codes"/>
+            icon="nline-sales-list" sequence="90" id="menu_js_sales_sic_codes"/>
         <record model="ir.ui.menu-res.group" id="menu_js_sales_sic_codes_group_sale">
             <field name="menu" ref="menu_js_sales_sic_codes"/>
             <field name="group" ref="sale.group_sale"/>
         </record>
         <menuitem parent="menu_js_sales" action="url_js_carriers"
-            sequence="100" id="menu_js_sales_carriers"/>
+            icon="nline-sales-carrier" sequence="100" id="menu_js_sales_carriers"/>
         <record model="ir.ui.menu-res.group" id="menu_js_sales_carriers_group_sale">
             <field name="menu" ref="menu_js_sales_carriers"/>
             <field name="group" ref="sale.group_sale"/>
         </record>
         <menuitem parent="menu_js_sales" action="url_js_discount_classes"
-            sequence="110" id="menu_js_sales_discount_classes"/>
+            icon="nline-sales-tag" sequence="110" id="menu_js_sales_discount_classes"/>
         <record model="ir.ui.menu-res.group" id="menu_js_sales_discount_classes_group_sale">
             <field name="menu" ref="menu_js_sales_discount_classes"/>
             <field name="group" ref="sale.group_sale"/>
         </record>
         <menuitem parent="menu_js_sales" action="url_js_reports_sales" name="Reports"
-            sequence="120" id="menu_js_sales_reports"/>
+            icon="nline-sales-report" sequence="120" id="menu_js_sales_reports"/>
 
-        <menuitem name="Purchasing" sequence="6" id="menu_js_purchasing" icon="tryton-purchase"/>
+        <menuitem name="Purchasing" sequence="6" id="menu_js_purchasing" icon="nline-purchasing-purchase"/>
         <menuitem parent="menu_js_purchasing" action="nline_desk.url_desk_supplier_window" name="Suppliers"
-            sequence="10" id="menu_js_purchasing_suppliers"/>
+            icon="nline-purchasing-party" sequence="10" id="menu_js_purchasing_suppliers"/>
         <menuitem parent="menu_js_purchasing" action="url_js_rfqs"
-            sequence="20" id="menu_js_purchasing_rfqs"/>
+            icon="nline-purchasing-send" sequence="20" id="menu_js_purchasing_rfqs"/>
         <record model="ir.ui.menu-res.group" id="menu_js_purchasing_rfqs_group_purchase">
             <field name="menu" ref="menu_js_purchasing_rfqs"/>
             <field name="group" ref="purchase.group_purchase"/>
         </record>
         <menuitem parent="menu_js_purchasing" action="nline_desk.url_desk_purchase_orders" name="Purchase Orders"
-            sequence="30" id="menu_js_purchasing_purchase_orders"/>
+            icon="nline-purchasing-purchase" sequence="30" id="menu_js_purchasing_purchase_orders"/>
         <record model="ir.ui.menu-res.group" id="menu_js_purchasing_purchase_orders_group_purchase">
             <field name="menu" ref="menu_js_purchasing_purchase_orders"/>
             <field name="group" ref="purchase.group_purchase"/>
         </record>
         <menuitem parent="menu_js_purchasing" action="nline_desk.url_desk_receiving"
-            sequence="40" id="menu_js_purchasing_receiving"/>
+            icon="nline-purchasing-shipment-in" sequence="40" id="menu_js_purchasing_receiving"/>
         <record model="ir.ui.menu-res.group" id="menu_js_purchasing_receiving_group_stock">
             <field name="menu" ref="menu_js_purchasing_receiving"/>
             <field name="group" ref="stock.group_stock"/>
         </record>
         <menuitem parent="menu_js_purchasing" action="url_js_services"
-            sequence="50" id="menu_js_purchasing_services"/>
+            icon="nline-purchasing-wrench" sequence="50" id="menu_js_purchasing_services"/>
         <record model="ir.ui.menu-res.group" id="menu_js_purchasing_services_group_purchase">
             <field name="menu" ref="menu_js_purchasing_services"/>
             <field name="group" ref="purchase.group_purchase"/>
         </record>
         <menuitem parent="menu_js_purchasing" action="url_js_purchase_tax_groups" name="Tax Groups"
-            sequence="60" id="menu_js_purchasing_tax_groups"/>
+            icon="nline-purchasing-percent" sequence="60" id="menu_js_purchasing_tax_groups"/>
         <record model="ir.ui.menu-res.group" id="menu_js_purchasing_tax_groups_group_purchase">
             <field name="menu" ref="menu_js_purchasing_tax_groups"/>
             <field name="group" ref="purchase.group_purchase"/>
         </record>
         <menuitem parent="menu_js_purchasing" action="url_js_reports_purchasing" name="Reports"
-            sequence="70" id="menu_js_purchasing_reports"/>
+            icon="nline-purchasing-report" sequence="70" id="menu_js_purchasing_reports"/>
 
-        <menuitem name="Planning" sequence="7" id="menu_js_planning" icon="tryton-production"/>
+        <menuitem name="Planning" sequence="7" id="menu_js_planning" icon="nline-planning-date"/>
         <menuitem parent="menu_js_planning" action="nline_desk.url_desk_planning"
-            sequence="10" id="menu_js_planning_planning"/>
+            icon="nline-planning-grid" sequence="10" id="menu_js_planning_planning"/>
         <record model="ir.ui.menu-res.group" id="menu_js_planning_planning_group_production">
             <field name="menu" ref="menu_js_planning_planning"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_planning" action="nline_desk.url_desk_scheduling"
-            sequence="20" id="menu_js_planning_scheduling"/>
+            icon="nline-planning-date" sequence="20" id="menu_js_planning_scheduling"/>
         <record model="ir.ui.menu-res.group" id="menu_js_planning_scheduling_group_production">
             <field name="menu" ref="menu_js_planning_scheduling"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_planning" action="url_js_reports_planning" name="Reports"
-            sequence="30" id="menu_js_planning_reports"/>
+            icon="nline-planning-report" sequence="30" id="menu_js_planning_reports"/>
 
-        <menuitem name="Shopfloor" sequence="8" id="menu_js_shopfloor" icon="tryton-production"/>
+        <menuitem name="Shopfloor" sequence="8" id="menu_js_shopfloor" icon="nline-shopfloor-factory"/>
         <menuitem parent="menu_js_shopfloor" action="nline_desk.url_desk_work_order" name="Work Orders"
-            sequence="10" id="menu_js_shopfloor_work_orders"/>
+            icon="nline-shopfloor-factory" sequence="10" id="menu_js_shopfloor_work_orders"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_work_orders_group_production">
             <field name="menu" ref="menu_js_shopfloor_work_orders"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_shopfloor" action="nline_desk.url_desk_issues" name="Material Issues/Returns"
-            sequence="20" id="menu_js_shopfloor_issues"/>
+            icon="nline-shopfloor-export" sequence="20" id="menu_js_shopfloor_issues"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_issues_group_production">
             <field name="menu" ref="menu_js_shopfloor_issues"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_shopfloor" action="nline_desk.url_desk_wo_receipts" name="Work Order Receipts/Returns"
-            sequence="30" id="menu_js_shopfloor_wo_receipts"/>
+            icon="nline-shopfloor-import" sequence="30" id="menu_js_shopfloor_wo_receipts"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_wo_receipts_group_production">
             <field name="menu" ref="menu_js_shopfloor_wo_receipts"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_shopfloor" action="nline_desk.url_desk_resources"
-            sequence="40" id="menu_js_shopfloor_resources"/>
+            icon="nline-shopfloor-production" sequence="40" id="menu_js_shopfloor_resources"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_resources_group_production">
             <field name="menu" ref="menu_js_shopfloor_resources"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_shopfloor" action="url_js_shop_groups"
-            sequence="50" id="menu_js_shopfloor_shop_groups"/>
+            icon="nline-shopfloor-grid" sequence="50" id="menu_js_shopfloor_shop_groups"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_shop_groups_group_production">
             <field name="menu" ref="menu_js_shopfloor_shop_groups"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_shopfloor" action="url_js_shop_views"
-            sequence="60" id="menu_js_shopfloor_shop_views"/>
+            icon="nline-shopfloor-list" sequence="60" id="menu_js_shopfloor_shop_views"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_shop_views_group_production">
             <field name="menu" ref="menu_js_shopfloor_shop_views"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_shopfloor" action="nline_desk.url_desk_labor"
-            sequence="70" id="menu_js_shopfloor_labor"/>
+            icon="nline-shopfloor-timesheet" sequence="70" id="menu_js_shopfloor_labor"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_labor_group_production">
             <field name="menu" ref="menu_js_shopfloor_labor"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_shopfloor" action="url_js_labor_collection"
-            sequence="80" id="menu_js_shopfloor_labor_collection"/>
+            icon="nline-shopfloor-touch" sequence="80" id="menu_js_shopfloor_labor_collection"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_labor_collection_group_production">
             <field name="menu" ref="menu_js_shopfloor_labor_collection"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_shopfloor" action="nline_desk.url_desk_employees"
-            sequence="90" id="menu_js_shopfloor_employees"/>
+            icon="nline-shopfloor-person" sequence="90" id="menu_js_shopfloor_employees"/>
         <record model="ir.ui.menu-res.group" id="menu_js_shopfloor_employees_group_employee_admin">
             <field name="menu" ref="menu_js_shopfloor_employees"/>
             <field name="group" ref="company.group_employee_admin"/>
         </record>
         <menuitem parent="menu_js_shopfloor" action="url_js_reports_shopfloor" name="Reports"
-            sequence="100" id="menu_js_shopfloor_reports"/>
+            icon="nline-shopfloor-report" sequence="100" id="menu_js_shopfloor_reports"/>
 
-        <menuitem name="Accounting" sequence="9" id="menu_js_accounting" icon="tryton-account"/>
+        <menuitem name="Accounting" sequence="9" id="menu_js_accounting" icon="nline-accounting-account"/>
         <menuitem parent="menu_js_accounting" action="nline_desk.url_desk_accounts" name="Accounts"
-            sequence="10" id="menu_js_accounting_accounts"/>
+            icon="nline-accounting-account" sequence="10" id="menu_js_accounting_accounts"/>
         <record model="ir.ui.menu-res.group" id="menu_js_accounting_accounts_group_account">
             <field name="menu" ref="menu_js_accounting_accounts"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_js_accounting" action="url_js_account_sets"
-            sequence="20" id="menu_js_accounting_account_sets"/>
+            icon="nline-accounting-list" sequence="20" id="menu_js_accounting_account_sets"/>
         <record model="ir.ui.menu-res.group" id="menu_js_accounting_account_sets_group_account">
             <field name="menu" ref="menu_js_accounting_account_sets"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_js_accounting" action="url_js_accounting_calendar"
-            sequence="30" id="menu_js_accounting_accounting_calendar"/>
+            icon="nline-accounting-date" sequence="30" id="menu_js_accounting_accounting_calendar"/>
         <record model="ir.ui.menu-res.group" id="menu_js_accounting_accounting_calendar_group_account">
             <field name="menu" ref="menu_js_accounting_accounting_calendar"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_js_accounting" action="url_js_account_interface"
-            sequence="40" id="menu_js_accounting_account_interface"/>
+            icon="nline-accounting-swap" sequence="40" id="menu_js_accounting_account_interface"/>
         <record model="ir.ui.menu-res.group" id="menu_js_accounting_account_interface_group_account">
             <field name="menu" ref="menu_js_accounting_account_interface"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_js_accounting" action="url_js_reports_accounting" name="Reports"
-            sequence="50" id="menu_js_accounting_reports"/>
+            icon="nline-accounting-report" sequence="50" id="menu_js_accounting_reports"/>
         <record model="ir.ui.menu-res.group" id="menu_js_accounting_reports_group_account">
             <field name="menu" ref="menu_js_accounting_reports"/>
             <field name="group" ref="account.group_account"/>
         </record>
 
-        <menuitem name="Common" sequence="10" id="menu_js_common" icon="tryton-list"/>
+        <menuitem name="Common" sequence="10" id="menu_js_common" icon="nline-common-list"/>
         <menuitem parent="menu_js_common" action="url_js_fob_points"
-            sequence="10" id="menu_js_common_fob_points"/>
+            icon="nline-common-flag" sequence="10" id="menu_js_common_fob_points"/>
         <menuitem parent="menu_js_common" action="url_js_ship_vias"
-            sequence="20" id="menu_js_common_ship_vias"/>
+            icon="nline-common-carrier" sequence="20" id="menu_js_common_ship_vias"/>
         <menuitem parent="menu_js_common" action="url_js_states"
-            sequence="30" id="menu_js_common_states"/>
+            icon="nline-common-map" sequence="30" id="menu_js_common_states"/>
         <menuitem parent="menu_js_common" action="url_js_postal_codes"
-            sequence="40" id="menu_js_common_postal_codes"/>
+            icon="nline-common-email" sequence="40" id="menu_js_common_postal_codes"/>
         <menuitem parent="menu_js_common" action="nline_desk.url_desk_terms"
-            sequence="50" id="menu_js_common_terms"/>
+            icon="nline-common-doc" sequence="50" id="menu_js_common_terms"/>
         <record model="ir.ui.menu-res.group" id="menu_js_common_terms_group_account">
             <field name="menu" ref="menu_js_common_terms"/>
             <field name="group" ref="account.group_account"/>
@@ -643,61 +643,61 @@ this repository contains the full copyright notices and license terms. -->
             <field name="group" ref="purchase.group_purchase"/>
         </record>
         <menuitem parent="menu_js_common" action="url_js_product_codes"
-            sequence="60" id="menu_js_common_product_codes"/>
+            icon="nline-common-tag" sequence="60" id="menu_js_common_product_codes"/>
         <menuitem parent="menu_js_common" action="url_js_commodity_codes"
-            sequence="70" id="menu_js_common_commodity_codes"/>
+            icon="nline-common-list" sequence="70" id="menu_js_common_commodity_codes"/>
         <menuitem parent="menu_js_common" action="url_js_reason_codes"
-            sequence="80" id="menu_js_common_reason_codes"/>
+            icon="nline-common-question" sequence="80" id="menu_js_common_reason_codes"/>
         <menuitem parent="menu_js_common" action="url_js_alert_messages"
-            sequence="90" id="menu_js_common_alert_messages"/>
+            icon="nline-common-bell" sequence="90" id="menu_js_common_alert_messages"/>
         <menuitem parent="menu_js_common" action="url_js_currency_codes"
-            sequence="100" id="menu_js_common_currency_codes"/>
+            icon="nline-common-currency" sequence="100" id="menu_js_common_currency_codes"/>
         <menuitem parent="menu_js_common" action="url_js_control_panel"
-            sequence="110" id="menu_js_common_control_panel"/>
+            icon="nline-common-person" sequence="110" id="menu_js_common_control_panel"/>
         <menuitem parent="menu_js_common" action="url_js_reports_common" name="Reports"
-            sequence="120" id="menu_js_common_reports"/>
+            icon="nline-common-report" sequence="120" id="menu_js_common_reports"/>
 
-        <menuitem name="Executive Information" sequence="11" id="menu_js_executive" icon="tryton-board"/>
+        <menuitem name="Executive Information" sequence="11" id="menu_js_executive" icon="nline-executive-gauge"/>
         <menuitem parent="menu_js_executive" action="url_js_exec_sales"
-            sequence="10" id="menu_js_executive_sales"/>
+            icon="nline-executive-trend" sequence="10" id="menu_js_executive_sales"/>
         <record model="ir.ui.menu-res.group" id="menu_js_executive_sales_group_sale">
             <field name="menu" ref="menu_js_executive_sales"/>
             <field name="group" ref="sale.group_sale"/>
         </record>
         <menuitem parent="menu_js_executive" action="url_js_exec_purchasing"
-            sequence="20" id="menu_js_executive_purchasing"/>
+            icon="nline-executive-purchase" sequence="20" id="menu_js_executive_purchasing"/>
         <record model="ir.ui.menu-res.group" id="menu_js_executive_purchasing_group_purchase">
             <field name="menu" ref="menu_js_executive_purchasing"/>
             <field name="group" ref="purchase.group_purchase"/>
         </record>
         <menuitem parent="menu_js_executive" action="url_js_exec_production"
-            sequence="30" id="menu_js_executive_production"/>
+            icon="nline-executive-gauge" sequence="30" id="menu_js_executive_production"/>
         <record model="ir.ui.menu-res.group" id="menu_js_executive_production_group_production">
             <field name="menu" ref="menu_js_executive_production"/>
             <field name="group" ref="production.group_production"/>
         </record>
         <menuitem parent="menu_js_executive" action="url_js_exec_financials"
-            sequence="40" id="menu_js_executive_financials"/>
+            icon="nline-executive-report" sequence="40" id="menu_js_executive_financials"/>
         <record model="ir.ui.menu-res.group" id="menu_js_executive_financials_group_account">
             <field name="menu" ref="menu_js_executive_financials"/>
             <field name="group" ref="account.group_account"/>
         </record>
 
-        <menuitem name="Administration" sequence="12" id="menu_js_administration" icon="tryton-settings"/>
+        <menuitem name="Administration" sequence="12" id="menu_js_administration" icon="nline-admin-shield"/>
         <menuitem parent="menu_js_administration" action="url_js_users"
-            sequence="10" id="menu_js_administration_users"/>
+            icon="nline-admin-people" sequence="10" id="menu_js_administration_users"/>
         <record model="ir.ui.menu-res.group" id="menu_js_administration_users_group_admin">
             <field name="menu" ref="menu_js_administration_users"/>
             <field name="group" ref="res.group_admin"/>
         </record>
         <menuitem parent="menu_js_administration" action="url_js_authorities"
-            sequence="20" id="menu_js_administration_authorities"/>
+            icon="nline-admin-shield" sequence="20" id="menu_js_administration_authorities"/>
         <record model="ir.ui.menu-res.group" id="menu_js_administration_authorities_group_admin">
             <field name="menu" ref="menu_js_administration_authorities"/>
             <field name="group" ref="res.group_admin"/>
         </record>
         <menuitem parent="menu_js_administration" action="url_js_system_settings"
-            sequence="30" id="menu_js_administration_system_settings"/>
+            icon="nline-admin-tune" sequence="30" id="menu_js_administration_system_settings"/>
         <record model="ir.ui.menu-res.group" id="menu_js_administration_system_settings_group_admin">
             <field name="menu" ref="menu_js_administration_system_settings"/>
             <field name="group" ref="res.group_admin"/>

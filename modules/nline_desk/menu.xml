@@ -402,213 +402,213 @@ this repository contains the full copyright notices and license terms. -->
         </record>
 
         <menuitem action="url_desk_home" sequence="1" id="menu_desk_home"
-            icon="tryton-board"/>
+            icon="nline-home-home"/>
 
-        <menuitem name="Customers" sequence="20" id="menu_nl_customers" icon="tryton-sale"/>
+        <menuitem name="Customers" sequence="20" id="menu_nl_customers" icon="nline-customers-people"/>
         <menuitem parent="menu_nl_customers" action="url_desk_customers"
-            sequence="10" id="menu_desk_customers"/>
+            icon="nline-customers-people" sequence="10" id="menu_desk_customers"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_customers_group_account">
             <field name="menu" ref="menu_desk_customers"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_customers" action="url_desk_income_tracker"
-            sequence="20" id="menu_desk_income_tracker"/>
+            icon="nline-customers-trend" sequence="20" id="menu_desk_income_tracker"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_income_tracker_group_account">
             <field name="menu" ref="menu_desk_income_tracker"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_customers" action="url_desk_invoices"
-            sequence="30" id="menu_desk_invoices"/>
+            icon="nline-customers-invoice" sequence="30" id="menu_desk_invoices"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_invoices_group_account">
             <field name="menu" ref="menu_desk_invoices"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_customers" action="url_desk_sales_receipts"
-            sequence="40" id="menu_desk_sales_receipts"/>
+            icon="nline-customers-receipt" sequence="40" id="menu_desk_sales_receipts"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_sales_receipts_group_account">
             <field name="menu" ref="menu_desk_sales_receipts"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_customers" action="url_desk_credits"
-            sequence="50" id="menu_desk_credits"/>
+            icon="nline-customers-doc" sequence="50" id="menu_desk_credits"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_credits_group_account">
             <field name="menu" ref="menu_desk_credits"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_customers" action="url_desk_receive"
-            sequence="60" id="menu_desk_receive"/>
+            icon="nline-customers-payment" sequence="60" id="menu_desk_receive"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_receive_group_account">
             <field name="menu" ref="menu_desk_receive"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_customers" action="url_desk_statements"
-            sequence="70" id="menu_desk_statements"/>
+            icon="nline-customers-doc" sequence="70" id="menu_desk_statements"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_statements_group_account">
             <field name="menu" ref="menu_desk_statements"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_customers" action="account_invoice.act_invoice_out_form"
-            sequence="80" id="menu_nl_customers_invoices_out"/>
+            icon="nline-customers-list" sequence="80" id="menu_nl_customers_invoices_out"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_customers_invoices_out_group_account">
             <field name="menu" ref="menu_nl_customers_invoices_out"/>
             <field name="group" ref="account.group_account"/>
         </record>
 
-        <menuitem name="Vendors" sequence="21" id="menu_nl_vendors" icon="tryton-purchase"/>
+        <menuitem name="Vendors" sequence="21" id="menu_nl_vendors" icon="nline-vendors-party"/>
         <menuitem parent="menu_nl_vendors" action="url_desk_vendors"
-            sequence="10" id="menu_desk_vendors"/>
+            icon="nline-vendors-party" sequence="10" id="menu_desk_vendors"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_vendors_group_account">
             <field name="menu" ref="menu_desk_vendors"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_vendors" action="url_desk_bill_tracker"
-            sequence="20" id="menu_desk_bill_tracker"/>
+            icon="nline-vendors-trend" sequence="20" id="menu_desk_bill_tracker"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_bill_tracker_group_account">
             <field name="menu" ref="menu_desk_bill_tracker"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_vendors" action="url_desk_bill_receipts"
-            sequence="30" id="menu_desk_bill_receipts"/>
+            icon="nline-vendors-shipment-in" sequence="30" id="menu_desk_bill_receipts"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_bill_receipts_group_account">
             <field name="menu" ref="menu_desk_bill_receipts"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_vendors" action="url_desk_bills"
-            sequence="40" id="menu_desk_bills"/>
+            icon="nline-vendors-receipt" sequence="40" id="menu_desk_bills"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_bills_group_account">
             <field name="menu" ref="menu_desk_bills"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_vendors" action="url_desk_vendor_credits"
-            sequence="50" id="menu_desk_vendor_credits"/>
+            icon="nline-vendors-doc" sequence="50" id="menu_desk_vendor_credits"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_vendor_credits_group_account">
             <field name="menu" ref="menu_desk_vendor_credits"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_vendors" action="url_desk_pay_bills"
-            sequence="60" id="menu_desk_pay_bills"/>
+            icon="nline-vendors-payment" sequence="60" id="menu_desk_pay_bills"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_pay_bills_group_account">
             <field name="menu" ref="menu_desk_pay_bills"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_vendors" action="account_invoice.act_invoice_in_form"
-            sequence="70" id="menu_nl_vendors_invoices_in"/>
+            icon="nline-vendors-list" sequence="70" id="menu_nl_vendors_invoices_in"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_vendors_invoices_in_group_account">
             <field name="menu" ref="menu_nl_vendors_invoices_in"/>
             <field name="group" ref="account.group_account"/>
         </record>
 
-        <menuitem name="Banking" sequence="22" id="menu_nl_banking" icon="tryton-bank"/>
+        <menuitem name="Banking" sequence="22" id="menu_nl_banking" icon="nline-banking-bank"/>
         <menuitem parent="menu_nl_banking" action="url_desk_checks"
-            sequence="10" id="menu_desk_checks"/>
+            icon="nline-banking-receipt" sequence="10" id="menu_desk_checks"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_checks_group_account">
             <field name="menu" ref="menu_desk_checks"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_banking" action="url_desk_deposits"
-            sequence="20" id="menu_desk_deposits"/>
+            icon="nline-banking-bank" sequence="20" id="menu_desk_deposits"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_deposits_group_account">
             <field name="menu" ref="menu_desk_deposits"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_banking" action="url_desk_cards"
-            sequence="30" id="menu_desk_cards"/>
+            icon="nline-banking-card" sequence="30" id="menu_desk_cards"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_cards_group_account">
             <field name="menu" ref="menu_desk_cards"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_banking" action="url_desk_register"
-            sequence="40" id="menu_desk_register"/>
+            icon="nline-banking-list" sequence="40" id="menu_desk_register"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_register_group_account">
             <field name="menu" ref="menu_desk_register"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_banking" action="url_desk_reconcile"
-            sequence="50" id="menu_desk_reconcile"/>
+            icon="nline-banking-check" sequence="50" id="menu_desk_reconcile"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_reconcile_group_account">
             <field name="menu" ref="menu_desk_reconcile"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_banking" action="account_statement.act_statement_form"
-            sequence="60" id="menu_nl_banking_statements"/>
+            icon="nline-banking-report" sequence="60" id="menu_nl_banking_statements"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_banking_statements_group_statement">
             <field name="menu" ref="menu_nl_banking_statements"/>
             <field name="group" ref="account_statement.group_statement"/>
         </record>
 
-        <menuitem name="Company" sequence="23" id="menu_nl_company" icon="tryton-account"/>
+        <menuitem name="Company" sequence="23" id="menu_nl_company" icon="nline-company-company"/>
         <menuitem parent="menu_nl_company" action="url_desk_reports"
-            sequence="10" id="menu_desk_reports"/>
+            icon="nline-company-report" sequence="10" id="menu_desk_reports"/>
         <menuitem parent="menu_nl_company" action="url_desk_company_info"
-            sequence="20" id="menu_desk_company_info"/>
+            icon="nline-company-company" sequence="20" id="menu_desk_company_info"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_company_info_group_admin">
             <field name="menu" ref="menu_desk_company_info"/>
             <field name="group" ref="res.group_admin"/>
         </record>
         <menuitem parent="menu_nl_company" action="url_desk_settings"
-            sequence="30" id="menu_desk_settings"/>
+            icon="nline-company-tune" sequence="30" id="menu_desk_settings"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_settings_group_admin">
             <field name="menu" ref="menu_desk_settings"/>
             <field name="group" ref="res.group_admin"/>
         </record>
         <menuitem parent="menu_nl_company" action="url_desk_terms"
-            sequence="40" id="menu_desk_terms"/>
+            icon="nline-company-doc" sequence="40" id="menu_desk_terms"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_terms_group_account">
             <field name="menu" ref="menu_desk_terms"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_company" action="url_desk_lists"
-            sequence="50" id="menu_desk_lists"/>
+            icon="nline-company-list" sequence="50" id="menu_desk_lists"/>
         <menuitem parent="menu_nl_company" action="url_desk_import"
-            sequence="60" id="menu_desk_import"/>
+            icon="nline-company-import" sequence="60" id="menu_desk_import"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_import_group_admin">
             <field name="menu" ref="menu_desk_import"/>
             <field name="group" ref="res.group_admin"/>
         </record>
         <menuitem parent="menu_nl_company" action="url_desk_closing"
-            sequence="70" id="menu_desk_closing"/>
+            icon="nline-company-shield" sequence="70" id="menu_desk_closing"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_closing_group_account_admin">
             <field name="menu" ref="menu_desk_closing"/>
             <field name="group" ref="account.group_account_admin"/>
         </record>
         <menuitem parent="menu_nl_company" action="url_desk_accounts"
-            sequence="80" id="menu_desk_accounts"/>
+            icon="nline-company-account" sequence="80" id="menu_desk_accounts"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_accounts_group_account">
             <field name="menu" ref="menu_desk_accounts"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_company" action="url_desk_journal"
-            sequence="90" id="menu_desk_journal"/>
+            icon="nline-company-doc" sequence="90" id="menu_desk_journal"/>
         <record model="ir.ui.menu-res.group" id="menu_desk_journal_group_account">
             <field name="menu" ref="menu_desk_journal"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_company" action="account.act_move_form"
-            sequence="100" id="menu_nl_company_moves"/>
+            icon="nline-company-list" sequence="100" id="menu_nl_company_moves"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_company_moves_group_account">
             <field name="menu" ref="menu_nl_company_moves"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_company" action="account.act_general_ledger_account_form"
-            sequence="110" id="menu_nl_company_general_ledger"/>
+            icon="nline-company-report" sequence="110" id="menu_nl_company_general_ledger"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_company_general_ledger_group_account">
             <field name="menu" ref="menu_nl_company_general_ledger"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_company" action="account.act_account_balance_sheet_tree"
-            sequence="120" id="menu_nl_company_balance_sheet"/>
+            icon="nline-company-report" sequence="120" id="menu_nl_company_balance_sheet"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_company_balance_sheet_group_account">
             <field name="menu" ref="menu_nl_company_balance_sheet"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_company" action="account.act_account_income_statement_tree"
-            sequence="130" id="menu_nl_company_income_statement"/>
+            icon="nline-company-trend" sequence="130" id="menu_nl_company_income_statement"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_company_income_statement_group_account">
             <field name="menu" ref="menu_nl_company_income_statement"/>
             <field name="group" ref="account.group_account"/>
         </record>
         <menuitem parent="menu_nl_company" action="account.act_aged_balance_list"
-            sequence="140" id="menu_nl_company_aged_balance"/>
+            icon="nline-company-clock" sequence="140" id="menu_nl_company_aged_balance"/>
         <record model="ir.ui.menu-res.group" id="menu_nl_company_aged_balance_group_account">
             <field name="menu" ref="menu_nl_company_aged_balance"/>
             <field name="group" ref="account.group_account"/>
