@@ -536,25 +536,26 @@
         });
     }
 
-    /* ---- Category tabs, the menu per tab, the window list ------------- */
+    /* ---- Category tabs, the menu list per tab, the window list --------- */
 
     /* The broad categories across the top, as in every N-Line BI app; the
-     * menu shows the top menus of the chosen one (Home in all). A top menu
-     * not listed here shows under Admin. */
+     * menu pane lists every window of the chosen one's top menus, flat (no
+     * folders to open), Home first. A top menu not listed here shows under
+     * Admin. */
     var CATEGORIES = [
         ['Inventory/Engineering', ['Inventory', 'Engineering', 'Products',
             'Inventory & Stock', 'Productions']],
         ['Quotation/Sales', ['Estimating', 'Sales', 'Customers']],
         ['RFQ/Purchasing', ['Purchasing', 'Vendors', 'Purchases']],
         ['Shopfloor', ['Shopfloor', 'Planning']],
-        ['Accounting', ['Accounting', 'Banking', 'Financial',
+        ['Accounting', ['Accounting', 'Company', 'Banking', 'Financial',
             'Executive Information', 'Currencies', 'Banks']],
-        ['Settings', ['Common', 'Company', 'Companies', 'Parties']],
+        ['Settings', ['Common', 'Companies', 'Parties']],
         ['Admin', ['Administration', 'System Administration']]
     ];
     var ALWAYS = ['Home'];
-    var topMenus = null;        /* [{id, name}] the user's top menus */
-    var baseDomain = null;      /* the menu's own domain */
+    var menus = null;           /* the user's menus, by id */
+    var tops = [];              /* the top menus, in order */
 
     function store(key, value) {
         try {
@@ -592,48 +593,119 @@
         return store(userKey('category')) || CATEGORIES[0][0];
     }
 
-    /* The menu of a category: its top menus, less the hidden ones */
+    function icon(img, name) {
+        if (name) {
+            Sao.common.ICONFACTORY.get_icon_url(name).then(function (url) {
+                img.attr('src', url);
+            });
+        }
+        return img;
+    }
+
+    function openMenu(id) {
+        Sao.Action.exec_keyword('tree_open', {model: 'ir.ui.menu', id: id},
+            null, false);
+    }
+
+    /* The windows of a menu, depth first, each with its folder path (a
+     * sub-folder becomes a heading, not a folder to open); a window met
+     * before in the same list is left out (the same window in two
+     * folders) */
+    function windowsOf(menu, path, hidden, seen, out) {
+        (menu.children || []).forEach(function (child) {
+            if (hidden.indexOf(child.id) >= 0) {
+                return;
+            }
+            if (child.action && !seen[child.action]) {
+                seen[child.action] = true;
+                out.push({menu: child, path: path});
+            }
+            /* (a folder that is a window itself lists once: its
+             * children are its variants) */
+            if (child.children.length && !child.action) {
+                windowsOf(child, path.slice(0, 1).concat([child.name]),
+                    hidden, seen, out);
+            }
+        });
+        return out;
+    }
+
+    function menuRow(menu, kind) {
+        var row = jQuery('<a/>', {'href': '#', 'class': 'nl-mi' +
+            (kind ? ' ' + kind : ''), 'title': menu.name})
+            .append(icon(jQuery('<img/>', {'class': 'nl-mi-icon',
+                'alt': ''}), menu.icon), jQuery('<span/>', {
+                'text': menu.name}));
+        row.click(function (event) {
+            event.preventDefault();
+            jQuery('#nl-menu .nl-mi.on').removeClass('on');
+            row.addClass('on');
+            openMenu(menu.id);
+        });
+        return row;
+    }
+
+    /* The menu list of a category */
     function showCategory(category) {
         store(userKey('category'), category);
         jQuery('#nl-cats a').each(function () {
             jQuery(this).toggleClass('on', this.dataset.cat === category);
         });
         jQuery('#nl-menu-tools').toggle(category === 'Settings');
-        var screen = Sao.main_menu_screen;
-        if (!screen || !topMenus) {
+        var list = jQuery('#nl-menu').empty();
+        if (!menus) {
             return;
         }
-        if (baseDomain === null) {
-            baseDomain = (screen.domain || []).slice();
-        }
         var hidden = hiddenMenus();
-        var ids = topMenus.filter(function (menu) {
-            var cat = categoryOf(menu.name);
-            return (cat === null || cat === category) &&
-                hidden.indexOf(menu.id) < 0;
-        }).map(function (menu) {
-            return menu.id;
+        var seen = {};
+        /* Top menus of the same name (e.g. Banking) as one group */
+        var groups = [], byName = {};
+        tops.forEach(function (top) {
+            if (hidden.indexOf(top.id) >= 0) {
+                return;
+            }
+            var cat = categoryOf(top.name);
+            if (cat === null) {
+                list.append(menuRow(top, 'nl-mi-home'));
+                return;
+            }
+            if (cat !== category) {
+                return;
+            }
+            if (!byName[top.name]) {
+                byName[top.name] = [];
+                groups.push(byName[top.name]);
+            }
+            byName[top.name].push(top);
         });
-        screen.domain = baseDomain.concat([['id', 'in', ids]]);
-        screen.search_filter();
-    }
-
-    /* Hidden menu items below the top: their rows in the menu tree */
-    function hideRows() {
-        var screen = Sao.main_menu_screen;
-        var view = screen && screen.current_view;
-        if (!view || !view.rows) {
-            return;
-        }
-        var hidden = hiddenMenus();
-        (function walk(rows) {
-            rows.forEach(function (row) {
-                if (row.record && row.el) {
-                    jQuery(row.el).toggle(hidden.indexOf(row.record.id) < 0);
+        groups.forEach(function (group) {
+            var items = [];
+            group.forEach(function (top) {
+                if (top.action && !seen[top.action]) {
+                    seen[top.action] = true;
+                    items.push({menu: top, path: [top.name]});
                 }
-                walk(row.rows || []);
+                windowsOf(top, [top.name], hidden, seen, items);
             });
-        }(view.rows));
+            /* One heading per folder, its windows under it */
+            var order = [], under = {};
+            items.forEach(function (item) {
+                var title = item.path.join(' › ');
+                if (!under[title]) {
+                    under[title] = [];
+                    order.push({title: title, sub: item.path.length > 1});
+                }
+                under[title].push(item.menu);
+            });
+            order.forEach(function (heading) {
+                list.append(jQuery('<div/>', {'class': 'nl-mh' +
+                    (heading.sub ? ' nl-mh-sub' : ''),
+                    'text': heading.title}));
+                under[heading.title].forEach(function (menu) {
+                    list.append(menuRow(menu));
+                });
+            });
+        });
     }
 
     function categoryBar() {
@@ -650,18 +722,30 @@
         jQuery('#main').before(bar);
     }
 
-    /* Which categories the user has: those of their top menus */
+    /* The user's menus (what their groups may open), once per sign-in */
     function loadMenus() {
         var session = Sao.Session.current_session;
         Sao.rpc({
             method: 'model.ir.ui.menu.search_read',
-            params: [[['parent', '=', null]], 0, null,
-                [['sequence', 'ASC'], ['id', 'ASC']], ['name'], {}]
-        }, session).then(function (menus) {
-            topMenus = menus;
+            params: [[], 0, null, [['sequence', 'ASC'], ['id', 'ASC']],
+                ['name', 'parent', 'icon', 'action'], {}]
+        }, session).then(function (rows) {
+            menus = {};
+            tops = [];
+            rows.forEach(function (row) {
+                row.children = [];
+                menus[row.id] = row;
+            });
+            rows.forEach(function (row) {
+                if (row.parent && menus[row.parent]) {
+                    menus[row.parent].children.push(row);
+                } else if (!row.parent) {
+                    tops.push(row);
+                }
+            });
             var have = {};
-            menus.forEach(function (menu) {
-                have[categoryOf(menu.name)] = true;
+            tops.forEach(function (top) {
+                have[categoryOf(top.name)] = true;
             });
             jQuery('#nl-cats a').each(function () {
                 jQuery(this).toggle(Boolean(have[this.dataset.cat]));
@@ -674,96 +758,90 @@
                     return cat[0];
                 })[0] || CATEGORIES[0][0];
             }
-            (function wait() {
-                if (!Sao.main_menu_screen) {
-                    setTimeout(wait, 100);
-                    return;
-                }
-                showCategory(wanted);
-            }());
+            showCategory(wanted);
         });
     }
 
     /* Settings > Menu Items: tick the menus to show */
     function menuItemsDialog() {
-        var session = Sao.Session.current_session;
-        Sao.rpc({
-            method: 'model.ir.ui.menu.search_read',
-            params: [[], 0, null, [['sequence', 'ASC'], ['id', 'ASC']],
-                ['name', 'parent'], {}]
-        }, session).then(function (menus) {
-            var hidden = hiddenMenus();
-            var children = {};
-            menus.forEach(function (menu) {
-                var parent = menu.parent || 0;
-                (children[parent] = children[parent] || []).push(menu);
+        if (!menus) {
+            return;
+        }
+        var hidden = hiddenMenus();
+        var list = jQuery('<div/>', {'class': 'nl-menu-items'});
+        function add(items, depth) {
+            items.forEach(function (menu) {
+                if (!depth && ALWAYS.indexOf(menu.name) >= 0) {
+                    return;
+                }
+                var box = jQuery('<input/>', {'type': 'checkbox'})
+                    .prop('checked', hidden.indexOf(menu.id) < 0)
+                    .data('id', menu.id);
+                list.append(jQuery('<label/>', {
+                    'class': depth ? '' : 'nl-top',
+                    'style': 'padding-left: ' + (depth * 20) + 'px'
+                }).append(box, ' ', jQuery('<span/>', {
+                    'text': menu.name
+                }), depth ? null : jQuery('<span/>', {
+                    'class': 'nl-cat-name',
+                    'text': categoryOf(menu.name) || ''
+                })));
+                add(menu.children || [], depth + 1);
             });
-            var list = jQuery('<div/>', {'class': 'nl-menu-items'});
-            function add(parent, depth) {
-                (children[parent] || []).forEach(function (menu) {
-                    if (!depth && ALWAYS.indexOf(menu.name) >= 0) {
-                        return;
-                    }
-                    var box = jQuery('<input/>', {'type': 'checkbox'})
-                        .prop('checked', hidden.indexOf(menu.id) < 0)
-                        .data('id', menu.id);
-                    list.append(jQuery('<label/>', {
-                        'class': depth ? '' : 'nl-top',
-                        'style': 'padding-left: ' + (depth * 20) + 'px'
-                    }).append(box, ' ', jQuery('<span/>', {
-                        'text': menu.name
-                    }), depth ? null : jQuery('<span/>', {
-                        'class': 'nl-cat-name',
-                        'text': categoryOf(menu.name) || ''
-                    })));
-                    if (depth < 1) {
-                        add(menu.id, depth + 1);
-                    }
-                });
-            }
-            add(0, 0);
-            var overlay = jQuery('<div/>', {'class': 'nl-dialog-back'});
-            var dialog = jQuery('<div/>', {'class': 'nl-dialog',
-                'role': 'dialog', 'aria-label': 'Menu Items'}).append(
-                jQuery('<div/>', {'class': 'nl-dialog-title',
-                    'text': 'Menu Items'}),
-                jQuery('<p/>', {'class': 'nl-dialog-note', 'text':
-                    'Untick the menus you do not use: they leave the ' +
-                    'menu list (kept on this computer for your sign-in).'}),
-                list,
-                jQuery('<div/>', {'class': 'nl-dialog-buttons'}).append(
-                    jQuery('<button/>', {'type': 'button', 'class': 'btn',
-                        'text': 'Show All'}).click(function () {
-                        list.find('input').prop('checked', true);
-                    }),
-                    jQuery('<span/>', {'style': 'flex: 1'}),
-                    jQuery('<button/>', {'type': 'button', 'class': 'btn',
-                        'text': 'Cancel'}).click(function () {
-                        overlay.remove();
-                    }),
-                    jQuery('<button/>', {'type': 'button',
-                        'class': 'btn btn-primary', 'text': 'OK'})
-                        .click(function () {
-                            var ids = [];
-                            list.find('input').each(function () {
-                                if (!this.checked) {
-                                    ids.push(jQuery(this).data('id'));
-                                }
-                            });
-                            store(userKey('menu.hidden'), ids);
-                            overlay.remove();
-                            showCategory(currentCategory());
-                        })));
-            overlay.append(dialog).appendTo('body');
+        }
+        /* Grouped by tab, in the tabs' order */
+        CATEGORIES.forEach(function (cat) {
+            add(tops.filter(function (top) {
+                return categoryOf(top.name) === cat[0];
+            }), 0);
         });
+        var overlay = jQuery('<div/>', {'class': 'nl-dialog-back'});
+        var dialog = jQuery('<div/>', {'class': 'nl-dialog',
+            'role': 'dialog', 'aria-label': 'Menu Items'}).append(
+            jQuery('<div/>', {'class': 'nl-dialog-title',
+                'text': 'Menu Items'}),
+            jQuery('<p/>', {'class': 'nl-dialog-note', 'text':
+                'Untick the menus you do not use: they leave the ' +
+                'menu list (kept on this computer for your sign-in).'}),
+            list,
+            jQuery('<div/>', {'class': 'nl-dialog-buttons'}).append(
+                jQuery('<button/>', {'type': 'button', 'class': 'btn',
+                    'text': 'Show All'}).click(function () {
+                    list.find('input').prop('checked', true);
+                }),
+                jQuery('<span/>', {'style': 'flex: 1'}),
+                jQuery('<button/>', {'type': 'button', 'class': 'btn',
+                    'text': 'Cancel'}).click(function () {
+                    overlay.remove();
+                }),
+                jQuery('<button/>', {'type': 'button',
+                    'class': 'btn btn-primary', 'text': 'OK'})
+                    .click(function () {
+                        var ids = [];
+                        list.find('input').each(function () {
+                            if (!this.checked) {
+                                ids.push(jQuery(this).data('id'));
+                            }
+                        });
+                        store(userKey('menu.hidden'), ids);
+                        overlay.remove();
+                        showCategory(currentCategory());
+                    })));
+        overlay.append(dialog).appendTo('body');
     }
 
-    /* The open windows: one short row each at the bottom of the menu pane
-     * (Jobshop's window list), in place of the tabs along the top */
+    /* The bottom of the menu pane: the Action search (Tryton's global
+     * search: type part of a window's or a record's name to open it) and
+     * the open windows, one short row each (Jobshop's window list), in
+     * place of the tabs along the top */
     function windowList() {
         var panel = jQuery('<div/>', {'id': 'nl-windows'}).append(
+            jQuery('<div/>', {'id': 'nl-search'}).append(
+                jQuery('#global-search').attr('title', 'Search: type part ' +
+                    'of a window or a record name to open it')
+),
             jQuery('<div/>', {'class': 'nl-win-head'}).append(
-                jQuery('<span/>', {'text': 'Windows'}),
+                jQuery('<span/>', {'text': 'Open Windows'}),
                 jQuery('<span/>', {'class': 'nl-win-count'})),
             jQuery('<ul/>', {'class': 'nl-win-list', 'role': 'tablist'}));
         jQuery('.row-offcanvas').append(panel);
@@ -804,6 +882,12 @@
             panel.toggleClass('empty', !items.length);
             root.style.setProperty('--nl-win-h', panel.outerHeight() + 'px');
         }
+        /* The client fills the search box later: name what it does */
+        new MutationObserver(function () {
+            panel.find('#global-search input').attr('placeholder',
+                'Find a window or record');
+        }).observe(panel.find('#nl-search')[0], {childList: true,
+            subtree: true});
         new MutationObserver(draw).observe(document.getElementById(
             'tablist'), {childList: true, subtree: true, attributes: true,
             attributeFilter: ['class'], characterData: true});
@@ -813,18 +897,21 @@
     jQuery(function () {
         menuEdge();
         categoryBar();
+        /* The menu list in place of the client's folder tree (which
+         * stays, hidden: the client keeps it up to date) */
+        jQuery('#menu').before(jQuery('<nav/>', {'id': 'nl-menu',
+            'aria-label': 'Menu'}));
         windowList();
+        /* The menu pane always shown: no hiding it by the name */
+        jQuery('.row-offcanvas').addClass('active');
+        jQuery('[data-toggle="offcanvas"]').off('click')
+            .removeAttr('data-toggle');
         /* Settings: Menu Items, at the right of the category bar */
         jQuery('#nl-cats').append(jQuery('<span/>', {'id': 'nl-menu-tools'})
             .append(jQuery('<button/>', {'type': 'button',
                 'class': 'nl-menu-tool', 'text': 'Menu Items...',
                 'title': 'Choose the menus the menu list shows'})
                 .click(menuItemsDialog)).hide());
-        /* The menu tree redrawn or a folder opened: hide the hidden rows */
-        new MutationObserver(function () {
-            hideRows();
-        }).observe(document.getElementById('menu'), {childList: true,
-            subtree: true});
         /* The name on two lines: "Tryton ERP", under it "for" (handwritten)
          * and N-Line's logo; N-Line's valve beside them */
         var title = jQuery('#title');
