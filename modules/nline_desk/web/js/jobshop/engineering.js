@@ -780,9 +780,9 @@
     var CARD_W = 230, CARD_H = 64, STEP_X = 14, STEP_Y = 20;
     /* The header card is a card like the others (as in Jobshop) */
     var PROD_W = CARD_W, PROD_H = CARD_H, LEG_GAP = 32, MARGIN = 16;
-    /* Where a leg's line leaves its operation card: below the card stacked
-     * behind it, through the card's visible right edge */
-    var LEG_LINE_Y = CARD_H - 10;
+    /* Where a leg's line leaves its operation card: the card's bottom-right
+     * corner (owner, 28 Oct 2026), clear of the card stacked in front */
+    var LEG_LINE_Y = CARD_H;
     var STATUS = {unreleased: 'Unreleased', firm: 'Firm', hold: 'Hold',
         released: 'Released', closed: 'Closed', cancelled: 'Cancelled'};
     var LETTER = {unreleased: 'U', firm: 'F', hold: 'H', released: 'R',
@@ -2167,8 +2167,8 @@
             svg.setAttribute('width', plan.width);
             svg.setAttribute('height', plan.height);
             plan.links.forEach(function (link) {
-                /* Straight: from the operation's top line to the leg's
-                 * header card, level with it (layout) */
+                /* Straight: from the operation card's bottom-right corner
+                 * to the leg's header card, level with it (layout) */
                 var sx = link.from.x + link.from.w;
                 var sy = link.from.y + LEG_LINE_Y;
                 var tx = link.to.x;
