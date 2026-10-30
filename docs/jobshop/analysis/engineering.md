@@ -180,6 +180,21 @@ Subordinates.
 - Copy `js/jobshop/engineering.js` to the web roots and bump its `?v=`.
 - Shared wishes: M11, Q7, C15 above.
 
+
+### Modern pages (29 Oct 2026)
+
+- docpage.js `docPage`: its document keydown listener stays after the
+  window went back to Classic view (it checks `main.isConnected` only) and
+  calls `preventDefault` on the page's single keys; check the page node
+  (`pageNode.isConnected`) instead. Worked around in engineering.js
+  (`guardKeys`), but the key is still swallowed in the classic window.
+- docpage.js: no `UI.setUrl`; a new record's address and the finder are not
+  updated after its first save (engineering.js does both itself:
+  `history.replaceState` and the finder's input).
+- docpage.js: `spec.keys` show as `KEY label`; keys like the arrows, Enter,
+  Ins cannot be listed there (they would read "ARROWUP"); a `display` name
+  per key would let the card stack's keys sit in the same line.
+
 ## Test results
 
 - `test.ps1 nline_js_engineering`: see the status file (scenario covers the

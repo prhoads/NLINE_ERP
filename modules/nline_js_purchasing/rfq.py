@@ -133,7 +133,14 @@ class RequestForQuote(ShipToMixin, ModelSQL, ModelView):
             if not values.get('number'):
                 sequence = Sequence(ModelData.get_id(
                         'nline_js_purchasing', 'sequence_rfq'))
-                values['number'] = sequence.get()
+                number = sequence.get()
+                # Jobshop's imported requests may hold the next numbers
+                # already: skip them (else "The RFQ ID must be unique")
+                taken = {r.number for r in cls.search(
+                        [('number', '!=', None)])}
+                while number in taken:
+                    number = sequence.get()
+                values['number'] = number
         return super().create(vlist)
 
     @classmethod

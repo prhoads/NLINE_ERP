@@ -256,6 +256,14 @@ this repository contains the full copyright notices and license terms. -->
             <field name="name">nline-inventory-tune</field>
             <field name="path">icons/nline-inventory-tune.svg</field>
         </record>
+        <record model="ir.ui.icon" id="icon_nline_personal_grid">
+            <field name="name">nline-personal-grid</field>
+            <field name="path">icons/nline-personal-grid.svg</field>
+        </record>
+        <record model="ir.ui.icon" id="icon_nline_personal_tune">
+            <field name="name">nline-personal-tune</field>
+            <field name="path">icons/nline-personal-tune.svg</field>
+        </record>
         <record model="ir.ui.icon" id="icon_nline_planning_date">
             <field name="name">nline-planning-date</field>
             <field name="path">icons/nline-planning-date.svg</field>

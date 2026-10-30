@@ -27,7 +27,10 @@
     var BEHIND_NLBI = BASE !== '';
 
     document.write(
-        '<script src="desk/shared/nline_header.js?v=20261027c"><\/script>');
+        '<script src="desk/shared/nline_header.js?v=20261027c"><\/script>' +
+        /* The menu pane's icons and the user's Menu Layout (menuprefs.js) */
+        '<script src="desk/js/menuicons.js?v=20261105a"><\/script>' +
+        '<script src="desk/js/menuprefs.js?v=20261105a"><\/script>');
 
     Sao.config.title = 'Tryton ERP';
     /* The client paints every icon in its first colour (teal): Tryton's own
@@ -121,6 +124,7 @@
                 openScreen('', 'Home');
             }
         }, 300);
+        menuPrefsText = preferences && preferences.nline_menu_prefs || null;
         loadMenus();
         var session = Sao.Session.current_session;
         if (BEHIND_NLBI || !window.NLineHeader || !session) {
@@ -245,7 +249,8 @@
         'users': 'User Manager',
         'authorities': 'Authority Manager',
         'system-settings': 'System Settings',
-        'currency-codes': 'Currency Codes'
+        'currency-codes': 'Currency Codes',
+        'menu-layout': 'Menu Layout'
     };
 
     /* Screens with a tab per item: a register per account, a tab per
@@ -465,6 +470,11 @@
                     tab.set_name(String(data.name));
                 }
             });
+        } else if (data.nline === 'menu-prefs') {
+            /* Settings > Menu Layout saved (or previewed): draw the menu */
+            menuPrefsText = typeof data.prefs === 'string' ? data.prefs :
+                menuPrefsText;
+            showCategory(currentCategory());
         } else if (data.nline === 'toast' && data.message) {
             toast(String(data.message), String(data.kind || ''));
         } else if (data.nline === 'action' && data.action) {
@@ -550,7 +560,7 @@
         ['Shopfloor', ['Shopfloor', 'Planning']],
         ['Accounting', ['Accounting', 'Company', 'Banking', 'Financial',
             'Executive Information', 'Currencies', 'Banks']],
-        ['Settings', ['Common', 'Companies', 'Parties']],
+        ['Settings', ['My Settings', 'Common', 'Companies', 'Parties']],
         ['Admin', ['Administration', 'System Administration']]
     ];
     var ALWAYS = ['Home'];
@@ -575,9 +585,21 @@
             session.login : '');
     }
 
-    /* Settings > Menu Items: the menus this user hides (ids), per browser */
+    /* Settings > Menu Layout: the user's layout (res.user
+     * nline_menu_prefs, menuprefs.js); an older per-browser list of hidden
+     * menus until one is saved */
+    var menuPrefsText = null;
+    function prefs() {
+        var p = window.NLineMenu ? NLineMenu.parse(menuPrefsText) : {
+            hidden: [], icons: {}, colors: {}};
+        if (!menuPrefsText) {
+            p.hidden = store(userKey('menu.hidden')) || [];
+        }
+        return p;
+    }
+
     function hiddenMenus() {
-        return store(userKey('menu.hidden')) || [];
+        return prefs().hidden;
     }
 
     function categoryOf(name) {
@@ -593,10 +615,15 @@
         return store(userKey('category')) || CATEGORIES[0][0];
     }
 
-    function icon(img, name) {
-        if (name) {
-            Sao.common.ICONFACTORY.get_icon_url(name).then(function (url) {
-                img.attr('src', url);
+    /* A menu's icon: drawn in the user's colours (menuprefs.js), else the
+     * server's */
+    function icon(img, menu) {
+        var url = window.NLineMenu && NLineMenu.iconUrl(menu, prefs());
+        if (url) {
+            img.attr('src', url);
+        } else if (menu.icon) {
+            Sao.common.ICONFACTORY.get_icon_url(menu.icon).then(function (u) {
+                img.attr('src', u);
             });
         }
         return img;
@@ -634,7 +661,7 @@
         var row = jQuery('<a/>', {'href': '#', 'class': 'nl-mi' +
             (kind ? ' ' + kind : ''), 'title': menu.name})
             .append(icon(jQuery('<img/>', {'class': 'nl-mi-icon',
-                'alt': ''}), menu.icon), jQuery('<span/>', {
+                'alt': ''}), menu), jQuery('<span/>', {
                 'text': menu.name}));
         row.click(function (event) {
             event.preventDefault();
@@ -762,74 +789,6 @@
         });
     }
 
-    /* Settings > Menu Items: tick the menus to show */
-    function menuItemsDialog() {
-        if (!menus) {
-            return;
-        }
-        var hidden = hiddenMenus();
-        var list = jQuery('<div/>', {'class': 'nl-menu-items'});
-        function add(items, depth) {
-            items.forEach(function (menu) {
-                if (!depth && ALWAYS.indexOf(menu.name) >= 0) {
-                    return;
-                }
-                var box = jQuery('<input/>', {'type': 'checkbox'})
-                    .prop('checked', hidden.indexOf(menu.id) < 0)
-                    .data('id', menu.id);
-                list.append(jQuery('<label/>', {
-                    'class': depth ? '' : 'nl-top',
-                    'style': 'padding-left: ' + (depth * 20) + 'px'
-                }).append(box, ' ', jQuery('<span/>', {
-                    'text': menu.name
-                }), depth ? null : jQuery('<span/>', {
-                    'class': 'nl-cat-name',
-                    'text': categoryOf(menu.name) || ''
-                })));
-                add(menu.children || [], depth + 1);
-            });
-        }
-        /* Grouped by tab, in the tabs' order */
-        CATEGORIES.forEach(function (cat) {
-            add(tops.filter(function (top) {
-                return categoryOf(top.name) === cat[0];
-            }), 0);
-        });
-        var overlay = jQuery('<div/>', {'class': 'nl-dialog-back'});
-        var dialog = jQuery('<div/>', {'class': 'nl-dialog',
-            'role': 'dialog', 'aria-label': 'Menu Items'}).append(
-            jQuery('<div/>', {'class': 'nl-dialog-title',
-                'text': 'Menu Items'}),
-            jQuery('<p/>', {'class': 'nl-dialog-note', 'text':
-                'Untick the menus you do not use: they leave the ' +
-                'menu list (kept on this computer for your sign-in).'}),
-            list,
-            jQuery('<div/>', {'class': 'nl-dialog-buttons'}).append(
-                jQuery('<button/>', {'type': 'button', 'class': 'btn',
-                    'text': 'Show All'}).click(function () {
-                    list.find('input').prop('checked', true);
-                }),
-                jQuery('<span/>', {'style': 'flex: 1'}),
-                jQuery('<button/>', {'type': 'button', 'class': 'btn',
-                    'text': 'Cancel'}).click(function () {
-                    overlay.remove();
-                }),
-                jQuery('<button/>', {'type': 'button',
-                    'class': 'btn btn-primary', 'text': 'OK'})
-                    .click(function () {
-                        var ids = [];
-                        list.find('input').each(function () {
-                            if (!this.checked) {
-                                ids.push(jQuery(this).data('id'));
-                            }
-                        });
-                        store(userKey('menu.hidden'), ids);
-                        overlay.remove();
-                        showCategory(currentCategory());
-                    })));
-        overlay.append(dialog).appendTo('body');
-    }
-
     /* The bottom of the menu pane: the Action search (Tryton's global
      * search: type part of a window's or a record's name to open it) and
      * the open windows, one short row each (Jobshop's window list), in
@@ -906,12 +865,14 @@
         jQuery('.row-offcanvas').addClass('active');
         jQuery('[data-toggle="offcanvas"]').off('click')
             .removeAttr('data-toggle');
-        /* Settings: Menu Items, at the right of the category bar */
+        /* Settings: Menu Layout, at the right of the category bar */
         jQuery('#nl-cats').append(jQuery('<span/>', {'id': 'nl-menu-tools'})
             .append(jQuery('<button/>', {'type': 'button',
-                'class': 'nl-menu-tool', 'text': 'Menu Items...',
-                'title': 'Choose the menus the menu list shows'})
-                .click(menuItemsDialog)).hide());
+                'class': 'nl-menu-tool', 'text': 'Menu Layout...',
+                'title': 'Choose the menu items, colours and icons'})
+                .click(function () {
+                    openScreen('menu-layout', 'Menu Layout');
+                })).hide());
         /* The name on two lines: "Tryton ERP", under it "for" (handwritten)
          * and N-Line's logo; N-Line's valve beside them */
         var title = jQuery('#title');

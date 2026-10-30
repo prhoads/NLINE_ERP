@@ -125,6 +125,70 @@ lines without a part.
 Decision: commission % and line ship via are unused at N-Line (data) but
 now shown and stored, as the layout has them (emulate first).
 
+## Modern pages (29 Oct 2026, owner's design)
+
+The four document windows open as the modern document page (`UI.docPage`)
+by default; More > Classic view gives Jobshop's window (per window and
+browser), whose ribbon has "New View" back. Built like the reference
+Purchase Order (`poModern`).
+
+- Customer Order Entry (`orders/<id>`, `orders/new`, `orders/new?customer=<id>`):
+  headline the customer (ID chip), SO number / date / who / PO, desired
+  ship date amber today / red late, order amount. Chips: status, printed,
+  shipped, paid, credit status. One main action: Release, else Ship (opens
+  the open shipper), else Invoice (the draft invoice); Print; ••• Change
+  status, Change the customer (draft), Add a service charge, Re-price lines,
+  Copy, Delete (unreleased / firm / cancelled), Open customer / quote,
+  Shipper lines, Notes, Classic view. Attention: no customer, credit hold,
+  order on hold, no customer PO, lines without price (Set price while
+  draft), past the desired ship date with lines open (Ship / New date), not
+  released, invoice waiting to post. Tracker Ordered → Shipped → Invoiced →
+  Paid. Lines: part chip (name in tooltip), PO line, wanted / late,
+  promised, WO links, specs, shipped progress; the line dialog has all the
+  Order Line window's fields (price, qty, part locked once released), its
+  work orders and New work order; Remove (draft). Add a line prices it from
+  the customer (`sales_price`) when no price is typed. Charges section when
+  there are charges. Cards: Sold to (+ customer PO), Ship to (a customer
+  address or typed), Terms, Sales rep and delivery, Specs and notes. Trail:
+  quote, entered, released, printed, each shipper, each invoice, paid,
+  closed, Notes. Keys P R S A. New From Quote stays in the classic window.
+- Shipping (`shipping/<id>`, `?return=1` for a return): the shipper as a
+  document; `shipping` without an ID is still the Shipping Activity
+  (classic) and a double-click opens the modern page. Ship (ship the
+  quantities, then asks to print the packing list) / Receive return,
+  Packing list, Invoice; ••• Assign / Pick / Pack steps, Picking list,
+  Return parts, Open sales order, Sales order lines, Notes, Shipping
+  activity, Classic view. Attention: order on hold, credit hold, past ship
+  date, lines short of stock (one item when more than two), lines at $0, no
+  tracking number, invoice not posted. Tracker Stock assigned → Picked →
+  Packed → Shipped → Invoiced (return: Received → Credited). A line opens
+  ship qty / close short. Cards: Sold to, Ship to, Delivery (editable),
+  Terms and accounting, Specs.
+- Invoicing (`invoicing/<id>`): the invoice as a document; `invoicing`
+  without an ID is still the Invoicing Activity. Amount due (posted) or
+  total (draft); Post (post and print) as the main action while draft,
+  Print, Credit memo on a posted invoice (opens the new draft memo).
+  Attention: lines without price (Set price), no customer PO, not posted,
+  overdue, not printed. Tracker Drafted → Posted → Printed → Paid. Lines
+  (price and description while draft), Charges (add / change / remove
+  while draft), Taxes. Cards Bill to, Ship to, Terms (editable while
+  draft), Delivery, Specs and notes.
+- Customers (`customer-window/<id>`): the customer as a master record:
+  open balance, credit chips, New order (opens `orders/new?customer=`);
+  attention credit hold (Approve), over the order limit, no terms, no
+  phone / e-mail, inactive, released orders past their date. Sections Open
+  orders (shipped progress), Open invoices, Contacts and Addresses (add /
+  change there). Cards Main address, Contact, Credit and terms, Sales and
+  delivery, Tax, Specs and instructions. Prices, Quotes and the footers
+  stay in the Classic view.
+
+Server (needs the module update): `sale_order_get` gives `invoiced_amount`,
+`paid_amount`, `draft_invoices`; `sales_shipper_get` gives `credit_status`,
+`sales_hold`; `sale_order_save` deletes the lines left out of a draft order
+first (the desk's save failed with "records that don't exist" when a line
+was removed, also from the classic grid). Until updated the pages work
+(paid shows yes / no; no hold items on shippers) but removing a line fails.
+
 ## Decisions
 
 - Jobshop statuses on Tryton's sale: `js_status` (function, searchable) = Unreleased (draft), Firm (quotation), Released (confirmed / processing), Closed (done, or the `js_closed` flag), Cancelled; Hold is the `js_hold` flag. Line status `js_line_status` = Open / Closed (shipped to completion) / Cancelled.

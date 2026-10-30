@@ -360,3 +360,81 @@ Changed:
   set); Routing Operation (N-Line's) beside Preserved.
 - Left: Quote Lines as Jobshop's editable grid with all its columns (L: the
   lines table works per quantity; kept), Supplier Svc ID (unused at N-Line).
+
+## Modern document pages (29 Oct 2026, BRIEF_MODERN.md)
+
+The owner's design ("the answers first, the fields second") on
+`UI.docPage` (docpage.js); each window opens modern by default, ••• >
+Classic view goes back to the Jobshop window (its ribbon's **New View**
+returns). Views are per window and browser: `wo`, `master`,
+`quote-master`, `quote`.
+
+- **Work Order** (`woModern`): headline = the part's description, chips
+  part ID + Eng rev, sub-line WO number · qty · want date (red when overdue);
+  status chips (order status, Started, N materials short, legs, traveler);
+  main action by state (Release / Start = assign + run / Receive), Traveler,
+  ••• (Change status, Schedule, Assign stock, Reschedule, availability,
+  costs, Links ▸, Card tools ▸ = the header card's right-click menu, Copy,
+  New from master ▸, Delete, Open part / master, Notes, Classic view).
+  Needs your attention: a leg can't start (short materials, its legs too) →
+  Order them (one draft PO per short card, `eng_purchase`, or Order all);
+  short for the order → Order them; overdue → Reschedule (want / release
+  date, then Schedule); no master; no operations → Add one; no want date;
+  outside service without PO → Order it; not released → Release; traveler
+  not printed → Print. Route tracker: legs first, then the operations by
+  sequence (outside services blue, blocked = a short material at the
+  operation in red, done in the accent; a click selects the card). The
+  card stack (JS.cards, `modern: true`) restyled: sage operations,
+  dusty-blue outside services, terracotta materials, purple legs, short =
+  red outline, one-line back-card labels (seq + name), a dot where the
+  leg's line leaves the operation card's bottom-right corner (LEG_LINE_Y =
+  CARD_H kept). Beside it the inspector: operation (resource, status /
+  blocked, planned, setup, run, reported hours from the labor tickets,
+  outside supplier / PO), material (part, qty, issued, short, supply, used
+  at), leg (number, status, short; Open, Order short, Availability), header
+  card = the work order's own details in groups (What to make, When, For
+  and from, Progress) with Edit → fields, Save / Cancel. Double-click the
+  header card, click the title, or Enter on it opens the edit. A new work
+  order opens with the inspector in edit mode (Part + Quantity required;
+  Release on = want date or today, as Tryton needs it). Specs card, paper
+  trail (created, released, traveler printed, material issued x of y, legs
+  done, received to stock, closed, Notes). Keys: arrows move between cards
+  (up / down the stack, right into a leg, left back), Enter edits, Ins adds
+  after (an operation at the middle sequence, a material at the card's
+  operation), L makes a leg, R reports labor (Start Labor Ticket for an
+  employee), T traveler. Right-click menus, Make leg, editing dialogs, Del,
+  Cut / Copy / Paste work as on the Details tab (the same JS.cards).
+- **Engineering Master / Quote Master** (`masterModern`): same layout
+  without the shop floor parts. Headline = description, chips part ID + Eng
+  rev (quote master ID); status Active / Inactive, Locked, counts; main
+  action Make a work order (quantity, want date → work order opened), Costs;
+  ••• Copy into a new quote / engineering master or revision, availability,
+  Card tools, Open part, Notes, Delete, Classic view. Attention: no part
+  (quote master: Choose the part → `eng_master_ready`), inactive master
+  (Activate), inactive parts used, materials without cost, no operations,
+  Locked (Unlock). Route = standard hours per operation. Inspector header
+  groups: What it makes, Drawing, Codes (account set read-only),
+  Engineering (rank, forward schedule, Locked, Inactive), Work order special
+  instructions. New master: part (+ Eng ID) then Create (`eng_master_ready`).
+  Trail: created, engineered, the part's revisions (click opens), work
+  orders made from it (count + last ones), Notes. Keys W, L + the stack's.
+  The "no standard hours" flag was dropped: N-Line's masters carry none, it
+  would show on every master.
+- **Quotes** (`quoteModern`): customer headline, ID chip, sub-line quote no
+  · date · rep · their ref · expires (amber within 7 days, red when past);
+  tracker Active → Ready → Won / Lost / Cancelled; main action Win Quote
+  (sales order), Mark ready, Print; ••• Lose, Cancel, Back to active,
+  Addresses from customer, Open sales order, Notes, Classic view. Attention:
+  no customer, no lines, line without price (opens the line), expiring /
+  expired (Extend), follow-up due, won without sales order. Lines as a list
+  (quantities @ prices, cost from, no price); click = the Quote Line window
+  (Line / Quantities Quoted / Specs, costed with the 35% markup), saved with
+  `eng_quote_save`; "Add a part to quote". Cards Customer, Ship to, Dates,
+  Terms, Specs and footer (pencil → fields). New quote: choose the customer
+  → created with the customer's addresses (`eng_party_address`).
+- No server change: everything uses the existing RPCs and model reads.
+- Tests (local, BAT_PORT 9373, `tools/eng_modern_*.js`): WO 177 view, card
+  clicks / arrows / Enter / Ins / L, header edit + save, new WO, Order
+  them; master 391 view, header edit, Enter on a material, right-click menu,
+  new master; quote master 402; quote 746/745 view, Dates card edit, line
+  edit + add, new quote; Classic view and New View back on all four.

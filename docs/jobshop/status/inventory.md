@@ -260,3 +260,37 @@ adjustments at the part's unit cost) only with `NLINE_JS_INVENTORY_BALANCES=1`
   GRID PART_LOCATION has 8 columns); the Other tab's unlabelled User N fields
   stay, disabled, as Jobshop draws them — N-Line's data has values in them
   (e.g. User 10 on part 332-00582-001-01-2).
+
+## Modern page (29 Oct 2026, owner's design; `docpage.js`)
+
+- Parts (`parts`, `parts/<id>`) opens the modern page by default
+  (`partsModern` in `inventory.js`); More > Classic view switches to
+  Jobshop's window (`classicParts`, unchanged), whose ribbon has "New View"
+  back (per browser, `UI.docView('part')`).
+- Header: description, Part ID chip; sub-line product code · U/M · drawing;
+  the unit cost on the right. Status chips Active/Inactive, Fabricated,
+  Purchased, Stocked, Tool/fixture, Lot tracked. One main action: Order
+  more (purchased part below order point / safety stock), Create master
+  (fabricated part without one), else Supply & demand. "•••": Inventory
+  Txs, Where Used, Material Availability, Inventory Pieces, Reset Material
+  Costs, Open drawing file, Copy, Delete, Classic view — per the user's rights.
+- Needs your attention: inactive but on open orders, no unit cost, below
+  safety stock, at/below order point, negative on hand, fabricated without
+  an engineering master, purchased without a preferred supplier, stocked
+  without a primary location — each with its fix.
+- Tracker: On hand → On order → Allocated → Available (`part_availability`).
+- Sections: Open orders (SO / WO / PO lines from `part_supply_demand`,
+  click opens the order), Where used (engineering masters,
+  `part_where_used`), Locations (`nline.js.part_location`: qty, primary,
+  issue from, hold, last counted).
+- Cards with a pencil: Part (description, U/M, flags, inactive), Costs,
+  Planning, Purchasing, Engineering and drawing, Accounting, Specs. Saves
+  write only the fields that changed (Tryton refuses an unchanged Stock U/M
+  once the part has moves).
+- Paper trail: created, last modified, last received / issued / shipped
+  (from `inventory_transactions`), last counted, Inventory transactions,
+  Notes. Keys: S supply & demand, W where used, T transactions, E master.
+- New part: New, then "Enter the part" asks Part ID, description, Stock U/M
+  and the kind flags.
+- Adjustments / Transfers / Physical Count stay entry grids (unchanged).
+- No server change.

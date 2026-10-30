@@ -242,6 +242,19 @@ commission percent and ship via::
     ('Houston', 'Plant 2', True)
     >>> float(order['lines'][0]['commission_percent'])
     2.5
+
+A line left out of a draft order is deleted (the modern page's Remove)::
+
+    >>> scratch = Desk.sale_order_save({'party': customer.id, 'lines': [
+    ...         {'product': plug.id, 'quantity': 1, 'gross_unit_price': '40'},
+    ...         {'product': plug.id, 'quantity': 2, 'gross_unit_price': '40'}],
+    ...         }, config.context)
+    >>> scratch = Desk.sale_order_save({'id': scratch['id'],
+    ...         'party': customer.id, 'lines': [dict(scratch['lines'][1],
+    ...             product=plug.id)]}, config.context)
+    >>> [l['quantity'] for l in scratch['lines']]
+    [2.0]
+    >>> _ = Desk.sales_order_delete(scratch['id'], config.context)
     >>> order['lines'][0]['quotes_exist'], order['payment_term_descr'] != None
     (False, True)
     >>> Note = Model.get('ir.note')
@@ -413,6 +426,18 @@ Invoicing: the drafts wait, a charge is added, the invoice is posted::
     (True, True)
     >>> data['customer_code'] == (customer.code or '')
     True
+
+The order's tracker amounts (the modern page): invoiced, not paid yet::
+
+    >>> order = Desk.sale_order_get(order['id'], config.context)
+    >>> order['invoiced_amount'] == invoice.total_amount
+    True
+    >>> order['paid_amount'] == 0, isinstance(order['draft_invoices'], list)
+    (True, True)
+    >>> done = Desk.sales_shipper_get(shipper['id'], 'stock.shipment.out',
+    ...     config.context)
+    >>> done['credit_status'] == customer.credit_status, done['sales_hold']
+    (True, False)
 
 Issue a credit memo for it::
 

@@ -400,6 +400,11 @@ this repository contains the full copyright notices and license terms. -->
             <field name="nline_writes" eval="False"/>
             <field name="url">desk/index.html#/reports</field>
         </record>
+        <record model="ir.action.url" id="url_desk_menu_layout">
+            <field name="name">Menu Layout</field>
+            <field name="nline_writes" eval="True"/>
+            <field name="url">desk/index.html#/menu-layout</field>
+        </record>
 
         <menuitem action="url_desk_home" sequence="1" id="menu_desk_home"
             icon="nline-home-home"/>
@@ -613,6 +618,10 @@ this repository contains the full copyright notices and license terms. -->
             <field name="menu" ref="menu_nl_company_aged_balance"/>
             <field name="group" ref="account.group_account"/>
         </record>
+
+        <menuitem name="My Settings" sequence="24" id="menu_nl_personal" icon="nline-personal-tune"/>
+        <menuitem parent="menu_nl_personal" action="url_desk_menu_layout"
+            icon="nline-personal-grid" sequence="10" id="menu_desk_menu_layout"/>
         <!-- END N-Line menus -->
 
         <!-- The administrator hides the standard menus N-Line replaces -->

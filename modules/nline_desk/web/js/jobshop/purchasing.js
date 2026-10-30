@@ -1503,7 +1503,545 @@
         }, UI.showError);
     }
 
+    /* ---- Suppliers, modern view (UI.docPage) ---------------------------
+     * The supplier as a master record: name and ID, what needs attention
+     * (inactive, no terms, no contact, no address, late orders), its open
+     * purchase orders, cards of the address, contact, purchasing defaults,
+     * accounting, specs and user fields; the paper trail = its latest
+     * orders and receipts. Loaded and saved as party.party (the classic
+     * window's fields). */
+
+    var SUPPLIER_CHAR = ['code', 'name', 'supplier_address_1',
+        'supplier_address_2', 'supplier_city', 'supplier_state',
+        'supplier_postal_code', 'supplier_country', 'supplier_address_etc',
+        'supplier_contact', 'supplier_contact_title', 'supplier_phone',
+        'supplier_fax', 'supplier_email', 'supplier_mobile',
+        'supplier_web_url', 'supplier_buyer', 'supplier_our_customer_id',
+        'supplier_tax_id_number', 'supplier_specifications',
+        'supplier_rfq_instructions', 'supplier_po_instructions',
+        'supplier_user_0', 'supplier_user_1', 'supplier_user_2',
+        'supplier_open_date', 'supplier_last_order_date',
+        'supplier_exported_date', 'supplier_inactive', 'supplier_exported',
+        'supplier_tax_exempt', 'supplier_freight_terms', 'payable'];
+    var SUPPLIER_M2O = ['supplier_payment_term', 'supplier_tax_group',
+        'supplier_fob_point', 'supplier_ship_via', 'supplier_expense_account',
+        'account_payable'];
+
+    function m2oOf(record, name) {
+        var related = record[name + '.'];
+        return record[name] ? {id: record[name], rec_name: related ?
+            related.rec_name : String(record[name])} : null;
+    }
+
+    function loadSupplier(id) {
+        return Rpc.model('party.party', 'read', [[id],
+            SUPPLIER_CHAR.concat(SUPPLIER_M2O, SUPPLIER_M2O.map(function (n) {
+                return n + '.rec_name';
+            }), ['rec_name'])]).then(function (rows) {
+                var d = rows[0];
+                SUPPLIER_M2O.forEach(function (n) {
+                    d[n] = m2oOf(d, n);
+                    delete d[n + '.'];
+                });
+                /* Its orders and latest receipts (none if not allowed) */
+                return Promise.all([
+                    Rpc.desk('js_supplier_purchases', [id,
+                        SUPPLIER_STATUSES]).catch(function () {
+                            return [];
+                        }),
+                    Rpc.searchRead('stock.shipment.in', [['supplier', '=', id],
+                        ['state', '=', 'done']], ['number', 'effective_date',
+                        'reference', 'supplier_invoice'], {limit: 5, order: [
+                            ['effective_date', 'DESC'], ['id', 'DESC']]})
+                        .catch(function () {
+                            return [];
+                        })]).then(function (all) {
+                    d.purchases = all[0];
+                    d.receipts = all[1];
+                    return d;
+                });
+            });
+    }
+
+    function supplierModern(main, openId) {
+        var access = {};
+        var screens = {};
+        var page;
+        Promise.all([UI.access(['party.party', 'purchase.purchase',
+            'nline.rfq']), UI.screenAllowed('purchase-orders/new'),
+            UI.screenAllowed('rfqs')]).then(function (all) {
+                access = all[0] || {};
+                screens = {po: all[1], rfq: all[2]};
+                if (page) {
+                    page.render();
+                }
+            });
+        function can(model, right) {
+            return Boolean(access[model] && access[model][right]);
+        }
+        function mayWrite(d) {
+            return can('party.party', d && d.id ? 'write' : 'create');
+        }
+        function canPo() {
+            return can('purchase.purchase', 'create') && screens.po;
+        }
+        function canRfq() {
+            return can('nline.rfq', 'create') && screens.rfq;
+        }
+        function money(v) {
+            return UI.money(n0(v), true);
+        }
+        function newPo(d) {
+            UI.openScreen('purchase-orders/new?supplier=' + d.id, 'New PO');
+        }
+        function newRfq(d) {
+            UI.openScreen('rfqs?supplier=' + d.id, 'New RFQ');
+        }
+        function edit(title, fields, d) {
+            UI.docEdit(title, fields, d).then(function (v) {
+                page.save(v).then(null, function () {});
+            }, function () {});
+        }
+        function openPurchases(d) {
+            return (d.purchases || []).filter(function (p) {
+                return p.status !== 'closed' && p.status !== 'cancelled';
+            });
+        }
+        function late(p) {
+            var due = p.promise_date || p.delivery_date;
+            return p.status === 'released' && due && due < today() &&
+                n0(p.received_amount) < n0(p.total_amount);
+        }
+        function address(d) {
+            return [d.supplier_address_1, d.supplier_address_2,
+                d.supplier_address_etc, [d.supplier_city, d.supplier_state,
+                    d.supplier_postal_code].filter(Boolean).join(' '),
+                d.supplier_country].filter(Boolean).join(', ');
+        }
+        function web(d) {
+            var url = d.supplier_web_url;
+            global.open(/^https?:/i.test(url) ? url : 'http://' + url,
+                '_blank', 'noopener');
+        }
+
+        var CONTACT = [
+            {name: 'supplier_contact', label: 'Contact', type: 'char'},
+            {name: 'supplier_contact_title', label: 'Title', type: 'char'},
+            {name: 'supplier_phone', label: 'Phone', type: 'char'},
+            {name: 'supplier_fax', label: 'Fax', type: 'char'},
+            {name: 'supplier_email', label: 'E-mail', type: 'char'},
+            {name: 'supplier_mobile', label: 'Mobile', type: 'char'},
+            {name: 'supplier_web_url', label: 'Web URL', type: 'char'}];
+        var ADDRESS = [
+            {name: 'supplier_address_1', label: 'Address', type: 'char'},
+            {name: 'supplier_address_2', label: 'Address 2', type: 'char'},
+            {name: 'supplier_city', label: 'City', type: 'char'},
+            {name: 'supplier_state', label: 'State', type: 'char'},
+            {name: 'supplier_postal_code', label: 'Postal code',
+                type: 'char'},
+            {name: 'supplier_country', label: 'Country', type: 'char'},
+            {name: 'supplier_address_etc', label: 'Etc.', type: 'char'}];
+
+        page = UI.docPage(main, {
+            title: 'Supplier',
+            crumbs: ['Purchasing', 'Suppliers'],
+            model: 'party.party', label: 'Supplier ID',
+            domain: [['is_supplier', '=', true]],
+            order: [['code', 'ASC'], ['name', 'ASC']],
+            openId: openId,
+            load: loadSupplier,
+            /* (party.party writes only the fields it gets: the changes) */
+            values: function () {
+                return {};
+            },
+            save: function (values, d) {
+                Object.keys(values).forEach(function (k) {
+                    if (values[k] === undefined) {
+                        delete values[k];
+                    }
+                });
+                if (d.id) {
+                    return Rpc.model('party.party', 'write', [[d.id], values])
+                        .then(function () {
+                            return loadSupplier(d.id);
+                        });
+                }
+                if (!values.name) {
+                    return Promise.reject({message: 'Enter the supplier\'s ' +
+                        'name first.'});
+                }
+                if (!values.code) {
+                    delete values.code;
+                }
+                return Rpc.model('party.party', 'create', [[Object.assign({
+                    is_supplier: true, supplier_open_date: Rpc.date(today())},
+                    values)]]).then(function (ids) {
+                        UI.setTitle('Supplier');
+                        return loadSupplier(ids[0]);
+                    });
+            },
+            blank: function () {
+                return {id: null, name: '', code: '', purchases: [],
+                    receipts: [], supplier_open_date: today()};
+            },
+            head: function (d) {
+                var last = d.supplier_last_order_date;
+                return {
+                    title: d.name || 'New supplier',
+                    chips: d.code ? [d.code] : [],
+                    sub: [d.id ? null : 'Not saved yet',
+                        d.supplier_open_date ? 'supplier since ' +
+                            UI.date(d.supplier_open_date) : null,
+                        last ? 'last order ' + UI.date(last) : d.id ?
+                            'no order yet' : null,
+                        d.supplier_buyer ? 'buyer ' + d.supplier_buyer : null],
+                    amount: d.id ? {value: money(d.payable), label:
+                        'open balance' + (d.supplier_payment_term ? ' · ' +
+                            d.supplier_payment_term.rec_name : '')} : null
+                };
+            },
+            status: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                return [d.supplier_inactive ? {text: 'Inactive', tone: 'bad'} :
+                    {text: 'Active', tone: 'ok'},
+                    d.supplier_tax_exempt ? {text: 'Tax exempt'} : null,
+                    d.supplier_exported ? {text: 'Exported ' + UI.date(
+                        d.supplier_exported_date)} : null,
+                    {text: openPurchases(d).length + ' open orders'}]
+                    .filter(Boolean);
+            },
+            actions: function (d) {
+                if (!d.id) {
+                    return [mayWrite(d) ? {label: 'Name the supplier',
+                        primary: true, onclick: function () {
+                            edit('New supplier', [
+                                {name: 'name', label: 'Name', type: 'char',
+                                    wide: true},
+                                {name: 'code', label: 'Supplier ID (blank: ' +
+                                    'the next number)', type: 'char'}], d);
+                        }} : null];
+                }
+                return [
+                    canPo() && !d.supplier_inactive ? {label: 'New purchase ' +
+                        'order', key: 'o', primary: true, onclick: newPo} :
+                        null,
+                    canRfq() && !d.supplier_inactive ? {label: 'Request a ' +
+                        'quote', key: 'q', onclick: newRfq} : null,
+                    d.supplier_web_url ? {label: 'Web site', onclick: web} :
+                        null];
+            },
+            more: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                return [
+                    mayWrite(d) ? {label: d.supplier_inactive ? 'Make active' :
+                        'Make inactive', onclick: function () {
+                            page.save({supplier_inactive:
+                                !d.supplier_inactive}).then(null,
+                                function () {});
+                        }} : null,
+                    {label: 'Part and service prices', onclick: function () {
+                        toClassic(main, 'supplier', 'jsSupplierWindow',
+                            [d.id]);
+                    }},
+                    {label: 'Addresses', onclick: function () {
+                        toClassic(main, 'supplier', 'jsSupplierWindow',
+                            [d.id]);
+                    }},
+                    '-',
+                    {label: 'Classic view', onclick: function () {
+                        toClassic(main, 'supplier', 'jsSupplierWindow',
+                            [d.id]);
+                    }}].filter(Boolean);
+            },
+            attention: function (d) {
+                var out = [];
+                var w = mayWrite(d);
+                if (!d.id) {
+                    return [{tone: 'info', title: 'Name the supplier',
+                        detail: 'A supplier needs its name before it can be ' +
+                            'saved; the ID is the next number if left blank.',
+                        action: w ? {label: 'Name it', onclick: function () {
+                            edit('New supplier', [
+                                {name: 'name', label: 'Name', type: 'char',
+                                    wide: true},
+                                {name: 'code', label: 'Supplier ID (blank: ' +
+                                    'the next number)', type: 'char'}], d);
+                        }} : null}];
+                }
+                if (d.supplier_inactive) {
+                    out.push({tone: 'bad', title: 'Inactive', detail: 'It is ' +
+                        'left out of the supplier lookups: no new order or ' +
+                        'quote request goes to it.', action: w ? {label:
+                            'Make active', onclick: function () {
+                                page.save({supplier_inactive: false}).then(
+                                    null, function () {});
+                            }} : null});
+                }
+                if (!d.supplier_payment_term) {
+                    out.push({tone: 'warn', title: 'No payment terms',
+                        detail: 'New purchase orders would have no terms.',
+                        action: w ? {label: 'Set terms', onclick: function () {
+                            edit('Payment terms', [{name:
+                                'supplier_payment_term', label: 'Terms',
+                                type: 'many2one', model:
+                                    'account.invoice.payment_term'}], d);
+                        }} : null});
+                }
+                if (!d.supplier_contact && !d.supplier_phone &&
+                        !d.supplier_email) {
+                    out.push({tone: 'warn', title: 'No contact', detail:
+                        'No contact name, phone or e-mail to send orders to.',
+                        action: w ? {label: 'Add contact', onclick:
+                            function () {
+                                edit('Contact', CONTACT, d);
+                            }} : null});
+                }
+                if (!d.supplier_address_1 && !d.supplier_city) {
+                    out.push({tone: 'warn', title: 'No address', detail:
+                        'Orders print without the supplier\'s address.',
+                        action: w ? {label: 'Add address', onclick:
+                            function () {
+                                edit('Address', ADDRESS, d);
+                            }} : null});
+                }
+                var lates = openPurchases(d).filter(late);
+                if (lates.length) {
+                    out.push({tone: 'bad', icon: 'clock', title: lates.length +
+                        (lates.length > 1 ? ' orders are' : ' order is') +
+                        ' late', detail: lates.slice(0, 5).map(function (p) {
+                            return 'PO ' + p.number + ' (' + UI.date(
+                                p.promise_date || p.delivery_date) + ')';
+                        }).join(', '), action: {label: 'Open PO ' +
+                            lates[0].number, onclick: function () {
+                                openPo(lates[0].id, lates[0].number);
+                            }}});
+                }
+                return out;
+            },
+            sections: [{title: 'Open purchase orders', note: function (d) {
+                var open = openPurchases(d);
+                var due = open.reduce(function (a, p) {
+                    return a + n0(p.total_amount) - n0(p.received_amount);
+                }, 0);
+                return open.length ? money(due) + ' still to come' : '';
+            }, visible: function (d) {
+                return Boolean(d.id);
+            }, render: function (pane, d) {
+                var open = openPurchases(d);
+                UI.docLines(pane, {
+                    items: open,
+                    kind: function () {
+                        return {icon: 'doc', tone: 'part'};
+                    },
+                    title: function (p) {
+                        return 'PO ' + p.number;
+                    },
+                    chips: function (p) {
+                        var due = p.promise_date || p.delivery_date;
+                        return [{text: PO_STATUS[p.status] || p.status, tone:
+                            p.status === 'released' ? 'accent' : p.status ===
+                            'hold' ? 'warn' : null},
+                            'ordered ' + UI.date(p.purchase_date),
+                            due ? {text: (p.promise_date ? 'promised ' :
+                                'wanted ') + UI.date(due) + (late(p) ?
+                                ', late' : ''), tone: late(p) ? 'bad' :
+                                null} : null];
+                    },
+                    progress: function (p) {
+                        var t = n0(p.total_amount), r = n0(p.received_amount);
+                        return {done: r, total: t, label: money(r) +
+                            ' received'};
+                    },
+                    right: function (p) {
+                        return [money(p.total_amount), p.last_received_date ?
+                            'last in ' + UI.date(p.last_received_date) : ''];
+                    },
+                    onclick: function (p) {
+                        openPo(p.id, p.number);
+                    },
+                    empty: 'No open purchase order.',
+                    add: canPo() && !d.supplier_inactive ? {placeholder:
+                        'Start a purchase order', onclick: function () {
+                            newPo(d);
+                        }} : null,
+                    footer: [open.length + ' open', 'Total ' + money(
+                        open.reduce(function (a, p) {
+                            return a + n0(p.total_amount);
+                        }, 0))]
+                });
+            }}],
+            cards: [
+                {title: 'Address', rows: function (d) {
+                    return [['Name', d.name], ['Address', address(d)]];
+                }, fields: [{name: 'name', label: 'Name', type: 'char'}]
+                    .concat(ADDRESS), editable: mayWrite},
+                {title: 'Contact', rows: function (d) {
+                    return [['Contact', [d.supplier_contact,
+                        d.supplier_contact_title].filter(Boolean)
+                        .join(', ')], ['Phone', d.supplier_phone],
+                        ['Fax', d.supplier_fax], ['E-mail', d.supplier_email],
+                        ['Mobile', d.supplier_mobile],
+                        ['Web', d.supplier_web_url]];
+                }, fields: CONTACT, editable: mayWrite},
+                {title: 'Purchasing defaults', rows: function (d) {
+                    return [['Terms', d.supplier_payment_term &&
+                        d.supplier_payment_term.rec_name],
+                        ['Buyer', d.supplier_buyer],
+                        ['Ship via', d.supplier_ship_via &&
+                            UI.shortName('nline.ship_via',
+                                d.supplier_ship_via.rec_name)],
+                        ['FOB', d.supplier_fob_point && UI.shortName(
+                            'nline.fob_point', d.supplier_fob_point.rec_name)],
+                        ['Freight', (FREIGHT.filter(function (f) {
+                            return f[0] === d.supplier_freight_terms;
+                        })[0] || [])[1]],
+                        ['Tax group', d.supplier_tax_group &&
+                            d.supplier_tax_group.rec_name],
+                        ['Our customer ID', d.supplier_our_customer_id]];
+                }, fields: [
+                    {name: 'supplier_payment_term', label: 'Terms',
+                        type: 'many2one',
+                        model: 'account.invoice.payment_term'},
+                    {name: 'supplier_buyer', label: 'Buyer', type: 'char'},
+                    {name: 'supplier_ship_via', label: 'Ship via',
+                        type: 'many2one', model: 'nline.ship_via'},
+                    {name: 'supplier_fob_point', label: 'FOB point',
+                        type: 'many2one', model: 'nline.fob_point'},
+                    {name: 'supplier_freight_terms', label: 'Freight terms',
+                        type: 'selection', options: FREIGHT},
+                    {name: 'supplier_tax_group', label: 'Tax group',
+                        type: 'many2one', model: 'account.tax',
+                        domain: TAX_GROUP_DOMAIN},
+                    {name: 'supplier_tax_exempt', label: 'Tax exempt',
+                        type: 'boolean'},
+                    {name: 'supplier_our_customer_id', label:
+                        'Our customer ID', type: 'char'}],
+                    editable: mayWrite},
+                {title: 'Accounting', rows: function (d) {
+                    return [['Payable', d.account_payable &&
+                        d.account_payable.rec_name],
+                        ['Expense', d.supplier_expense_account &&
+                            d.supplier_expense_account.rec_name],
+                        ['Tax ID number', d.supplier_tax_id_number],
+                        ['Opened', d.supplier_open_date ? UI.date(
+                            d.supplier_open_date) : null],
+                        ['Exported', d.supplier_exported ? 'Yes' +
+                            (d.supplier_exported_date ? ', ' + UI.date(
+                                d.supplier_exported_date) : '') : 'No']];
+                }, fields: [
+                    {name: 'account_payable', label: 'Payable account',
+                        type: 'many2one', model: 'account.account', domain: [
+                            ['type.payable', '=', true],
+                            ['closed', '!=', true]]},
+                    {name: 'supplier_expense_account', label:
+                        'Expense account', type: 'many2one',
+                        model: 'account.account', domain: EXPENSE_DOMAIN},
+                    {name: 'supplier_tax_id_number', label: 'Tax ID number',
+                        type: 'char'},
+                    {name: 'supplier_open_date', label: 'Account opened',
+                        type: 'date'},
+                    {name: 'supplier_exported', label: 'Exported',
+                        type: 'boolean'}],
+                    editable: mayWrite},
+                {title: 'Specs and instructions', rows: function (d) {
+                    function cut(t) {
+                        return t ? String(t).slice(0, 160) : null;
+                    }
+                    return [['Specs', cut(d.supplier_specifications)],
+                        ['On quote requests', cut(
+                            d.supplier_rfq_instructions)],
+                        ['On orders', cut(d.supplier_po_instructions)]];
+                }, fields: [
+                    {name: 'supplier_specifications', label: 'Specs',
+                        type: 'text'},
+                    {name: 'supplier_rfq_instructions', label:
+                        'Special instructions on quote requests',
+                        type: 'text'},
+                    {name: 'supplier_po_instructions', label:
+                        'Special instructions on purchase orders',
+                        type: 'text'}], editable: mayWrite},
+                /* Jobshop's user fields N-Line fills (Other tab) */
+                {title: 'Other', rows: function (d) {
+                    return [['N-Line field', d.supplier_user_0],
+                        ['Notes', d.supplier_user_1],
+                        ['Audit date', d.supplier_user_2]];
+                }, fields: [
+                    {name: 'supplier_user_0', label: 'N-Line field',
+                        type: 'char'},
+                    {name: 'supplier_user_1', label: 'Notes', type: 'char'},
+                    {name: 'supplier_user_2', label: 'Audit date',
+                        type: 'char'}], editable: mayWrite}
+            ],
+            trail: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var rows = [{done: Boolean(d.supplier_open_date), text:
+                    'Account opened', when: d.supplier_open_date ?
+                        UI.date(d.supplier_open_date) : 'not set'}];
+                (d.purchases || []).slice(0, 5).forEach(function (p) {
+                    rows.push({done: true, text: 'PO ' + p.number + ' · ' +
+                        (PO_STATUS[p.status] || p.status) + ' · ' +
+                        money(p.total_amount), when: UI.date(p.purchase_date),
+                        onclick: function () {
+                            openPo(p.id, p.number);
+                        }});
+                });
+                (d.receipts || []).forEach(function (r) {
+                    rows.push({done: true, text: 'Received ' + (r.number ||
+                        r.id) + (r.reference ? ' · slip ' + r.reference :
+                            '') + (r.supplier_invoice ? ' · bill ' +
+                                r.supplier_invoice : ''), when: UI.date(
+                        r.effective_date), onclick: function () {
+                            UI.openScreen('receiving?receipt=' + r.id,
+                                'Receiver ' + (r.number || ''));
+                        }});
+                });
+                if (!(d.purchases || []).length) {
+                    rows.push({text: 'No purchase order yet'});
+                }
+                rows.push({text: 'Notes', onclick: function () {
+                    var pane = el('div', {style: {minWidth: '480px'}});
+                    UI.notesTab(pane, 'party.party', d.id, mayWrite(d));
+                    UI.modal('Notes: ' + d.name, pane);
+                }});
+                return rows;
+            },
+            keys: {
+                o: {label: 'new purchase order', run: function (d) {
+                    if (d.id && canPo() && !d.supplier_inactive) {
+                        newPo(d);
+                    }
+                }},
+                q: {label: 'request a quote', run: function (d) {
+                    if (d.id && canRfq() && !d.supplier_inactive) {
+                        newRfq(d);
+                    }
+                }}
+            },
+            classic: function (d) {
+                toClassic(main, 'supplier', 'jsSupplierWindow', d && d.id ?
+                    [d.id] : []);
+            }
+        });
+        return page;
+    }
+
     Screens.jsSupplierWindow = function (main, params) {
+        var host = docHost(main, 'supplier');
+        if (host) {
+            supplierModern(host, params && params[0] ? parseInt(params[0],
+                10) : null);
+            return;
+        }
+        classicSupplierWindow(main, params);
+    };
+
+    function classicSupplierWindow(main, params) {
         css();
         Promise.all([rights(['purchase.product_supplier',
             'purchase.purchase', 'nline.rfq']),
@@ -1722,6 +2260,12 @@
                     }
                 },
                 extra: [
+                    {label: 'New View', title: 'The modern supplier page',
+                        onclick: function (record) {
+                            UI.setDocView('supplier', 'modern');
+                            Screens.jsSupplierWindow(main, record ?
+                                [record.id] : []);
+                        }},
                     {label: 'Tools ▾', onclick: function (record) {
                         popup(toolsButton(), [
                             canRfq ? {label: 'Create RFQ for Supplier...',
@@ -1778,7 +2322,7 @@
                 'Expense Acct ID': [339, 259, 736, 279],
                 'Payable Acct ID': [339, 281, 736, 301]});
         }, UI.showError);
-    };
+    }
 
     /* ======================================================================
      * Document windows (PO, RFQ, receivers, tax groups): an ID lookup,
@@ -2759,10 +3303,599 @@
         return d;
     }
 
+    /* ---- The Purchase Order, modern view (UI.docPage) ------------------- */
+
+    /* The box of a modern page (UI.docPage) in the screen, or null when the
+     * window shows its classic view (name: the window, UI.docView). The
+     * page lives in its own box: once the screen changes (another window,
+     * Classic view) the box leaves the document and the page's single keys
+     * (P, R, A...) stop with it; #main keeps no dp-main look for the next
+     * screen either */
+    function docHost(main, name) {
+        UI.clear(main);
+        main.classList.remove('dp-main');
+        if (!UI.docPage || UI.docView(name || 'po') !== 'modern') {
+            return null;
+        }
+        var host = el('div.dp-host');
+        main.appendChild(host);
+        /* The page's background over the whole screen while it is shown */
+        main.classList.add('dp-main');
+        if (global.MutationObserver) {
+            var watch = new global.MutationObserver(function () {
+                if (host.parentNode !== main) {
+                    main.classList.remove('dp-main');
+                    watch.disconnect();
+                }
+            });
+            watch.observe(main, {childList: true});
+        }
+        return host;
+    }
+
+    /* Classic view: the window as Jobshop draws it, in the screen (not in
+     * the modern page's box, which leaves with its keys) */
+    function toClassic(host, name, screen, params) {
+        UI.setDocView(name, 'classic');
+        Screens[screen](host.classList.contains('dp-host') && host.parentNode ?
+            host.parentNode : host, params);
+    }
+
+    function today() {
+        var d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2,
+            '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function n0(value) {
+        var n = parseFloat(value);
+        return isNaN(n) ? 0 : n;
+    }
+
+    /* The payload js_po_save expects: the whole order (it writes every
+     * header field it gets); the lines without their links (kept) */
+    function poValues(d) {
+        var values = Object.assign({}, d);
+        values.lines = (d.lines || []).map(function (l) {
+            var line = Object.assign({}, l);
+            /* js_po_save takes unit_price as Jobshop's quoted price (before
+             * the trade discount and the fixed charge): the line's list
+             * price, not the effective price js_po_get also sends */
+            if (l.list_unit_price !== null && l.list_unit_price !==
+                    undefined) {
+                line.unit_price = l.list_unit_price;
+            }
+            delete line.links;
+            delete line.js_links;
+            delete line.planning_links;
+            return line;
+        });
+        return values;
+    }
+
+    function poModern(main, openId, presetSupplier) {
+        var access = {};
+        var page;
+        UI.access(['purchase.purchase', 'purchase.line',
+            'stock.shipment.in']).then(function (a) {
+                access = a || {};
+                if (page) {
+                    page.render();
+                }
+            });
+        /* (nothing is offered before the rights are known: what the user
+         * may not do is not shown) */
+        function can(model, right) {
+            return Boolean(access[model] && access[model][right]);
+        }
+
+        function mayWrite(d) {
+            return can('purchase.purchase', d && d.id ? 'write' : 'create');
+        }
+
+        function lineKind(l) {
+            if (l.line_type === 'service') {
+                return {icon: 'service', tone: 'service'};
+            }
+            if (!l.product) {
+                return {icon: 'charge', tone: 'charge'};
+            }
+            return {icon: 'part', tone: 'part'};
+        }
+
+        function money(v) {
+            return '$' + UI.money(n0(v));
+        }
+
+        function problems(d) {
+            var out = [];
+            (d.lines || []).forEach(function (l) {
+                if (!n0(l.unit_price) && !n0(l.fixed_charge) &&
+                        l.line_status !== 'closed') {
+                    out.push({line: l, what: 'price'});
+                }
+            });
+            return out;
+        }
+
+        function editLine(d, l) {
+            var released = !d.lines_editable;
+            var fields = [
+                {name: 'description', label: 'Description', type: 'char',
+                    wide: true, readonly: released},
+                {name: 'product', label: 'Part or service', type: 'many2one',
+                    model: 'product.product', readonly: released,
+                    domain: [['purchasable', '=', true]]},
+                {name: 'quantity', label: 'Order qty', type: 'float',
+                    readonly: released},
+                {name: 'unit_price', label: 'Unit price', type: 'float',
+                    readonly: released},
+                {name: 'trade_discount', label: 'Trade disc %',
+                    type: 'float', readonly: released},
+                {name: 'fixed_charge', label: 'Fixed charge', type: 'float',
+                    readonly: released},
+                {name: 'receive_date', label: 'Wanted by', type: 'date'},
+                {name: 'promise_date', label: 'Promised', type: 'date'},
+                {name: 'supplier_part_code', label: 'Supplier part ID',
+                    type: 'char'},
+                {name: 'expense_account', label: 'Expense account',
+                    type: 'many2one', model: 'account.account'},
+                {name: 'line_closed', label: 'Closed (nothing more ' +
+                    'expected)', type: 'boolean'}];
+            /* (the order's own lines stay as they were if the save is
+             * refused) */
+            UI.docEdit('Line ' + (l.sequence || ''), fields, Object.assign(
+                {}, l, {unit_price: l.list_unit_price !== null &&
+                    l.list_unit_price !== undefined ? l.list_unit_price :
+                    l.unit_price})).then(
+                function (values) {
+                    page.save({lines: poValues(d).lines.map(function (x) {
+                        return x.id === l.id && x.sequence === l.sequence ?
+                            Object.assign(x, values) : x;
+                    })});
+                }, function () {});
+        }
+
+        function addLine(d) {
+            if (!d.lines_editable) {
+                UI.toast('A released order keeps its lines: add them on ' +
+                    'a new order', 'error');
+                return;
+            }
+            UI.docEdit('Add a line', [
+                {name: 'product', label: 'Part or service', type: 'many2one',
+                    model: 'product.product', domain: [['purchasable', '=',
+                        true]]},
+                {name: 'description', label: 'Description (a charge ' +
+                    'without a part)', type: 'char', wide: true},
+                {name: 'quantity', label: 'Order qty', type: 'float'},
+                {name: 'unit_price', label: 'Unit price', type: 'float'},
+                {name: 'receive_date', label: 'Wanted by', type: 'date'}],
+                {quantity: 1, receive_date: d.delivery_date}).then(
+                function (values) {
+                    if (!values.product && !values.description) {
+                        UI.toast('Choose a part or type a description',
+                            'error');
+                        return;
+                    }
+                    page.save({lines: poValues(d).lines.concat([
+                        Object.assign({id: null, line_status: 'open'},
+                            values)])});
+                }, function () {});
+        }
+
+        function print(d) {
+            Rpc.desk('js_po_printed', [d.id]).then(function () {
+                return Rpc.report('purchase.purchase', [d.id]);
+            }).then(function (r) {
+                UI.openReport(r, 'Purchase Order');
+                page.reload();
+            }, UI.showError);
+        }
+
+        function receive(d) {
+            UI.openScreen('receiving?purchase=' + d.id, 'Receiving');
+        }
+
+        function setStatus(d, status) {
+            var go = function () {
+                UI.service('js_po_status', d.id, [status]).then(function () {
+                    page.reload();
+                }, failed);
+            };
+            if (status === 'cancelled' || status === 'closed') {
+                UI.confirm('Change status', 'Set purchase order ' + d.number +
+                    ' to ' + PO_STATUS[status] + '?').then(function (ok) {
+                        if (ok) {
+                            go();
+                        }
+                    });
+            } else {
+                go();
+            }
+        }
+
+        page = UI.docPage(main, {
+            title: 'Purchase Order',
+            crumbs: ['Purchasing', 'Purchase orders'],
+            model: 'purchase.purchase', label: 'Order ID',
+            order: [['purchase_date', 'DESC'], ['id', 'DESC']],
+            openId: openId,
+            load: function (id) {
+                return Rpc.desk('js_po_get', [id]).then(poTerms).then(
+                    poTexts);
+            },
+            save: function (values) {
+                if (!values.party) {
+                    return Promise.reject({message: 'Choose the supplier ' +
+                        'first.'});
+                }
+                return UI.service('js_po_save', values).then(poTerms).then(
+                    function (d) {
+                        return poTexts(d);
+                    });
+            },
+            values: poValues,
+            route: function (d) {
+                return 'purchase-orders/' + d.id;
+            },
+            blank: function () {
+                return {id: null, number: '', party: presetSupplier || null,
+                    purchase_date: today(), delivery_date: today(),
+                    jobshop_status: 'unreleased', editable: true,
+                    lines_editable: true, lines: [], freight_terms: 'billed'};
+            },
+            head: function (d) {
+                var due = d.delivery_date;
+                var late = due && due < today() && d.jobshop_status !==
+                    'closed' && d.jobshop_status !== 'cancelled';
+                var isToday = due === today();
+                return {
+                    title: d.party ? (d.party_name || d.party.rec_name) :
+                        'New purchase order',
+                    chips: d.party_code ? [d.party_code] : [],
+                    sub: [d.number ? 'PO ' + d.number : 'Not saved yet',
+                        d.purchase_date ? 'ordered ' + UI.date(
+                            d.purchase_date) + (d.buyer ? ' by ' + d.buyer :
+                                '') : null,
+                        due ? {text: (late ? 'wanted ' : isToday ?
+                            'wanted today, ' : 'wanted by ') + UI.date(due) +
+                            (late ? ', late' : ''), tone: late ? 'bad' :
+                            isToday ? 'warn' : null, icon: 'clock'} : null],
+                    amount: {value: money(d.total_amount), label:
+                        (d.lines || []).length + ' lines' + (d.payment_term ?
+                            ' · ' + d.payment_term.rec_name : '')}
+                };
+            },
+            status: function (d) {
+                var tone = {released: 'accent', closed: 'ok', hold: 'warn',
+                    cancelled: 'bad'}[d.jobshop_status];
+                return [{text: PO_STATUS[d.jobshop_status] || 'Unreleased',
+                    tone: tone}, {text: d.printed_date ? 'Printed ' +
+                        UI.date(d.printed_date) : 'Not printed'}];
+            },
+            actions: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var released = d.jobshop_status === 'released';
+                return [
+                    {label: 'Print', key: 'p', onclick: print},
+                    (d.statuses || []).indexOf('released') >= 0 &&
+                        can('purchase.purchase', 'write') ? {label: 'Release',
+                            primary: !released, onclick: function () {
+                                setStatus(d, 'released');
+                            }} : null,
+                    released && can('stock.shipment.in', 'create') ?
+                        {label: 'Receive', key: 'r', primary: true,
+                            onclick: receive} : null];
+            },
+            more: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                return [
+                    {label: 'Change status', items: (d.statuses || []).map(
+                        function (s) {
+                            return {label: PO_STATUS[s], onclick: function () {
+                                setStatus(d, s);
+                            }};
+                        })},
+                    {label: 'Open supplier', onclick: function () {
+                        UI.openScreen('supplier-window/' + d.party.id,
+                            'Supplier');
+                    }},
+                    d.rfq ? {label: 'Open RFQ', onclick: function () {
+                        UI.openScreen('rfqs/' + d.rfq.id, 'RFQ');
+                    }} : null,
+                    '-',
+                    {label: 'Classic view', onclick: function () {
+                        toClassic(main, 'po', 'jsPurchaseOrder', [d.id]);
+                    }}].filter(Boolean);
+            },
+            attention: function (d) {
+                var out = [];
+                if (!d.party) {
+                    out.push({tone: 'info', title: 'Choose the supplier',
+                        detail: 'The order needs a supplier before it can ' +
+                            'be saved.', action: {label: 'Choose',
+                            onclick: function () {
+                                UI.docEdit('Supplier', [{name: 'party',
+                                    label: 'Supplier', type: 'many2one',
+                                    model: 'party.party', domain: [[
+                                        'is_supplier', '=', true]]}], d)
+                                    .then(function (v) {
+                                        page.save({party: v.party});
+                                    }, function () {});
+                            }}});
+                }
+                problems(d).forEach(function (p) {
+                    out.push({tone: 'warn', title: 'Line ' +
+                        (p.line.sequence || '') + ' has no price',
+                        detail: 'It would be received at $0 and understate ' +
+                            'the cost.', action: {label: 'Set price',
+                            onclick: function () {
+                                editLine(d, p.line);
+                            }}});
+                });
+                var due = d.delivery_date;
+                if (d.id && d.jobshop_status === 'released' &&
+                        !d.promise_date && due && due <= today()) {
+                    out.push({tone: 'warn', icon: 'clock', title: 'No ' +
+                        'promised date from the supplier', detail: 'Wanted ' +
+                        UI.date(due) + (d.printed_date ? '.' : '; the ' +
+                            'order has not been printed or sent yet.'),
+                        action: {label: 'Set promised date', onclick:
+                            function () {
+                                UI.docEdit('Promised date', [{name:
+                                    'promise_date', label: 'Promised',
+                                    type: 'date'}], d).then(function (v) {
+                                        page.save(v);
+                                    }, function () {});
+                            }}});
+                }
+                if (d.jobshop_status === 'unreleased' && d.id &&
+                        (d.lines || []).length) {
+                    out.push({tone: 'info', title: 'Not released yet',
+                        detail: 'Receiving and planning see it once it is ' +
+                            'released.', action: (d.statuses || []).indexOf(
+                            'released') >= 0 ? {label: 'Release',
+                            onclick: function () {
+                                setStatus(d, 'released');
+                            }} : null});
+                }
+                return out;
+            },
+            tracker: function (d) {
+                if (!d.id) {
+                    return null;
+                }
+                var total = n0(d.total_amount);
+                var received = n0(d.received_amount);
+                var billed = (d.receivers || []).filter(function (r) {
+                    return r.invoiced_date || r.supplier_invoice;
+                }).length;
+                return {title: 'Order, receipt and bill', note: 'three-way ' +
+                    'match', steps: [
+                    {label: 'Ordered', value: money(total), state: 'done'},
+                    {label: 'Received', value: money(received), state:
+                        received >= total && total ? 'done' : received ?
+                            'now' : 'todo'},
+                    {label: 'Billed', value: billed ? billed +
+                        ' receiver(s)' : '$0.00', state: billed ? 'now' :
+                        'todo'},
+                    {label: 'Closed', value: d.jobshop_status === 'closed' ?
+                        'yes' : 'no', state: d.jobshop_status === 'closed' ?
+                        'done' : 'todo'}]};
+            },
+            sections: [{title: "What's on order", note: function (d) {
+                return d.lines_editable ? 'Click a line to change it' :
+                    'Released: click a line for its dates';
+            }, render: function (pane, d) {
+                UI.docLines(pane, {
+                    items: (d.lines || []).slice().sort(function (a, b) {
+                        return (a.sequence || 0) - (b.sequence || 0);
+                    }),
+                    kind: lineKind,
+                    title: function (l) {
+                        return l.description || (l.product &&
+                            l.product.rec_name) || 'Line';
+                    },
+                    chips: function (l) {
+                        var c = [];
+                        if (l.product) {
+                            c.push(UI.shortName('product.product',
+                                l.product.rec_name));
+                        }
+                        if (!n0(l.unit_price) && !n0(l.fixed_charge)) {
+                            c.push({text: 'no price', tone: 'warn'});
+                        }
+                        if (l.line_status === 'closed') {
+                            c.push({text: 'closed', tone: 'ok'});
+                        }
+                        if (l.promise_date) {
+                            c.push('promised ' + UI.date(l.promise_date));
+                        }
+                        return c;
+                    },
+                    progress: function (l) {
+                        var q = n0(l.quantity), r = n0(l.received);
+                        return {done: r, total: q, label: r + ' of ' + q +
+                            ' back'};
+                    },
+                    right: function (l) {
+                        return [money(l.amount), n0(l.quantity) + ' × ' +
+                            money(l.unit_price), !n0(l.unit_price) &&
+                            !n0(l.fixed_charge) ? 'warn' : null];
+                    },
+                    onclick: function (l) {
+                        editLine(d, l);
+                    },
+                    add: d.lines_editable && d.party ? {placeholder:
+                        'Add a part, service or charge', onclick:
+                        function () {
+                            addLine(d);
+                        }} : null,
+                    footer: ['Lines ' + money(d.untaxed_amount), 'Tax ' +
+                        money(d.tax_amount), 'Total ' + money(d.total_amount)]
+                });
+            }}],
+            cards: [
+                {title: 'Supplier', rows: function (d) {
+                    return [['Name', d.purchase_from_name || (d.party &&
+                        d.party.rec_name)],
+                        ['Address', [d.purchase_from_address_1,
+                            d.purchase_from_address_2, [d.purchase_from_city,
+                                d.purchase_from_state,
+                                d.purchase_from_postal_code].filter(Boolean)
+                                .join(' ')].filter(Boolean).join(', ')],
+                        ['Contact', d.purchase_from_contact],
+                        ['Phone', d.purchase_from_phone],
+                        ['E-mail', d.purchase_from_email]];
+                }, fields: [
+                    {name: 'purchase_from_contact', label: 'Contact',
+                        type: 'char'},
+                    {name: 'purchase_from_phone', label: 'Phone',
+                        type: 'char'},
+                    {name: 'purchase_from_email', label: 'E-mail',
+                        type: 'char'},
+                    {name: 'reference', label: 'Supplier quote ref',
+                        type: 'char'}], editable: mayWrite},
+                {title: 'Delivery', rows: function (d) {
+                    return [['Ship to', d.ship_to_summary ||
+                        d.ship_to_name || 'Our address'],
+                        ['Wanted by', d.delivery_date ? UI.date(
+                            d.delivery_date) : null],
+                        ['Promised', d.promise_date ? UI.date(
+                            d.promise_date) : null],
+                        ['Ship via', d.ship_via && d.ship_via.rec_name],
+                        ['FOB', d.fob_point && d.fob_point.rec_name],
+                        ['Freight', d.freight_terms ? d.freight_terms
+                            .charAt(0).toUpperCase() + d.freight_terms
+                            .slice(1) : null]];
+                }, fields: [
+                    {name: 'delivery_date', label: 'Wanted by', type: 'date'},
+                    {name: 'promise_date', label: 'Promised', type: 'date'},
+                    {name: 'ship_via', label: 'Ship via', type: 'many2one',
+                        model: 'nline.ship_via'},
+                    {name: 'fob_point', label: 'FOB point', type: 'many2one',
+                        model: 'nline.fob_point'},
+                    {name: 'freight_terms', label: 'Freight terms',
+                        type: 'selection', options: [['billed', 'Billed'],
+                            ['collect', 'Collect'], ['prepaid', 'Prepaid']]}],
+                    editable: function (d) {
+                        return d.editable !== false && mayWrite(d);
+                    }},
+                {title: 'Terms and accounting', rows: function (d) {
+                    return [['Terms', d.payment_term &&
+                        d.payment_term.rec_name],
+                        ['Buyer', d.buyer],
+                        ['Tax group', d.tax_group && d.tax_group.rec_name],
+                        ['Payable', d.payable_account &&
+                            d.payable_account.rec_name],
+                        ['Order date', d.purchase_date ? UI.date(
+                            d.purchase_date) : null]];
+                }, fields: [
+                    {name: 'payment_term', label: 'Terms', type: 'many2one',
+                        model: 'account.invoice.payment_term'},
+                    {name: 'buyer', label: 'Buyer', type: 'char'},
+                    {name: 'tax_group', label: 'Tax group', type: 'many2one',
+                        model: 'account.tax'},
+                    {name: 'payable_account', label: 'Payable account',
+                        type: 'many2one', model: 'account.account'},
+                    {name: 'purchase_date', label: 'Order date',
+                        type: 'date'}],
+                    editable: function (d) {
+                        return d.editable !== false && mayWrite(d);
+                    }},
+                {title: 'Specs and notes', rows: function (d) {
+                    return [['Specs', d.specifications ?
+                        String(d.specifications).slice(0, 160) : null],
+                        ['Memo', d.description]];
+                }, fields: [
+                    {name: 'specifications', label: 'Specs', type: 'text'},
+                    {name: 'description', label: 'Memo', type: 'char'}],
+                    editable: mayWrite}
+            ],
+            trail: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var status = d.jobshop_status;
+                var receivers = d.receivers || [];
+                return [
+                    {done: status !== 'unreleased' && status !== 'hold',
+                        text: 'Released', when: status === 'released' ||
+                            status === 'closed' ? '' : 'not yet'},
+                    {done: Boolean(d.printed_date), text: 'Printed / sent',
+                        when: d.printed_date ? UI.date(d.printed_date) :
+                            'not yet'},
+                    {done: receivers.length > 0, text: 'Receivers',
+                        when: receivers.length ? receivers.length + ' · last ' +
+                            UI.date(d.last_received_date) : 'none yet'},
+                    {done: status === 'closed', text: 'Closed', when:
+                        status === 'closed' ? '' : 'open'},
+                    {text: 'Notes', onclick: function () {
+                        UI.modal('Notes: PO ' + d.number, el('div', {ref:
+                            null}, (function () {
+                                var pane = el('div', {style: {minWidth:
+                                    '480px'}});
+                                UI.notesTab(pane, 'purchase.purchase', d.id,
+                                    true);
+                                return pane;
+                            }())));
+                    }}];
+            },
+            keys: {
+                p: {label: 'print', run: function (d) {
+                    if (d.id) {
+                        print(d);
+                    }
+                }},
+                r: {label: 'receive', run: function (d) {
+                    if (d.jobshop_status === 'released') {
+                        receive(d);
+                    }
+                }},
+                a: {label: 'add a line', run: function (d) {
+                    addLine(d);
+                }}
+            },
+            classic: function (d) {
+                toClassic(main, 'po', 'jsPurchaseOrder', d && d.id ? [d.id] :
+                    []);
+            }
+        });
+        return page;
+    }
+
+    /* The Purchase Order window: the modern page (default) or Jobshop's
+     * classic window (More > Classic view; its ribbon's New View goes
+     * back) */
     Screens.jsPurchaseOrder = function (main, params) {
         var openId = params && params[0] ? parseInt(params[0], 10) : null;
         var query = (global.location.hash.split('?')[1] || '');
         var preset = /(?:^|&)supplier=(\d+)/.exec(query);
+        var host = docHost(main);
+        if (host) {
+            var supplier = preset ? {id: parseInt(preset[1], 10),
+                rec_name: ''} : null;
+            var page = poModern(host, openId, supplier);
+            if (supplier) {
+                /* (the new order's headline: the supplier's name) */
+                Rpc.searchRead('party.party', [['id', '=', supplier.id]],
+                    ['rec_name']).then(function (rows) {
+                        supplier.rec_name = rows.length ? rows[0].rec_name :
+                            '';
+                        page.render();
+                    }, function () {});
+            }
+            return;
+        }
+        classicPurchaseOrder(main, openId, preset);
+    };
+
+    function classicPurchaseOrder(main, openId, preset) {
         var statusButton = el('button', {type: 'button', title:
             'Change Status', hidden: true}, 'Change Status ▾');
         var api = docWindow(main, {
@@ -2977,6 +4110,12 @@
                         }}];
                 }}],
             extra: [
+                {label: 'New View', title: 'The modern purchase order page',
+                    onclick: function (data) {
+                        UI.setDocView('po', 'modern');
+                        Screens.jsPurchaseOrder(main, data && data.id ?
+                            [data.id] : []);
+                    }},
                 {label: 'Print', title: 'Print the purchase order',
                     visible: function (data) {
                         return Boolean(data);
@@ -3568,7 +4707,806 @@
         return {get: tab.get, lock: tab.lock};
     }
 
+    /* ---- Request For Quote, modern view (UI.docPage) -------------------
+     * Headline: what is being quoted (the first line's part); the quotes
+     * of the three suppliers side by side, one click to enter a supplier's
+     * quote, Create PO from the best one. Loaded and saved with js_rfq_get
+     * / js_rfq_save (the whole request: it writes every field it gets). */
+
+    var RFQ_SLOTS = [1, 2, 3];
+
+    /* The payload js_rfq_save expects: the whole request, the lines with
+     * their quantities and prices; their links stay as they are */
+    function rfqValues(d) {
+        var values = Object.assign({}, d);
+        values.lines = (d.lines || []).map(function (l) {
+            var line = Object.assign({}, l);
+            line.prices = (l.prices || []).map(function (p) {
+                return Object.assign({}, p);
+            });
+            delete line.links;
+            delete line.purchase_lines;
+            return line;
+        });
+        RFQ_SLOTS.forEach(function (s) {
+            delete values['address_' + s];
+        });
+        delete values.purchases;
+        return values;
+    }
+
+    function rfqModern(main, openId, preset) {
+        var access = {};
+        var page;
+        UI.access(['nline.rfq', 'purchase.purchase',
+            'purchase.product_supplier']).then(function (a) {
+                access = a || {};
+                if (page) {
+                    page.render();
+                }
+            });
+        function can(model, right) {
+            return Boolean(access[model] && access[model][right]);
+        }
+        function mayWrite(d) {
+            return can('nline.rfq', d && d.id ? 'write' : 'create');
+        }
+        function money(v) {
+            return UI.money(n0(v), true);
+        }
+        function priced(p, s) {
+            return p && p['unit_price_' + s] !== null &&
+                p['unit_price_' + s] !== undefined;
+        }
+        function slots(d) {
+            return RFQ_SLOTS.filter(function (s) {
+                return d['supplier_' + s];
+            });
+        }
+        function who(d, s) {
+            var p = d['supplier_' + s];
+            return p ? (d['supplier_code_' + s] || p.rec_name) : 'Supplier ' +
+                s;
+        }
+        /* A supplier's quote is in: Quote Received ticked, or a price on
+         * every line */
+        function quoted(d, s) {
+            return Boolean(d['quote_received_' + s]) || ((d.lines || [])
+                .length > 0 && (d.lines || []).every(function (l) {
+                    return (l.prices || []).some(function (p) {
+                        return priced(p, s);
+                    });
+                }));
+        }
+        function unquotedLines(d) {
+            return (d.lines || []).filter(function (l) {
+                return l.line_status !== 'closed' && !(l.purchase_lines ||
+                    []).length && !slots(d).some(function (s) {
+                        return (l.prices || []).some(function (p) {
+                            return priced(p, s);
+                        });
+                    });
+            });
+        }
+        /* The cheapest supplier of a price row: {slot, amount} | null */
+        function best(d, p) {
+            var out = null;
+            slots(d).forEach(function (s) {
+                if (priced(p, s) && (!out || n0(p['amount_' + s]) <
+                        out.amount)) {
+                    out = {slot: s, amount: n0(p['amount_' + s])};
+                }
+            });
+            return out;
+        }
+        function bestTotal(d) {
+            return (d.lines || []).reduce(function (a, l) {
+                var b = best(d, (l.prices || [])[0]);
+                return a + (b ? b.amount : 0);
+            }, 0);
+        }
+        function lineName(l) {
+            return l.description || (l.product && l.product.rec_name) ||
+                'Line ' + (l.sequence || '');
+        }
+        function qtyText(l) {
+            return (l.prices || []).map(function (p) {
+                return num(p.quantity);
+            }).join(', ');
+        }
+        function late(d) {
+            return d.due_date && d.due_date < today() && d.status === 'active';
+        }
+        function setStatus(d, status) {
+            var go = function () {
+                page.save({status: status}).then(null, function () {});
+            };
+            if (status === 'cancelled' || status === 'closed') {
+                UI.confirm('Change status', 'Set request for quote ' +
+                    d.number + ' to ' + RFQ_LABEL[status] + '?').then(
+                    function (ok) {
+                        if (ok) {
+                            go();
+                        }
+                    });
+            } else {
+                go();
+            }
+        }
+        function print(d) {
+            Rpc.desk('js_rfq_printed', [d.id]).then(function () {
+                UI.toast('Printed date set; the RFQ form is in Purchasing ' +
+                    'Reports');
+                page.reload();
+            }, UI.showError);
+        }
+        function mayOrder(d) {
+            return rfqMayCreatePo(d, access);
+        }
+        function createPo(d) {
+            rfqCreatePo(d, {reload: function () {
+                return page.reload();
+            }});
+        }
+
+        /* The line dialog (new or changed): part, description, the quote
+         * quantities as "1, 10, 50" */
+        function editLine(d, l) {
+            var isNew = !l;
+            l = l || {id: null, sequence: (d.lines || []).reduce(function (a,
+                x) {
+                return Math.max(a, x.sequence || 0);
+            }, 0) + 1, line_type: 'part', line_status: 'open', prices: [
+                {quantity: 1}], desired_receive_date: d.desired_receive_date};
+            var item = Object.assign({}, l, {quantities: qtyText(l)});
+            var locked = (l.purchase_lines || []).length > 0;
+            var fields = [
+                {name: 'product', label: 'Part or service', type: 'many2one',
+                    model: 'product.product', domain: [['purchasable', '=',
+                        true]], readonly: locked},
+                {name: 'description', label: 'Description', type: 'char',
+                    wide: true},
+                {name: 'quantities', label: 'Quote quantities (e.g. 1, 10, ' +
+                    '50)', type: 'char'},
+                {name: 'desired_receive_date', label: 'Wanted by',
+                    type: 'date'},
+                {name: 'mfg_name', label: 'Mfg name', type: 'char'},
+                {name: 'mfg_part_id', label: 'Mfg part ID', type: 'char'},
+                {name: 'line_status', label: 'Line status', type: 'selection',
+                    options: LINE_STATUS}];
+            if (!isNew && !locked) {
+                fields.push({name: 'remove', label: 'Remove this line',
+                    type: 'boolean'});
+            }
+            UI.docEdit(isNew ? 'Add a part or service to quote' : 'Line ' +
+                (l.sequence || ''), fields, item).then(function (v) {
+                    var lines = rfqValues(d).lines;
+                    if (v.remove) {
+                        page.save({lines: lines.filter(function (x) {
+                            return x.id !== l.id;
+                        })}).then(null, function () {});
+                        return;
+                    }
+                    if (!v.product && !v.description) {
+                        UI.toast('Choose a part or type a description',
+                            'error');
+                        return;
+                    }
+                    var qtys = String(v.quantities || '1').split(/[,;\s]+/)
+                        .map(parseNum).filter(function (q) {
+                            return q;
+                        });
+                    var line = Object.assign({}, isNew ? l : lines.filter(
+                        function (x) {
+                            return x.id === l.id;
+                        })[0], {product: v.product, description:
+                            v.description, desired_receive_date:
+                            v.desired_receive_date, mfg_name: v.mfg_name,
+                        mfg_part_id: v.mfg_part_id, line_status:
+                            v.line_status || 'open'});
+                    line.prices = (qtys.length ? qtys : [1]).map(function (q) {
+                        return (line.prices || []).filter(function (p) {
+                            return n0(p.quantity) === q;
+                        })[0] || {quantity: q};
+                    });
+                    var oldProduct = l.product && l.product.id;
+                    var changed = v.product && v.product !== oldProduct;
+                    var ready = changed ? Promise.all([
+                        Rpc.searchRead('product.product', [['id', '=',
+                            v.product]], ['type']),
+                        Rpc.desk('js_supplier_price', [null, v.product, 1,
+                            null])]).then(function (all) {
+                                var p = all[0][0] || {};
+                                var q = all[1] || {};
+                                line.line_type = p.type === 'service' ?
+                                    'service' : 'part';
+                                line.description = line.description ||
+                                    q.description;
+                                line.unit = q.unit || line.unit;
+                                line.drawing = q.drawing || line.drawing;
+                                line.drawing_revision = q.drawing_revision ||
+                                    line.drawing_revision;
+                            }) : Promise.resolve();
+                    ready.then(function () {
+                        page.save({lines: isNew ? lines.concat([line]) :
+                            lines.map(function (x) {
+                                return x.id === l.id ? line : x;
+                            })}).then(null, function () {});
+                    }, UI.showError);
+                }, function () {});
+        }
+
+        /* Enter a supplier's quote: its reference and dates, a unit price
+         * and lead time per line and quantity */
+        function enterQuote(d, s) {
+            var item = {reference: d['reference_' + s], as_of_date:
+                d['as_of_date_' + s] || today(), expiration_date:
+                d['expiration_date_' + s]};
+            var fields = [
+                {name: 'reference', label: 'Supplier quote ref', type: 'char'},
+                {name: 'as_of_date', label: 'Quoted on', type: 'date'},
+                {name: 'expiration_date', label: 'Good until', type: 'date'}];
+            (d.lines || []).forEach(function (l, i) {
+                (l.prices || []).forEach(function (p, j) {
+                    var key = 'p' + i + '_' + j;
+                    var what = 'Line ' + l.sequence + ' · ' + (l.product ?
+                        UI.shortName('product.product', l.product.rec_name) :
+                        lineName(l)) + ' · qty ' + num(p.quantity);
+                    item[key] = p['unit_price_' + s];
+                    item[key + 'l'] = p['lead_time_' + s];
+                    fields.push({name: key, label: what + ': unit price',
+                        type: 'float'}, {name: key + 'l', label:
+                        'lead time (days)', type: 'integer'});
+                });
+            });
+            UI.docEdit('Quote from ' + who(d, s), fields, item).then(
+                function (v) {
+                    var lines = rfqValues(d).lines;
+                    lines.forEach(function (l, i) {
+                        l.prices.forEach(function (p, j) {
+                            p['unit_price_' + s] = v['p' + i + '_' + j];
+                            p['lead_time_' + s] = v['p' + i + '_' + j + 'l'];
+                        });
+                    });
+                    var changes = {lines: lines};
+                    changes['reference_' + s] = v.reference;
+                    changes['as_of_date_' + s] = v.as_of_date;
+                    changes['expiration_date_' + s] = v.expiration_date;
+                    changes['quote_received_' + s] = true;
+                    page.save(changes).then(null, function () {});
+                }, function () {});
+        }
+        function chooseSuppliers(d) {
+            UI.docEdit('Suppliers', RFQ_SLOTS.map(function (s) {
+                return {name: 'supplier_' + s, label: 'Supplier ' + s,
+                    type: 'many2one', model: 'party.party',
+                    domain: SUPPLIER_DOMAIN};
+            }), d).then(function (v) {
+                page.save(v).then(null, function () {});
+            }, function () {});
+        }
+        function missing(d) {
+            return slots(d).filter(function (s) {
+                return !quoted(d, s);
+            });
+        }
+
+        page = UI.docPage(main, {
+            title: 'Request For Quote',
+            crumbs: ['Purchasing', 'Requests for quote'],
+            model: 'nline.rfq', label: 'RFQ ID',
+            order: [['rfq_date', 'DESC'], ['number', 'DESC']],
+            openId: openId,
+            load: function (id) {
+                return Rpc.desk('js_rfq_get', [id]);
+            },
+            save: function (values) {
+                return UI.service('js_rfq_save', values);
+            },
+            values: rfqValues,
+            blank: function () {
+                return {id: null, number: '', rfq_date: today(), due_date:
+                    today(), status: 'unreleased', lines: [], purchases: [],
+                    supplier_1: preset || null, freight_terms: null};
+            },
+            head: function (d) {
+                var lines = d.lines || [];
+                var first = lines[0];
+                var due = d.due_date;
+                var isToday = due === today() && d.status === 'active';
+                var b = bestTotal(d);
+                return {
+                    title: first ? lineName(first) + (lines.length > 1 ?
+                        ' and ' + (lines.length - 1) + ' more' : '') :
+                        'New request for quote',
+                    chips: first && first.product ? [UI.shortName(
+                        'product.product', first.product.rec_name)] : [],
+                    sub: [d.number ? 'RFQ ' + d.number : 'Not saved yet',
+                        d.rfq_date ? 'requested ' + UI.date(d.rfq_date) +
+                            (d.buyer ? ' by ' + d.buyer : '') : null,
+                        due ? {text: (late(d) ? 'quotes were due ' :
+                            isToday ? 'quotes due today, ' :
+                                'quotes due ') + UI.date(due) + (late(d) ?
+                            ', late' : ''), tone: late(d) ? 'bad' : isToday ?
+                            'warn' : null, icon: 'clock'} : null,
+                        slots(d).map(function (s) {
+                            return who(d, s);
+                        }).join(', ') || null],
+                    amount: {value: b ? money(b) : '—', label: b ?
+                        'best quotes at the first quantity' :
+                        'no quote yet'}
+                };
+            },
+            status: function (d) {
+                var tone = {active: 'accent', closed: 'ok', cancelled: 'bad'}[
+                    d.status];
+                var n = slots(d).length;
+                return [{text: RFQ_LABEL[d.status] || 'Unreleased', tone: tone},
+                    {text: d.printed_date ? 'Printed ' + UI.date(
+                        d.printed_date) : 'Not printed'},
+                    n ? {text: (n - missing(d).length) + ' of ' + n +
+                        ' quotes in', tone: missing(d).length ? null : 'ok'} :
+                        null].filter(Boolean);
+            },
+            actions: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var w = mayWrite(d);
+                var gaps = missing(d);
+                return [
+                    {label: 'Print', key: 'p', onclick: print},
+                    w && d.status === 'unreleased' ? {label: 'Mark sent',
+                        primary: true, title: 'Active (awaiting quote)',
+                        onclick: function () {
+                            setStatus(d, 'active');
+                        }} : null,
+                    w && d.status === 'active' && slots(d).length ? {label:
+                        'Enter quote', key: 'q', primary: !mayOrder(d) ||
+                        gaps.length === slots(d).length, onclick:
+                        function () {
+                            enterQuote(d, gaps.length ? gaps[0] :
+                                slots(d)[0]);
+                        }} : null,
+                    mayOrder(d) && gaps.length < slots(d).length ? {label:
+                        'Create PO', key: 'o', primary: true, onclick:
+                        createPo} : null];
+            },
+            more: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var w = mayWrite(d);
+                var price = access['purchase.product_supplier'];
+                return [
+                    w ? {label: 'Change status', items: RFQ_STATUS.map(
+                        function (s) {
+                            return {label: s[1], checked: d.status === s[0],
+                                onclick: function () {
+                                    setStatus(d, s[0]);
+                                }};
+                        })} : null,
+                    w && slots(d).length ? {label: 'Enter quote from',
+                        items: slots(d).map(function (s) {
+                            return {label: who(d, s), checked: quoted(d, s),
+                                onclick: function () {
+                                    enterQuote(d, s);
+                                }};
+                        })} : null,
+                    price && price.write && price.create && slots(d).some(
+                        function (s) {
+                            return quoted(d, s);
+                        }) ? {label: 'Keep quoted prices on file',
+                        items: slots(d).filter(function (s) {
+                            return quoted(d, s);
+                        }).map(function (s) {
+                            return {label: who(d, s), onclick: function () {
+                                var ids = [];
+                                d.lines.forEach(function (l) {
+                                    l.prices.forEach(function (p) {
+                                        if (priced(p, s)) {
+                                            ids.push(p.id);
+                                        }
+                                    });
+                                });
+                                Rpc.desk('js_rfq_update_pricing', [d.id, s,
+                                    ids]).then(function (done) {
+                                        UI.toast(done.length + ' supplier ' +
+                                            'price(s) updated', 'ok');
+                                    }, UI.showError);
+                            }};
+                        })} : null,
+                    slots(d).length ? {label: 'Open supplier', items:
+                        slots(d).map(function (s) {
+                            return {label: who(d, s), onclick: function () {
+                                UI.openScreen('supplier-window/' +
+                                    d['supplier_' + s].id, 'Supplier');
+                            }};
+                        })} : null,
+                    can('nline.rfq', 'delete') && !d.purchases.length ? {
+                        label: 'Delete', onclick: function () {
+                            UI.confirm('Delete', 'Delete request for quote ' +
+                                d.number + '? It cannot be recovered.').then(
+                                function (ok) {
+                                    if (ok) {
+                                        Rpc.desk('js_rfq_delete', [d.id])
+                                            .then(function () {
+                                                UI.toast('Deleted', 'ok');
+                                                page.clear();
+                                            }, UI.showError);
+                                    }
+                                });
+                        }} : null,
+                    '-',
+                    {label: 'Classic view', onclick: function () {
+                        toClassic(main, 'rfq', 'jsRfq', [d.id]);
+                    }}].filter(Boolean);
+            },
+            attention: function (d) {
+                var out = [];
+                var w = mayWrite(d);
+                if (!slots(d).length) {
+                    out.push({tone: 'info', title: 'Choose the suppliers',
+                        detail: 'Up to three suppliers quote on the same ' +
+                            'lines.', action: w ? {label: 'Choose',
+                            onclick: function () {
+                                chooseSuppliers(d);
+                            }} : null});
+                }
+                if (!(d.lines || []).length) {
+                    out.push({tone: 'info', title: 'Nothing to quote yet',
+                        detail: 'Add the parts or services and their ' +
+                            'quantities.', action: w ? {label: 'Add a line',
+                            onclick: function () {
+                                editLine(d, null);
+                            }} : null});
+                }
+                if (d.id && d.status === 'unreleased' && slots(d).length &&
+                        (d.lines || []).length) {
+                    out.push({tone: 'info', title: 'Not sent yet', detail:
+                        'Print it for the suppliers, then mark it sent ' +
+                            '(Active, awaiting quote).', action: w ? {label:
+                            'Mark sent', onclick: function () {
+                                setStatus(d, 'active');
+                            }} : null});
+                }
+                if (d.status === 'active') {
+                    missing(d).forEach(function (s) {
+                        if (d.due_date && d.due_date <= today()) {
+                            out.push({tone: late(d) ? 'bad' : 'warn', icon:
+                                'clock', title: 'No quote from ' + who(d, s),
+                                detail: 'Quotes ' + (late(d) ? 'were ' : '') +
+                                    'due ' + UI.date(d.due_date) + '.',
+                                action: w ? {label: 'Enter quote', onclick:
+                                    function () {
+                                        enterQuote(d, s);
+                                    }} : null});
+                        }
+                    });
+                    slots(d).forEach(function (s) {
+                        var until = d['expiration_date_' + s];
+                        if (quoted(d, s) && until && until < today()) {
+                            out.push({tone: 'warn', title: 'The quote from ' +
+                                who(d, s) + ' expired', detail: 'Good until ' +
+                                UI.date(until) + '.', action: w ? {label:
+                                    'Enter new quote', onclick: function () {
+                                        enterQuote(d, s);
+                                    }} : null});
+                        }
+                    });
+                    var bare = unquotedLines(d);
+                    if (bare.length && slots(d).length) {
+                        out.push({tone: 'warn', title: bare.length +
+                            (bare.length > 1 ? ' lines have' : ' line has') +
+                            ' no quote yet', detail: bare.slice(0, 4).map(
+                                function (l) {
+                                    return 'line ' + l.sequence;
+                                }).join(', ') + (bare.length > 4 ? '…' : ''),
+                            action: w ? {label: 'Enter quote', onclick:
+                                function () {
+                                    var gaps = missing(d);
+                                    enterQuote(d, gaps.length ? gaps[0] :
+                                        slots(d)[0]);
+                                }} : null});
+                    }
+                    if (slots(d).length && !missing(d).length &&
+                            !d.purchases.length) {
+                        out.push({tone: 'info', title: 'All quotes are in',
+                            detail: 'Order from the best one.', action:
+                                mayOrder(d) ? {label: 'Create PO', onclick:
+                                    function () {
+                                        createPo(d);
+                                    }} : null});
+                    }
+                }
+                return out;
+            },
+            tracker: function (d) {
+                if (!d.id) {
+                    return null;
+                }
+                var n = slots(d).length;
+                var inn = n - missing(d).length;
+                var sent = d.status !== 'unreleased';
+                return {title: 'Request, quotes and order', steps: [
+                    {label: 'Requested', value: UI.date(d.rfq_date), state:
+                        'done'},
+                    {label: 'Sent', value: sent ? (d.printed_date ?
+                        UI.date(d.printed_date) : 'yes') : 'no', state:
+                        sent ? 'done' : 'now'},
+                    {label: 'Quoted', value: inn + ' of ' + n, state: n &&
+                        inn === n ? 'done' : !sent ? 'todo' : late(d) ? 'bad' :
+                        'now'},
+                    {label: 'Ordered', value: d.purchases.length ?
+                        d.purchases.map(function (p) {
+                            return 'PO ' + p.number;
+                        }).join(', ') : 'no', state: d.purchases.length ?
+                        'done' : 'todo'},
+                    {label: 'Closed', value: d.status === 'closed' ? 'yes' :
+                        d.status === 'cancelled' ? 'cancelled' : 'no', state:
+                        d.status === 'closed' ? 'done' : d.status ===
+                        'cancelled' ? 'bad' : 'todo'}]};
+            },
+            sections: [{title: 'What is being quoted', note: function (d) {
+                return mayWrite(d) ? 'Click a line to change it' : '';
+            }, render: function (pane, d) {
+                var n = slots(d).length;
+                UI.docLines(pane, {
+                    items: (d.lines || []).slice().sort(function (a, b) {
+                        return (a.sequence || 0) - (b.sequence || 0);
+                    }),
+                    kind: function (l) {
+                        return l.line_type === 'service' ? {icon: 'service',
+                            tone: 'service'} : {icon: 'part', tone: 'part'};
+                    },
+                    title: lineName,
+                    chips: function (l) {
+                        var c = [];
+                        if (l.product) {
+                            c.push(UI.shortName('product.product',
+                                l.product.rec_name));
+                        }
+                        c.push('qty ' + qtyText(l));
+                        (l.purchase_lines || []).forEach(function (p) {
+                            c.push({text: 'on PO ' + p.number, tone: 'ok'});
+                        });
+                        if (l.line_status === 'closed') {
+                            c.push({text: 'closed', tone: 'ok'});
+                        }
+                        if (l.desired_receive_date) {
+                            c.push('wanted ' + UI.date(
+                                l.desired_receive_date));
+                        }
+                        return c;
+                    },
+                    progress: function (l) {
+                        if (!n) {
+                            return null;
+                        }
+                        var inn = slots(d).filter(function (s) {
+                            return (l.prices || []).some(function (p) {
+                                return priced(p, s);
+                            });
+                        }).length;
+                        return {done: inn, total: n, label: inn + ' of ' + n +
+                            ' quoted'};
+                    },
+                    right: function (l) {
+                        var p = (l.prices || [])[0];
+                        var b = best(d, p);
+                        return b ? [money(b.amount), 'best: ' + who(d, b.slot) +
+                            ' at ' + num(p.quantity)] : ['—', 'no quote'];
+                    },
+                    onclick: mayWrite(d) ? function (l) {
+                        editLine(d, l);
+                    } : null,
+                    add: mayWrite(d) ? {placeholder: 'Add a part or service ' +
+                        'to quote', onclick: function () {
+                            editLine(d, null);
+                        }} : null,
+                    footer: [(d.lines || []).length + ' lines', 'Best ' +
+                        money(bestTotal(d))]
+                });
+            }}, {title: 'Quotes side by side', note: 'the lowest of each ' +
+                'quantity is marked', visible: function (d) {
+                return slots(d).length > 0 && (d.lines || []).length > 0;
+            }, render: function (pane, d) {
+                var w = mayWrite(d);
+                var head = el('tr', el('th', 'Line'), el('th', 'Part / ' +
+                    'description'), el('th.num', 'Qty'), slots(d).map(
+                    function (s) {
+                        return el('th.num', w ? el('a', {href: '#', title:
+                            'Enter the quote from ' + who(d, s), onclick:
+                            function (event) {
+                                event.preventDefault();
+                                enterQuote(d, s);
+                            }}, who(d, s)) : who(d, s));
+                    }));
+                var body = el('tbody');
+                d.lines.forEach(function (l) {
+                    (l.prices || []).forEach(function (p, j) {
+                        /* (best: only against another supplier's price) */
+                        var b = slots(d).filter(function (s) {
+                            return priced(p, s);
+                        }).length > 1 ? best(d, p) : null;
+                        body.appendChild(el('tr', el('td', j ? '' :
+                            String(l.sequence)), el('td', j ? '' :
+                            (l.product ? el('span', {title: lineName(l)},
+                                UI.shortName('product.product',
+                                    l.product.rec_name)) : lineName(l))),
+                            el('td.num', num(p.quantity)), slots(d).map(
+                                function (s) {
+                                    if (!priced(p, s)) {
+                                        return el('td.num.dp-muted', '—');
+                                    }
+                                    return el('td.num', el('div',
+                                        b && b.slot === s ? UI.docChip(
+                                            'best', 'ok') : null, ' ',
+                                        money(p['amount_' + s])),
+                                        el('div.dp-muted', money(
+                                            p['unit_price_' + s]) + ' ea' +
+                                            (p['lead_time_' + s] ? ' · ' +
+                                                p['lead_time_' + s] + ' d' :
+                                                '')));
+                                })));
+                    });
+                });
+                pane.appendChild(el('div.table-wrap', el('table.data',
+                    el('thead', head), body)));
+            }}],
+            cards: [
+                {title: 'Suppliers', rows: function (d) {
+                    return RFQ_SLOTS.map(function (s) {
+                        var p = d['supplier_' + s];
+                        if (!p && s > 1) {
+                            return null;
+                        }
+                        return ['Supplier ' + s, p ? el('span', {title:
+                            p.rec_name}, who(d, s) + (quoted(d, s) ?
+                                ' · quoted' + (d['reference_' + s] ? ' (' +
+                                    d['reference_' + s] + ')' : '') : '')) :
+                            null];
+                    });
+                }, fields: RFQ_SLOTS.map(function (s) {
+                    return {name: 'supplier_' + s, label: 'Supplier ' + s,
+                        type: 'many2one', model: 'party.party',
+                        domain: SUPPLIER_DOMAIN};
+                }), editable: mayWrite},
+                {title: 'Delivery', rows: function (d) {
+                    return [['Wanted by', d.desired_receive_date ? UI.date(
+                        d.desired_receive_date) : null],
+                        ['Ship to', d.ship_to_name || 'Our address'],
+                        ['Ship via', d.ship_via && UI.shortName(
+                            'nline.ship_via', d.ship_via.rec_name)],
+                        ['FOB', d.fob_point && UI.shortName('nline.fob_point',
+                            d.fob_point.rec_name)],
+                        ['Freight', (FREIGHT.filter(function (f) {
+                            return f[0] === d.freight_terms;
+                        })[0] || [])[1]]];
+                }, fields: [
+                    {name: 'desired_receive_date', label: 'Wanted by',
+                        type: 'date'},
+                    {name: 'ship_via', label: 'Ship via', type: 'many2one',
+                        model: 'nline.ship_via'},
+                    {name: 'fob_point', label: 'FOB point', type: 'many2one',
+                        model: 'nline.fob_point'},
+                    {name: 'freight_terms', label: 'Freight terms',
+                        type: 'selection', options: FREIGHT}],
+                    editable: mayWrite},
+                {title: 'Terms and dates', rows: function (d) {
+                    return [['RFQ date', d.rfq_date ? UI.date(d.rfq_date) :
+                        null], ['Quotes due', d.due_date ? UI.date(
+                            d.due_date) : null],
+                        ['Buyer', d.buyer],
+                        ['Terms', d.payment_term && d.payment_term.rec_name],
+                        ['Payable', d.payable_account &&
+                            d.payable_account.rec_name]];
+                }, fields: [
+                    {name: 'number', label: 'RFQ ID (blank: the next number)',
+                        type: 'char'},
+                    {name: 'rfq_date', label: 'RFQ date', type: 'date'},
+                    {name: 'due_date', label: 'Quotes due', type: 'date'},
+                    {name: 'buyer', label: 'Buyer', type: 'char'},
+                    {name: 'payment_term', label: 'Terms', type: 'many2one',
+                        model: 'account.invoice.payment_term'},
+                    {name: 'payable_account', label: 'Payable account',
+                        type: 'many2one', model: 'account.account', domain: [
+                            ['type.payable', '=', true],
+                            ['closed', '!=', true]]}],
+                    editable: mayWrite},
+                {title: 'Specs', rows: function (d) {
+                    return [['Specs', d.specifications ?
+                        String(d.specifications).slice(0, 200) : null]];
+                }, fields: [{name: 'specifications', label: 'Specs',
+                    type: 'text'}], editable: mayWrite}
+            ],
+            trail: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var rows = [
+                    {done: true, text: 'Requested', when: UI.date(d.rfq_date)},
+                    {done: Boolean(d.printed_date), text: 'Printed', when:
+                        d.printed_date ? UI.date(d.printed_date) : 'not yet'},
+                    {done: d.status !== 'unreleased', text: 'Sent (active)',
+                        when: d.status === 'unreleased' ? 'not yet' : ''}];
+                slots(d).forEach(function (s) {
+                    rows.push({done: quoted(d, s), text: 'Quote from ' +
+                        who(d, s) + (d['reference_' + s] ? ' · ' +
+                            d['reference_' + s] : ''), when: quoted(d, s) ?
+                        UI.date(d['as_of_date_' + s]) : 'waiting'});
+                });
+                d.purchases.forEach(function (p) {
+                    rows.push({done: true, text: 'PO ' + p.number + ' · ' +
+                        p.party + ' · ' + (PO_STATUS[p.status] || ''),
+                        onclick: function () {
+                            openPo(p.id, p.number);
+                        }});
+                });
+                rows.push({done: d.status === 'closed', text: 'Closed', when:
+                    d.status === 'closed' ? '' : 'open'});
+                rows.push({text: 'Notes', onclick: function () {
+                    var pane = el('div', {style: {minWidth: '480px'}});
+                    UI.notesTab(pane, 'nline.rfq', d.id, mayWrite(d));
+                    UI.modal('Notes: RFQ ' + d.number, pane);
+                }});
+                return rows;
+            },
+            keys: {
+                p: {label: 'print', run: function (d) {
+                    if (d.id) {
+                        print(d);
+                    }
+                }},
+                a: {label: 'add a line', run: function (d) {
+                    if (mayWrite(d)) {
+                        editLine(d, null);
+                    }
+                }},
+                q: {label: 'enter a quote', run: function (d) {
+                    var gaps = missing(d);
+                    if (d.id && mayWrite(d) && slots(d).length) {
+                        enterQuote(d, gaps.length ? gaps[0] : slots(d)[0]);
+                    }
+                }},
+                o: {label: 'create PO', run: function (d) {
+                    if (mayOrder(d)) {
+                        createPo(d);
+                    }
+                }}
+            },
+            classic: function (d) {
+                toClassic(main, 'rfq', 'jsRfq', d && d.id ? [d.id] : []);
+            }
+        });
+        return page;
+    }
+
     Screens.jsRfq = function (main, params) {
+        var openId = params && params[0] ? parseInt(params[0], 10) : null;
+        var query = (global.location.hash.split('?')[1] || '');
+        var preset = /(?:^|&)supplier=(\d+)/.exec(query);
+        var host = docHost(main, 'rfq');
+        if (!host) {
+            classicRfq(main, params);
+            return;
+        }
+        if (preset && !openId) {
+            /* Suppliers > Request a quote: a new request with the supplier
+             * as Supplier 1 */
+            Rpc.searchRead('party.party', [['id', '=', parseInt(preset[1],
+                10)]], ['rec_name', 'code']).then(function (rows) {
+                    rfqModern(host, null, rows.length ? {id: rows[0].id,
+                        rec_name: rows[0].rec_name} : null);
+                }, function () {
+                    rfqModern(host, null, null);
+                });
+            return;
+        }
+        rfqModern(host, openId, null);
+    };
+
+    function classicRfq(main, params) {
         var openId = params && params[0] ? parseInt(params[0], 10) : null;
         var statusLabel = {};
         RFQ_STATUS.forEach(function (s) {
@@ -3714,6 +5652,11 @@
                 }
             },
             extra: [
+                {label: 'New View', title: 'The modern request for quote page',
+                    onclick: function (data) {
+                        UI.setDocView('rfq', 'modern');
+                        Screens.jsRfq(main, data && data.id ? [data.id] : []);
+                    }},
                 {label: 'Print', visible: function (data) {
                     return Boolean(data);
                 }, onclick: function (data, api) {
@@ -3741,7 +5684,7 @@
                 }
             }, UI.showError);
         }
-    };
+    }
 
     /* ======================================================================
      * Receiving
@@ -3815,10 +5758,1042 @@
             }}]);
     }
 
-    Screens.jsReceiving = function (main) {
+    /* ---- Receiving, modern view (UI.docPage) ---------------------------
+     * Nothing open: what waits to be received (late first) and what came
+     * in lately. A receiver as a document: the supplier as headline, the
+     * lines received, the three-way match of the order, this receipt and
+     * the supplier's bill; Receive, Enter bill, Return and Cancel as
+     * actions. A receiver is opened by its key: 'new:<purchase>',
+     * 'receipt:<id>' or 'return:<id>' (a plain id: a receipt). Loaded and
+     * saved with the classic window's RPCs (js_receiver_*). */
+
+    function receiverKey(key) {
+        if (typeof key === 'number' || /^\d+$/.test(String(key))) {
+            return {kind: 'receipt', id: parseInt(key, 10)};
+        }
+        var m = /^(new|receipt|return):(\d+)$/.exec(String(key || ''));
+        return m ? {kind: m[1], id: parseInt(m[2], 10)} : null;
+    }
+
+    /* The receiver with its order (js_po_get) and the supplier's bill in
+     * accounting (account.invoice of the receiver's Invoice ID); id is the
+     * key, shipment the receiver's own id */
+    function loadReceiver(key) {
+        var k = receiverKey(key);
+        if (!k) {
+            return Promise.reject({message: 'No such receiver: ' + key});
+        }
+        var get = k.kind === 'new' ? Rpc.desk('js_receiver_new', [k.id]) :
+            Rpc.desk('js_receiver_get', [k.kind, k.id]);
+        return get.then(receiverExtras);
+    }
+
+    function receiverExtras(d) {
+        d.shipment = d.id;
+        d.id = d.id ? d.kind + ':' + d.id : null;
+        d.lines = d.lines || [];
+        var po = d.purchase ? Rpc.desk('js_po_get', [d.purchase]).catch(
+            function () {
+                return null;
+            }) : Promise.resolve(null);
+        var bill = d.supplier_invoice && d.supplier ? Rpc.searchRead(
+            'account.invoice', [['type', '=', 'in'], ['party', '=',
+                d.supplier.id], ['OR', ['reference', '=', d.supplier_invoice],
+                ['number', '=', d.supplier_invoice]]], ['number', 'reference',
+                'invoice_date', 'total_amount', 'amount_to_pay', 'state'],
+            {limit: 1, order: [['id', 'DESC']]}).then(function (rows) {
+                return rows[0] || null;
+            }, function () {
+                return null;
+            }) : Promise.resolve(null);
+        return Promise.all([po, bill]).then(function (all) {
+            d.po = all[0];
+            d.bill = all[1];
+            d.poLines = {};
+            ((d.po && d.po.lines) || []).forEach(function (l) {
+                d.poLines[l.sequence] = l;
+            });
+            return d;
+        });
+    }
+
+    function receivingModern(main, openKey) {
+        var access = {};
+        var page, spec;
+        UI.access(['stock.shipment.in', 'stock.shipment.in.return',
+            'purchase.purchase']).then(function (a) {
+                access = a || {};
+                if (page) {
+                    page.render();
+                }
+            });
+        function can(model, right) {
+            return Boolean(access[model] && access[model][right]);
+        }
+        function canReceive() {
+            return can('stock.shipment.in', 'create');
+        }
+        function canReturn() {
+            return can('stock.shipment.in.return', 'create');
+        }
+        function mayWrite(d) {
+            return Boolean(d && d.shipment && can(d.kind === 'return' ?
+                'stock.shipment.in.return' : 'stock.shipment.in', 'write'));
+        }
+        function isNew(d) {
+            return d && !d.board && !d.transacted;
+        }
+        function live(d) {
+            return d && d.kind === 'receipt' && d.transacted &&
+                d.receiver_status !== 'cancelled';
+        }
+        function money(v) {
+            return UI.money(n0(v), true);
+        }
+        function amountOf(d, l) {
+            if (!isNew(d) && l.amount !== undefined && l.amount !== null) {
+                return n0(l.amount);
+            }
+            var q = isNew(d) ? n0(l.receive_quantity) : n0(l.quantity);
+            return Math.round((q * n0(l.unit_price) * (1 - n0(l.discount) /
+                100) + n0(l.fixed_charge)) * 100) / 100;
+        }
+        function total(d) {
+            return d.lines.reduce(function (a, l) {
+                return a + amountOf(d, l);
+            }, 0);
+        }
+        function poLine(d, l) {
+            return l.po_line_no !== null && l.po_line_no !== undefined ?
+                d.poLines[l.po_line_no] : null;
+        }
+        /* The order's price of a line (Jobshop's quoted price and trade
+         * discount) when the receiver's differs */
+        function priceGap(d, l) {
+            var p = poLine(d, l);
+            if (!p || d.kind !== 'receipt') {
+                return null;
+            }
+            var ordered = n0(p.list_unit_price !== undefined &&
+                p.list_unit_price !== null ? p.list_unit_price :
+                p.unit_price);
+            if (Math.abs(ordered - n0(l.unit_price)) > 0.00001 ||
+                    Math.abs(n0(p.trade_discount) - n0(l.discount)) >
+                    0.00001) {
+                return {price: ordered, discount: n0(p.trade_discount)};
+            }
+            return null;
+        }
+        function billGap(d) {
+            if (!d.bill) {
+                return null;
+            }
+            var diff = n0(d.bill.total_amount) - total(d);
+            return Math.abs(diff) > 0.005 ? diff : null;
+        }
+        function returned(d) {
+            return d.lines.reduce(function (a, l) {
+                return a + n0(l.returned_quantity);
+            }, 0);
+        }
+        function orderedAmount(d) {
+            var seen = {};
+            return d.lines.reduce(function (a, l) {
+                var p = poLine(d, l);
+                if (!p || seen[p.id]) {
+                    return a;
+                }
+                seen[p.id] = true;
+                return a + n0(p.amount);
+            }, 0);
+        }
+        function show(key) {
+            return page.load(key);
+        }
+        function print(d) {
+            Rpc.report('stock.shipment.in.restocking_list', [d.shipment])
+                .then(function (rep) {
+                    UI.openReport(rep, 'Receiver');
+                }, UI.showError);
+        }
+        function openPoOf(d) {
+            openPo(d.purchase, d.purchase_number);
+        }
+
+        /* Receive: the date, packing slip and status (and the bill if it
+         * came with the goods), then the quantities go into stock */
+        function receive(d) {
+            var lines = d.lines.filter(function (l) {
+                return n0(l.receive_quantity) > 0;
+            });
+            if (!lines.length) {
+                UI.toast('Enter the quantity of at least one line', 'error');
+                return;
+            }
+            UI.docEdit('Receive PO ' + d.purchase_number, [
+                {name: 'received_date', label: 'Received', type: 'date'},
+                {name: 'reference', label: 'Packing slip', type: 'char'},
+                {name: 'receiver_status', label: 'Receiver status',
+                    type: 'selection', options: RECEIVER_STATUS.slice(0, 2)},
+                {name: 'supplier_invoice', label: 'Supplier invoice ID (if ' +
+                    'the bill came with it)', type: 'char', wide: true},
+                {name: 'invoiced_date', label: 'Invoiced', type: 'date'},
+                {name: 'payment_due_date', label: 'Payment due',
+                    type: 'date'}], d, el('p.dp-muted', lines.length +
+                    ' line(s), ' + money(total(d)) + '. What is not ' +
+                    'received stays on order unless the line is closed ' +
+                    'short.')).then(function (v) {
+                        var values = plainValues(Object.assign({purchase:
+                            d.purchase, specifications: d.specifications},
+                            v));
+                        values.lines = lines.map(function (l) {
+                            return plainValues({move: l.move,
+                                receive_quantity: n0(l.receive_quantity),
+                                unit_price: l.unit_price, discount:
+                                l.discount, fixed_charge: l.fixed_charge,
+                                location: l.location ? l.location.id ||
+                                    l.location : null,
+                                close_short: Boolean(l.close_short)});
+                        });
+                        UI.service('js_receiver_receive', values).then(
+                            function (done) {
+                                UI.toast('Receiver ' + done.number +
+                                    ' received', 'ok');
+                                show('receipt:' + done.id).then(function () {
+                                    UI.confirm('Print', 'Print the ' +
+                                        'receiver?').then(function (ok) {
+                                            if (ok) {
+                                                print({shipment: done.id});
+                                            }
+                                        });
+                                });
+                            }, failed);
+                    }, function () {});
+        }
+
+        function enterBill(d) {
+            UI.docEdit('Supplier bill', [
+                {name: 'supplier_invoice', label: 'Supplier invoice ID',
+                    type: 'char', wide: true},
+                {name: 'invoiced_date', label: 'Invoiced', type: 'date'},
+                {name: 'payment_due_date', label: 'Payment due',
+                    type: 'date'}], d).then(function (v) {
+                        page.save(v).then(null, function () {});
+                    }, function () {});
+        }
+
+        function returnGoods(d) {
+            var item = {received_date: today(), reference: ''};
+            var fields = [
+                {name: 'received_date', label: 'Returned', type: 'date'},
+                {name: 'reference', label: 'RMA / reference', type: 'char'}];
+            var open = d.lines.filter(function (l) {
+                return n0(l.receive_quantity) - n0(l.returned_quantity) > 0;
+            });
+            open.forEach(function (l, i) {
+                var left = n0(l.receive_quantity) - n0(l.returned_quantity);
+                fields.push({name: 'q' + i, label: 'Line ' + l.line_no +
+                    ' · ' + (l.product ? UI.shortName('product.product',
+                        l.product.rec_name) : l.description) +
+                    ': quantity back (up to ' + num(left) + ' ' +
+                    UI.shortName('product.uom', l.unit) + ')', type: 'float',
+                    wide: true});
+            });
+            if (!open.length) {
+                UI.toast('Everything on this receiver went back already',
+                    'error');
+                return;
+            }
+            UI.docEdit('Return to ' + d.supplier.rec_name, fields, item,
+                el('p.dp-muted', 'The goods leave stock for the supplier; ' +
+                    'the order stays as it is. To expect them again, use ' +
+                    'Cancel receiver instead.')).then(function (v) {
+                    var lines = open.map(function (l, i) {
+                        return {move: l.move, receive_quantity: v['q' + i]};
+                    }).filter(function (x) {
+                        return n0(x.receive_quantity) > 0;
+                    });
+                    if (!lines.length) {
+                        UI.toast('Enter a quantity to give back', 'error');
+                        return;
+                    }
+                    UI.service('js_receiver_return', plainValues({receiver:
+                        d.shipment, received_date: v.received_date,
+                        reference: v.reference, receiver_status: 'approved',
+                        lines: lines})).then(function (back) {
+                            UI.toast('Return ' + back.number + ' done', 'ok');
+                            show('return:' + back.id);
+                        }, failed);
+                }, function () {});
+        }
+
+        function cancelReceiver(d) {
+            UI.confirm('Cancel receiver', 'Give back to the supplier all ' +
+                'that is left of receiver ' + d.number + ' and expect it ' +
+                'again on the order?').then(function (ok) {
+                    if (ok) {
+                        Rpc.desk('js_receiver_cancel', [d.shipment]).then(
+                            function (r) {
+                                UI.toast('Receiver ' + r.number +
+                                    ' cancelled', 'ok');
+                                page.reload();
+                            }, UI.showError);
+                    }
+                });
+        }
+
+        /* A line: the quantities and prices of a new receiver (kept here
+         * until Receive), the prices of a saved one until it is exported,
+         * else what it shows */
+        function editLine(d, l) {
+            var priced = isNew(d) || (mayWrite(d) && !d.receiver_exported &&
+                d.kind === 'receipt');
+            var fields = [
+                {name: 'description', label: 'Description', type: 'char',
+                    wide: true, readonly: true},
+                {name: 'receive_quantity', label: (isNew(d) ? 'Receive' :
+                    d.kind === 'return' ? 'Returned' : 'Received') + ' qty (' +
+                    UI.shortName('product.uom', l.unit) + ')', type: 'float',
+                    readonly: !isNew(d)},
+                {name: 'unit_price', label: 'Unit price', type: 'float',
+                    readonly: !priced},
+                {name: 'discount', label: 'Trade disc %', type: 'float',
+                    readonly: !priced},
+                {name: 'fixed_charge', label: 'Fixed charge', type: 'float',
+                    readonly: !priced},
+                {name: 'location', label: 'Location', type: 'many2one',
+                    model: 'stock.location', domain: [['type', '=',
+                        'storage']], readonly: !isNew(d)}];
+            if (isNew(d)) {
+                fields.push({name: 'close_short', label: 'Close short ' +
+                    '(nothing more expected on the line)', type: 'boolean'});
+            }
+            var p = poLine(d, l);
+            var info = el('p.dp-muted', [p ? 'PO line ' + p.sequence + ': ' +
+                num(p.quantity) + ' ordered at ' + money(
+                    p.list_unit_price !== undefined && p.list_unit_price !==
+                    null ? p.list_unit_price : p.unit_price) + (n0(
+                    p.trade_discount) ? ' less ' + num(p.trade_discount) +
+                    '%' : '') + ', ' + num(p.received) + ' received to date.' :
+                null, l.mfg_name || l.mfg_part_id ? ' Mfg: ' + [l.mfg_name,
+                    l.mfg_part_id].filter(Boolean).join(' ') + '.' : null,
+                (l.links || []).length ? ' Supplies ' + l.links.map(
+                    function (k) {
+                        return k.production;
+                    }).join(', ') + '.' : null].filter(Boolean).join(''));
+            UI.docEdit('Line ' + l.line_no + (l.product ? ' · ' +
+                UI.shortName('product.product', l.product.rec_name) : ''),
+                fields, l, info).then(function (v) {
+                    if (!priced) {
+                        return;
+                    }
+                    if (isNew(d)) {
+                        var picked = fields.filter(function (f) {
+                            return !f.readonly;
+                        });
+                        picked.forEach(function (f) {
+                            l[f.name] = v[f.name];
+                        });
+                        if (v.location && typeof v.location === 'number') {
+                            l.location = {id: v.location, rec_name: (l.location &&
+                                l.location.id === v.location) ?
+                                l.location.rec_name : String(v.location)};
+                            Rpc.searchRead('stock.location', [['id', '=',
+                                v.location]], ['rec_name']).then(
+                                function (rows) {
+                                    if (rows.length) {
+                                        l.location.rec_name =
+                                            rows[0].rec_name;
+                                        page.render();
+                                    }
+                                }, function () {});
+                        }
+                        page.render();
+                        return;
+                    }
+                    page.save({lines: lineValues(d).map(function (x) {
+                        return x.move === l.move ? Object.assign(x, {
+                            unit_price: v.unit_price, discount: v.discount,
+                            fixed_charge: v.fixed_charge}) : x;
+                    })}).then(null, function () {});
+                }, function () {});
+        }
+
+        function lineValues(d) {
+            return d.lines.map(function (l) {
+                return {move: l.move, unit_price: l.unit_price, discount:
+                    l.discount, fixed_charge: l.fixed_charge};
+            });
+        }
+
+        function fixedCharge(d) {
+            var lines = isNew(d) ? d.lines : lineValues(d).map(function (x, i) {
+                return Object.assign(x, {receive_quantity:
+                    d.lines[i].receive_quantity});
+            });
+            applyFixedCharges(lines.map(function (l) {
+                return {deleted: isNew(d) && !n0(l.receive_quantity),
+                    values: function () {
+                        return l;
+                    }, setFixed: function (v) {
+                        l.fixed_charge = v;
+                    }};
+            }), function () {
+                if (isNew(d)) {
+                    page.render();
+                } else {
+                    page.save({lines: lines.map(function (x) {
+                        return {move: x.move, unit_price: x.unit_price,
+                            discount: x.discount, fixed_charge:
+                                x.fixed_charge};
+                    })}).then(null, function () {});
+                }
+            });
+        }
+
+        /* ---- what waits (nothing open) ---- */
+        function board() {
+            var b = {id: null, board: true, rows: null, recent: null};
+            Promise.all([
+                Rpc.desk('js_receiving_activity', ['unreceived', null]),
+                Rpc.desk('js_receiving_activity', ['received', null]).catch(
+                    function () {
+                        return [];
+                    })]).then(function (all) {
+                        b.rows = all[0];
+                        b.recent = all[1].slice(0, 15);
+                        if (page && page.data() === b) {
+                            page.render();
+                        }
+                    }, UI.showError);
+            return b;
+        }
+        function due(rows, test) {
+            return (rows || []).filter(function (r) {
+                return test(r.desired_date);
+            });
+        }
+
+        var CARDS = [
+            {title: 'Receiver', rows: function (d) {
+                return [['Number', d.number || 'not received yet'],
+                    [d.kind === 'return' ? 'Returned' : 'Received',
+                        d.received_date ? UI.date(d.received_date) : null],
+                    [d.kind === 'return' ? 'RMA / reference' : 'Packing slip',
+                        d.reference],
+                    ['Status', RECEIVER_LABEL[d.receiver_status]],
+                    ['Received by', d.received_by]];
+            }, fields: [
+                {name: 'receiver_status', label: 'Receiver status',
+                    type: 'selection', options: RECEIVER_STATUS.slice(0, 2)}],
+                editable: function (d) {
+                    return mayWrite(d) && d.receiver_status !== 'cancelled';
+                }},
+            {title: 'Supplier bill', rows: function (d) {
+                return [['Invoice ID', d.supplier_invoice],
+                    ['Invoiced', d.invoiced_date ? UI.date(d.invoiced_date) :
+                        null],
+                    ['Payment due', d.payment_due_date ? UI.date(
+                        d.payment_due_date) : null],
+                    ['In accounting', d.bill ? d.bill.number + ' · ' +
+                        money(d.bill.total_amount) + (n0(
+                            d.bill.amount_to_pay) ? ', ' + money(
+                            d.bill.amount_to_pay) + ' open' : ', paid') :
+                        d.supplier_invoice ? 'not found' : null],
+                    ['Exported', d.receiver_exported ? 'Yes' + (
+                        d.receiver_exported_date ? ', ' + UI.date(
+                            d.receiver_exported_date) : '') : 'No']];
+            }, fields: [
+                {name: 'supplier_invoice', label: 'Supplier invoice ID',
+                    type: 'char'},
+                {name: 'invoiced_date', label: 'Invoiced', type: 'date'},
+                {name: 'payment_due_date', label: 'Payment due',
+                    type: 'date'},
+                {name: 'receiver_exported', label: 'Exported',
+                    type: 'boolean'}],
+                editable: mayWrite},
+            {title: 'Received from', rows: function (d) {
+                var a = d.receive_from || {};
+                return [['Name', a.name], ['Address', [a.address_1,
+                    a.address_2, [a.city, a.state, a.postal_code].filter(
+                        Boolean).join(' '), a.country].filter(Boolean)
+                    .join(', ')], ['Contact', a.contact], ['Phone', a.phone],
+                    ['E-mail', a.email]];
+            }},
+            {title: 'Order', rows: function (d) {
+                return [['Purchase order', d.purchase_number],
+                    ['Ordered', d.order_date ? UI.date(d.order_date) : null],
+                    ['Buyer', d.buyer],
+                    ['Terms', d.payment_term && d.payment_term.rec_name],
+                    ['Ship via', d.ship_via && UI.shortName('nline.ship_via',
+                        d.ship_via.rec_name)],
+                    ['FOB', d.fob_point && UI.shortName('nline.fob_point',
+                        d.fob_point.rec_name)],
+                    ['Tax group', d.tax_group && d.tax_group.rec_name]];
+            }},
+            {title: 'Specs', rows: function (d) {
+                return [['Specs', d.specifications ? String(d.specifications)
+                    .slice(0, 200) : null]];
+            }, fields: [{name: 'specifications', label: 'Specs',
+                type: 'text'}], editable: mayWrite}];
+
+        function trail(d) {
+            var rows = [];
+            if (d.purchase) {
+                rows.push({done: true, text: 'Ordered: PO ' +
+                    d.purchase_number, when: UI.date(d.order_date),
+                    onclick: function () {
+                        openPoOf(d);
+                    }});
+            }
+            rows.push({done: Boolean(d.transacted), text: d.kind ===
+                'return' ? 'Returned ' + d.number : d.transacted ?
+                'Received ' + d.number + (d.received_by ? ' by ' +
+                    d.received_by : '') : 'Not received yet', when:
+                d.transacted ? UI.date(d.received_date) : ''});
+            if (returned(d)) {
+                rows.push({done: true, text: num(returned(d)) +
+                    ' given back to the supplier'});
+            }
+            if (d.kind === 'receipt' && d.transacted) {
+                rows.push({done: Boolean(d.supplier_invoice), text: 'Billed' +
+                    (d.supplier_invoice ? ': ' + d.supplier_invoice : ''),
+                    when: d.invoiced_date ? UI.date(d.invoiced_date) :
+                        'not yet'});
+                rows.push({done: Boolean(d.receiver_exported), text:
+                    'Exported to accounting', when: d.receiver_exported ?
+                        UI.date(d.receiver_exported_date) : 'not yet'});
+            }
+            if (d.receiver_status === 'cancelled') {
+                rows.push({done: true, text: 'Cancelled: expected again on ' +
+                    'the order'});
+            }
+            ((d.po && d.po.receivers) || []).forEach(function (r) {
+                if (r.kind + ':' + r.id !== d.id) {
+                    rows.push({text: (r.kind === 'return' ? 'Return ' :
+                        'Other receiver ') + r.number + ' · ' + money(
+                            r.amount), when: UI.date(r.date), onclick:
+                        function () {
+                            show(r.kind + ':' + r.id);
+                        }});
+                }
+            });
+            if (d.shipment) {
+                rows.push({text: 'Notes', onclick: function () {
+                    var pane = el('div', {style: {minWidth: '480px'}});
+                    UI.notesTab(pane, d.kind === 'return' ?
+                        'stock.shipment.in.return' : 'stock.shipment.in',
+                        d.shipment, mayWrite(d));
+                    UI.modal('Notes: receiver ' + d.number, pane);
+                }});
+            }
+            return rows;
+        }
+
+        spec = {
+            title: 'Receiver',
+            crumbs: ['Purchasing', 'Receiving'],
+            model: 'stock.shipment.in', label: 'Receiver ID',
+            domain: [['state', '=', 'done']],
+            order: [['effective_date', 'DESC'], ['id', 'DESC']],
+            openId: openKey,
+            load: function (key) {
+                return loadReceiver(key).then(function (d) {
+                    spec.cards = CARDS;
+                    spec.trail = trail;
+                    return d;
+                });
+            },
+            values: function (d) {
+                return {kind: d.kind, id: d.shipment, receiver_status:
+                    d.receiver_status, supplier_invoice: d.supplier_invoice,
+                    invoiced_date: d.invoiced_date, payment_due_date:
+                    d.payment_due_date, receiver_exported:
+                    d.receiver_exported, specifications: d.specifications,
+                    lines: lineValues(d)};
+            },
+            save: function (values) {
+                return UI.service('js_receiver_save', plainValues(values))
+                    .then(receiverExtras);
+            },
+            blank: function () {
+                spec.cards = [];
+                spec.trail = null;
+                return board();
+            },
+            head: function (d) {
+                if (d.board) {
+                    var late = due(d.rows, function (x) {
+                        return x && x < today();
+                    }).length;
+                    var now = due(d.rows, function (x) {
+                        return x === today();
+                    }).length;
+                    return {title: 'Receiving', sub: d.rows ? [
+                        d.rows.length + ' orders to receive',
+                        late ? {text: late + ' late', tone: 'bad',
+                            icon: 'clock'} : null,
+                        now ? {text: now + ' due today', tone: 'warn'} :
+                            null] : ['Loading…']};
+                }
+                return {
+                    title: d.supplier ? d.supplier.rec_name : 'Receiver',
+                    chips: d.supplier_code ? [d.supplier_code] : [],
+                    sub: [d.shipment ? (d.kind === 'return' ? 'Return ' :
+                        'Receiver ') + d.number : 'New receiver, not ' +
+                        'received yet', d.purchase_number ? 'PO ' +
+                        d.purchase_number : null,
+                        d.transacted ? (d.kind === 'return' ? 'returned ' :
+                            'received ') + UI.date(d.received_date) +
+                            (d.received_by ? ' by ' + d.received_by : '') :
+                            null,
+                        d.reference ? (d.kind === 'return' ? 'RMA ' :
+                            'slip ') + d.reference : null],
+                    amount: {value: money(total(d)), label: d.lines.length +
+                        ' lines' + (isNew(d) ? ' to receive' : '')}
+                };
+            },
+            status: function (d) {
+                if (d.board) {
+                    return [];
+                }
+                if (isNew(d)) {
+                    return [{text: 'Not received', tone: 'warn'}];
+                }
+                var tone = {approved: 'ok', unapproved: 'warn', cancelled:
+                    'bad'}[d.receiver_status];
+                return [d.kind === 'return' ? {text: 'Return', tone:
+                    'accent'} : null, {text: RECEIVER_LABEL[
+                    d.receiver_status] || '', tone: tone},
+                    d.kind === 'receipt' ? (d.supplier_invoice ? {text:
+                        'Billed ' + d.supplier_invoice, tone: billGap(d) ?
+                            'warn' : null} : {text: 'Not billed'}) : null,
+                    d.receiver_exported ? {text: 'Exported'} : null]
+                    .filter(Boolean);
+            },
+            actions: function (d) {
+                if (d.board) {
+                    return [{label: 'Refresh', onclick: function () {
+                        page.clear();
+                    }}];
+                }
+                if (isNew(d)) {
+                    return [canReceive() ? {label: 'Receive', key: 'r',
+                        primary: true, onclick: receive} : null];
+                }
+                return [
+                    d.kind === 'receipt' ? {label: 'Print', key: 'p',
+                        onclick: print} : null,
+                    live(d) && mayWrite(d) ? {label: 'Enter bill', key: 'b',
+                        primary: !d.supplier_invoice, onclick: enterBill} :
+                        null,
+                    live(d) && canReturn() ? {label: 'Return', onclick:
+                        returnGoods} : null];
+            },
+            more: function (d) {
+                if (d.board) {
+                    return [{label: 'Classic view', onclick: function () {
+                        toClassic(main, 'receiving', 'jsReceiving', []);
+                    }}];
+                }
+                return [
+                    d.purchase ? {label: 'Open purchase order', onclick:
+                        function () {
+                            openPoOf(d);
+                        }} : null,
+                    d.purchase ? {label: 'Purchase order lines', onclick:
+                        function () {
+                            poLinesDialog('Purchase Order Lines - ' +
+                                d.purchase_number, [['purchase', '=',
+                                    d.purchase]]);
+                        }} : null,
+                    d.supplier ? {label: 'Open supplier', onclick:
+                        function () {
+                            UI.openScreen('supplier-window/' + d.supplier.id,
+                                'Supplier');
+                        }} : null,
+                    (isNew(d) && canReceive()) || (live(d) && mayWrite(d) &&
+                        !d.receiver_exported) ? {label: 'Apply a fixed charge',
+                        onclick: function () {
+                            fixedCharge(d);
+                        }} : null,
+                    live(d) && canReturn() && mayWrite(d) ? {label: 'Cancel ' +
+                        'receiver', onclick: function () {
+                            cancelReceiver(d);
+                        }} : null,
+                    {label: 'All receiving', onclick: function () {
+                        page.clear();
+                    }},
+                    '-',
+                    {label: 'Classic view', onclick: function () {
+                        toClassic(main, 'receiving', 'jsReceiving', []);
+                    }}].filter(Boolean);
+            },
+            attention: function (d) {
+                var out = [];
+                if (d.board) {
+                    var late = due(d.rows, function (x) {
+                        return x && x < today();
+                    });
+                    if (late.length) {
+                        out.push({tone: 'bad', icon: 'clock', title:
+                            late.length + (late.length > 1 ?
+                                ' orders are' : ' order is') + ' late',
+                            detail: late.slice(0, 4).map(function (r) {
+                                return 'PO ' + r.number + ' ' +
+                                    r.supplier_name + ' (' + r.message + ')';
+                            }).join(', '), action: canReceive() ? {label:
+                                'Receive PO ' + late[0].number, onclick:
+                                function () {
+                                    show('new:' + late[0].purchase);
+                                }} : null});
+                    }
+                    return out;
+                }
+                if (isNew(d)) {
+                    d.lines.forEach(function (l) {
+                        if (n0(l.receive_quantity) > 0 && !n0(l.unit_price) &&
+                                !n0(l.fixed_charge)) {
+                            out.push({tone: 'warn', title: 'Line ' +
+                                l.line_no + ' has no price', detail: 'It ' +
+                                'would go into stock at $0.', action: {label:
+                                    'Set price', onclick: function () {
+                                        editLine(d, l);
+                                    }}});
+                        }
+                        var q = n0(l.receive_quantity);
+                        if (q > 0 && q < n0(l.quantity) && !l.close_short) {
+                            out.push({tone: 'info', title: 'Line ' +
+                                l.line_no + ' comes in short', detail:
+                                num(q) + ' of ' + num(l.quantity) + ': the ' +
+                                'rest stays on order.', action: {label:
+                                    'Close short', onclick: function () {
+                                        l.close_short = true;
+                                        page.render();
+                                    }}});
+                        }
+                    });
+                    if (!d.lines.length) {
+                        out.push({tone: 'info', title: 'Nothing left to ' +
+                            'receive on this order'});
+                    }
+                    return out;
+                }
+                if (d.receiver_status === 'cancelled') {
+                    out.push({tone: 'bad', title: 'Cancelled', detail: 'What ' +
+                        'was left went back; the order expects it again.'});
+                    return out;
+                }
+                if (d.receiver_status === 'unapproved' && mayWrite(d)) {
+                    out.push({tone: 'warn', title: 'Not approved', action: {
+                        label: 'Approve', onclick: function () {
+                            page.save({receiver_status: 'approved'}).then(null,
+                                function () {});
+                        }}});
+                }
+                if (d.kind !== 'receipt') {
+                    return out;
+                }
+                d.lines.forEach(function (l) {
+                    var gap = priceGap(d, l);
+                    if (gap) {
+                        out.push({tone: 'warn', title: 'Line ' + l.line_no +
+                            ' was received at ' + money(l.unit_price) +
+                            (n0(l.discount) ? ' less ' + num(l.discount) +
+                                '%' : ''), detail: 'The order says ' + money(
+                            gap.price) + (gap.discount ? ' less ' +
+                                num(gap.discount) + '%' : '') + '.',
+                            action: mayWrite(d) && !d.receiver_exported ? {
+                                label: 'Use the order\'s price', onclick:
+                                    function () {
+                                        page.save({lines: lineValues(d).map(
+                                            function (x) {
+                                                return x.move === l.move ?
+                                                    Object.assign(x, {
+                                                        unit_price:
+                                                            gap.price,
+                                                        discount:
+                                                            gap.discount}) :
+                                                    x;
+                                            })}).then(null, function () {});
+                                    }} : null});
+                    }
+                });
+                if (!d.supplier_invoice) {
+                    out.push({tone: 'warn', title: 'No supplier bill yet',
+                        detail: 'Enter the supplier\'s invoice ID when the ' +
+                            'bill comes, to close the three-way match.',
+                        action: mayWrite(d) ? {label: 'Enter bill', onclick:
+                            function () {
+                                enterBill(d);
+                            }} : null});
+                } else if (billGap(d)) {
+                    out.push({tone: 'warn', title: 'Bill ' + d.bill.number +
+                        ' is ' + money(d.bill.total_amount) + ', the ' +
+                        'receiver ' + money(total(d)), detail: 'A bill may ' +
+                            'cover other receivers or charges too: check ' +
+                            'before paying.'});
+                } else if (!d.bill) {
+                    out.push({tone: 'info', title: 'Bill ' +
+                        d.supplier_invoice + ' is not in accounting yet',
+                        detail: 'No supplier bill of ' + d.supplier.rec_name +
+                            ' has that number or reference.'});
+                }
+                return out;
+            },
+            tracker: function (d) {
+                if (d.board || d.kind !== 'receipt' || !d.po) {
+                    return null;
+                }
+                var billed = d.bill ? n0(d.bill.total_amount) : null;
+                return {title: 'Order, receipt and bill', note: 'three-way ' +
+                    'match', steps: [
+                    {label: 'Ordered (these lines)', value: money(
+                        orderedAmount(d)), state: 'done'},
+                    {label: 'Received here', value: money(total(d)), state:
+                        d.transacted ? (d.receiver_status === 'cancelled' ?
+                            'bad' : 'done') : 'now'},
+                    {label: 'Billed', value: billed !== null ? money(billed) +
+                        ' (' + d.bill.number + ')' : d.supplier_invoice ||
+                        'no', state: billed !== null ? (billGap(d) ? 'bad' :
+                            'done') : d.supplier_invoice ? 'now' : 'todo'},
+                    {label: 'Exported', value: d.receiver_exported ? UI.date(
+                        d.receiver_exported_date) || 'yes' : 'no', state:
+                        d.receiver_exported ? 'done' : 'todo'}]};
+            },
+            sections: [
+                {title: 'Waiting to be received', note: 'click an order to ' +
+                    'receive it', visible: function (d) {
+                    return d.board;
+                }, render: function (pane, d) {
+                    if (!d.rows) {
+                        pane.appendChild(el('p.dp-muted.dp-pad', 'Loading…'));
+                        return;
+                    }
+                    UI.docLines(pane, {
+                        items: d.rows,
+                        kind: function (r) {
+                            return {icon: 'truck', tone: r.late ? 'bad' :
+                                'part'};
+                        },
+                        title: function (r) {
+                            return r.supplier_name;
+                        },
+                        chips: function (r) {
+                            return ['PO ' + r.number, r.supplier_code !==
+                                r.supplier_name ? r.supplier_code : null,
+                                r.message ? {text: r.message, tone: r.late ?
+                                    'bad' : r.message === 'Due today' ?
+                                    'warn' : null} : null];
+                        },
+                        right: function (r) {
+                            return [UI.date(r.desired_date), r.lines +
+                                ' line(s) open'];
+                        },
+                        onclick: canReceive() ? function (r) {
+                            show('new:' + r.purchase);
+                        } : null,
+                        empty: 'Nothing to receive: no released order waits.'
+                    });
+                }},
+                {title: 'Received lately', visible: function (d) {
+                    return d.board && (d.recent || []).length > 0;
+                }, render: function (pane, d) {
+                    UI.docLines(pane, {
+                        items: d.recent,
+                        kind: function (r) {
+                            return r.kind === 'return' ? {icon: 'truck', tone:
+                                'charge'} : {icon: 'ok', tone: 'ok'};
+                        },
+                        title: function (r) {
+                            return r.supplier_name;
+                        },
+                        chips: function (r) {
+                            return [(r.kind === 'return' ? 'Return ' :
+                                'Receiver ') + r.receiver_number,
+                                r.number ? 'PO ' + r.number : null,
+                                r.receiver_status !== 'approved' ? {text:
+                                    RECEIVER_LABEL[r.receiver_status] || '',
+                                    tone: 'warn'} : null];
+                        },
+                        right: function (r) {
+                            return [UI.date(r.date), ''];
+                        },
+                        onclick: function (r) {
+                            show(r.kind + ':' + r.receiver);
+                        }
+                    });
+                }},
+                {title: 'What came in', note: function (d) {
+                    return isNew(d) ? 'Click a line to change its quantity ' +
+                        'or price; nothing is saved until Receive' :
+                        d.kind === 'return' ? 'What went back' :
+                            'Click a line for its details';
+                }, visible: function (d) {
+                    return !d.board;
+                }, render: function (pane, d) {
+                    UI.docLines(pane, {
+                        items: d.lines,
+                        kind: function (l) {
+                            return l.line_type === 'service' ? {icon:
+                                'service', tone: 'service'} : {icon: 'part',
+                                tone: 'part'};
+                        },
+                        title: function (l) {
+                            return l.description || (l.product &&
+                                l.product.rec_name) || 'Line ' + l.line_no;
+                        },
+                        chips: function (l) {
+                            var c = [];
+                            if (l.product) {
+                                c.push(UI.shortName('product.product',
+                                    l.product.rec_name));
+                            }
+                            if (l.po_line_no !== null && l.po_line_no !==
+                                    undefined) {
+                                c.push('PO line ' + l.po_line_no);
+                            }
+                            if (l.location) {
+                                c.push(UI.shortName('stock.location',
+                                    l.location.rec_name));
+                            }
+                            if (!n0(l.unit_price) && !n0(l.fixed_charge)) {
+                                c.push({text: 'no price', tone: 'warn'});
+                            }
+                            if (priceGap(d, l)) {
+                                c.push({text: 'price differs from PO', tone:
+                                    'warn'});
+                            }
+                            if (n0(l.returned_quantity)) {
+                                c.push({text: num(l.returned_quantity) +
+                                    ' returned', tone: 'warn'});
+                            }
+                            if (l.close_short) {
+                                c.push({text: 'close short', tone: 'warn'});
+                            }
+                            return c;
+                        },
+                        progress: function (l) {
+                            if (isNew(d)) {
+                                return {done: n0(l.receive_quantity), total:
+                                    n0(l.quantity), label: 'receiving ' +
+                                    num(l.receive_quantity || 0) + ' of ' +
+                                    num(l.quantity) + ' open'};
+                            }
+                            var p = poLine(d, l);
+                            return p ? {done: n0(p.received), total:
+                                n0(p.quantity), label: num(p.received) +
+                                ' of ' + num(p.quantity) + ' ordered in'} :
+                                null;
+                        },
+                        right: function (l) {
+                            var q = isNew(d) ? l.receive_quantity : l.quantity;
+                            return [money(amountOf(d, l)), num(q || 0) + ' ' +
+                                UI.shortName('product.uom', l.unit) + ' × ' +
+                                money(l.unit_price), !n0(l.unit_price) &&
+                                !n0(l.fixed_charge) ? 'warn' : null];
+                        },
+                        onclick: function (l) {
+                            editLine(d, l);
+                        },
+                        footer: [d.lines.length + ' lines', 'Total ' +
+                            money(total(d))]
+                    });
+                }},
+                {title: 'Three-way match', note: 'order · this receipt · ' +
+                    'bill', visible: function (d) {
+                    return !d.board && d.kind === 'receipt' && Boolean(d.po) &&
+                        d.lines.length > 0;
+                }, render: function (pane, d) {
+                    var body = el('tbody');
+                    d.lines.forEach(function (l) {
+                        var p = poLine(d, l);
+                        var gap = priceGap(d, l);
+                        var q = isNew(d) ? l.receive_quantity : l.quantity;
+                        body.appendChild(el('tr',
+                            el('td', String(l.line_no)),
+                            el('td', l.product ? el('span', {title:
+                                l.product.rec_name}, UI.shortName(
+                                    'product.product', l.product.rec_name)) :
+                                l.description),
+                            el('td.num', p ? num(p.quantity) + ' @ ' + money(
+                                p.list_unit_price !== undefined &&
+                                p.list_unit_price !== null ?
+                                    p.list_unit_price : p.unit_price) : '—'),
+                            el('td.num', num(q || 0) + ' @ ' + money(
+                                l.unit_price)),
+                            el('td.num', p ? num(p.received) + ' of ' +
+                                num(p.quantity) : '—'),
+                            el('td', gap ? UI.docChip('price differs',
+                                'warn') : p ? UI.docChip('matches', 'ok') :
+                                '')));
+                    });
+                    var gapBill = billGap(d);
+                    body.appendChild(el('tr', el('td', ''), el('td',
+                        el('b', 'Bill')), el('td.num', money(
+                            orderedAmount(d))), el('td.num', money(total(d))),
+                        el('td.num', d.bill ? money(d.bill.total_amount) +
+                            ' (' + d.bill.number + ')' : d.supplier_invoice ||
+                            'not billed'),
+                        el('td', d.bill ? (gapBill ? UI.docChip(
+                            'differs by ' + money(gapBill), 'warn') :
+                            UI.docChip('matches', 'ok')) : '')));
+                    pane.appendChild(el('div.table-wrap', el('table.data',
+                        el('thead', el('tr', el('th', 'Line'), el('th',
+                            'Part'), el('th.num', 'Ordered'), el('th.num',
+                            'Received here'), el('th.num',
+                            'Received to date'), el('th', 'Check'))),
+                        body)));
+                }}],
+            cards: [],
+            trail: null,
+            keys: {
+                r: {label: 'receive', run: function (d) {
+                    if (isNew(d) && canReceive()) {
+                        receive(d);
+                    }
+                }},
+                p: {label: 'print', run: function (d) {
+                    if (d.shipment && d.kind === 'receipt') {
+                        print(d);
+                    }
+                }},
+                b: {label: 'enter bill', run: function (d) {
+                    if (live(d) && mayWrite(d)) {
+                        enterBill(d);
+                    }
+                }}
+            },
+            classic: function () {
+                toClassic(main, 'receiving', 'jsReceiving', []);
+            }
+        };
+        page = UI.docPage(main, spec);
+        return page;
+    }
+
+    Screens.jsReceiving = function (main, params) {
+        var host = docHost(main, 'receiving');
+        if (!host) {
+            classicReceiving(main, params);
+            return;
+        }
+        var query = (global.location.hash.split('?')[1] || '');
+        var open = /(receipt|return)=(\d+)/.exec(query);
+        var po = /purchase=(\d+)/.exec(query);
+        receivingModern(host, open ? open[1] + ':' + open[2] : po ?
+            'new:' + po[1] : null);
+    };
+
+    function classicReceiving(main) {
         css();
         var query = (global.location.hash.split('?')[1] || '');
         var form = UI.form(main, {title: 'Receiving', extra: [
+            {label: 'New View', title: 'The modern receiving page',
+                onclick: function () {
+                    UI.setDocView('receiving', 'modern');
+                    Screens.jsReceiving(main);
+                }},
             {label: 'Refresh', title: 'Refresh (F5)', onclick: function () {
                 loadActivity();
             }},
@@ -4598,7 +7573,7 @@
             p.appendChild(el('p.muted', 'Double-click an order in ' +
                 'Receiving Activity.'));
         });
-    };
+    }
 
     /* ======================================================================
      * Services

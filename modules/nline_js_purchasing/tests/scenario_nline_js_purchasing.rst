@@ -335,6 +335,15 @@ Order 50 from supplier 2::
     >>> rfq['status'], rfq['lines'][0]['po_line_exists']
     ('closed', True)
 
+A new request skips the IDs Jobshop's imported requests already hold::
+
+    >>> RFQ = Model.get('nline.rfq')
+    >>> imported = RFQ(number='00002')
+    >>> imported.save()
+    >>> Desk.js_rfq_save({'supplier_1': mill.id, 'lines': []},
+    ...     config.context)['number']
+    '00003'
+
 A purchase order not released yet can be deleted::
 
     >>> Desk.js_po_delete(made['id'], config.context)

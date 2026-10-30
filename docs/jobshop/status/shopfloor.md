@@ -243,3 +243,33 @@ and `#/time-attendance` (nline_jobshop).
   Description has it).
 - Integrator: nothing new (JS only; no fields, no module update).
 
+
+## Modern pages (29 Oct 2026, owner's design; `docpage.js`)
+
+- Employees (`employees/<id>`, `employees/0` = new) and Shop Resources
+  (`resources`, `resources/<id>`) open the modern page by default
+  (`employeeModern`, `resourceModern` in `shopfloor.js`); More > Classic
+  view switches to Jobshop's window (unchanged), whose ribbon has "New
+  View" back (per browser: `UI.docView('employee' | 'resource')`). The
+  Employees list (`employees`) stays Jobshop's list; a double-click opens
+  the page.
+- Employee: name, Clock No and Shift chips; title · phone · hired; base
+  cost per hour on the right; status Active/Inactive, own or shop calendar,
+  calendar exceptions. Actions Attendance (T) and Calendars (C: Jobshop's
+  calendar grids in a dialog, saved with its Save). Attention: inactive but
+  with labor in the last 30 days, terminated but active, no calendar of
+  their own, no labor cost. Section Recent labor (saved labor tickets, 90
+  days, `sf_labor_tickets`). Cards Personal, Pay and burden (pencil), and
+  Calendar (the week, read-only). Trail: created, modified, hired, last
+  labor, terminated, Notes.
+- Shop resource: description, ID chip; type · schedule method · category;
+  run labor/hr on the right. Main action Where used (W); Reset Operation
+  Costs under "•••" (write right). Attention: inactive with open
+  operations, no capacity, no labor rate, no description. Section Current
+  load (open operations on unclosed work orders, from
+  `sf_resource_where_used`). Cards Resource, Capacity and scheduling,
+  Costs (pencils), Calendar (read-only). Saving runs `sf_resource_setup`
+  as the classic window does.
+- Material Issues, WO Receipts, Labor Entry, Labor Data Collection, Time
+  and Attendance stay entry grids (unchanged; checked they still open).
+- No server change.

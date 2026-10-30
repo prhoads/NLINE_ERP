@@ -350,3 +350,42 @@ Details in `analysis/purchasing.md` "Screen review fixes".
   order's Purchase From copy (reports are shared; suggest the integrator
   uses `purchase_from_*` when set).
 
+
+## Modern document pages (29 Oct 2026, owner's design, UI.docPage)
+
+Every purchasing document window opens on the modern page; More >
+Classic view (or the top bar's Classic view) shows Jobshop's window, whose
+ribbon has **New View** back. The choice is per window and browser
+(`UI.docView`: `po`, `rfq`, `receiving`, `supplier`).
+
+| Window | Modern page |
+|---|---|
+| Purchase Order (`poModern`, integrator) | refined, see below |
+| Request For Quote (`rfqModern`) | headline = what is quoted (first line's part, "and N more"), part ID chip; sub = RFQ no., date/buyer, quotes due (amber today, red late), suppliers; amount = best quotes at the first quantity. Chips: status, printed, "n of m quotes in". Actions: Print, Mark sent (unreleased), Enter quote, Create PO (best supplier, Jobshop's Preview/Create PO dialog). Attention: no supplier, nothing to quote, not sent, no quote from X by the due date, quote expired, lines without any quote, all quotes in. Tracker Requested → Sent → Quoted → Ordered → Closed. Lines (part, quantities, "on PO n", n of m quoted, best price); line dialog = part, description, quote quantities "1, 10, 50", wanted by, mfg, status, remove. **Quotes side by side** (each line × quantity, a column per supplier, "best" marked when two or more quoted; the supplier's name opens Enter quote). Enter quote = ref, quoted on, good until, a unit price + lead time per line and quantity (ticks Quote Received). Cards Suppliers, Delivery, Terms and dates (incl. RFQ ID), Specs. Trail: requested, printed, sent, each supplier's quote, the POs made, closed, Notes. More: change status, enter quote from, keep quoted prices on file (= Update Supplier Pricing), open supplier, delete. Keys P, A, Q, O. |
+| Receiving (`receivingModern`) | nothing open: **what waits** (released orders to receive, late first in red, click = a new receiver) and what came in lately (click = the receiver). A receiver as a document: headline = supplier, ID chip; sub = receiver / return no., PO, received date by, packing slip; amount = its total. Chips: status, Return, Billed INV / Not billed, Exported. **Three-way match**: tracker Ordered (these lines) → Received here → Billed (the bill in accounting: account.invoice of the supplier whose number or reference = the receiver's Invoice ID) → Exported, and a table per line (ordered qty @ price, received here, received to date, check) with the bill row. Attention: line without price, short line (Close short), not approved (Approve), received price ≠ the order's (Use the order's price), no bill yet (Enter bill), bill amount ≠ receiver, bill not in accounting. Actions: Receive (date, packing slip, status, the bill if it came with the goods), Print, Enter bill, Return (a quantity per line, RMA), More: Apply a fixed charge, Cancel receiver, open PO / PO lines / supplier, All receiving. A new receiver's lines change in their dialog (qty, price, disc, fixed charge, location, close short) and nothing is saved until Receive. Cards Receiver, Supplier bill, Received from, Order, Specs; trail: ordered, received, returned, billed, exported, cancelled, the order's other receivers, Notes. Keys R, P, B. Opened by `receiving?purchase=`, `?receipt=`, `?return=` as before. |
+| Suppliers (`supplierModern`) | master record: name + ID chip; sub = supplier since, last order, buyer; amount = open balance · terms. Chips Active/Inactive, Tax exempt, Exported, n open orders. Attention: inactive (Make active), no terms, no contact, no address, late orders (Open PO). Section **Open purchase orders** (status, ordered, wanted/promised with late in red, received of total; Start a purchase order). Cards Address, Contact, Purchasing defaults, Accounting, Specs and instructions, Other (the user fields N-Line fills). Trail: account opened, the last 5 orders, the last 5 receipts, Notes. Actions New purchase order (O), Request a quote (Q), Web site; More: make (in)active, prices / addresses (classic tabs), Classic view. New supplier: name + ID (blank: next number). Saved with party.party write of the changed fields only. |
+
+Shared fixes in `purchasing.js` while doing it:
+
+- **Bug:** `poModern`'s `num(value)` (2nd declaration in the same scope)
+  replaced the file's `num(value, digits)` formatter for every classic
+  window: blank numbers showed as 0 (receiver Disc %/Fixed Charge, RFQ
+  prices, links). The modern helper is now `n0`.
+- **Bug:** `poValues` sent the line's effective `unit_price` (after trade
+  discount and spread fixed charge) where `js_po_save` expects Jobshop's
+  quoted price: every save of an unreleased order with a discount or fixed
+  charge lowered its prices again. It now sends `list_unit_price`; the
+  line dialog edits it.
+- `poModern`: the line dialog / add a line / choose supplier no longer
+  change the shown order before the save is accepted; a preset supplier's
+  name is fetched for the new order's headline; rights unknown = nothing
+  offered (was: everything), cards without write right have no pencil.
+- `docHost(main, name)`: each modern page lives in its own box in #main,
+  so its single keys stop when the screen changes (before: the docPage
+  key listener of a PO left open kept answering P / R / A on every later
+  screen and in its own Classic view); #main's `dp-main` look is removed
+  when the page leaves. `toClassic` opens the classic window in #main.
+- Server: `nline.rfq.create` skips RFQ IDs already used by imported
+  requests (local test copy: a new RFQ failed with "The RFQ ID must be
+  unique" because the sequence is behind the imported numbers). Scenario
+  test added. Needs the module update.

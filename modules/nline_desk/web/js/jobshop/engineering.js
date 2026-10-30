@@ -911,10 +911,14 @@
 
     /* cards(pane, {kind: 'production'|'bom', id, perm, title, onHeader(),
      * masters: true (the drag-a-master panel), onChange(tree)}) ->
-     * {reload, menu(name), tree()} */
+     * {reload, menu(name), tree()}
+     * The modern page's options: modern (the calmer style), tree (the tree
+     * already read: no second read), onSelect(n), keep (a {kind, id,
+     * step_id} card selected at first) */
     function cards(pane, opts) {
         var perm = opts.perm;
         var kind = opts.kind;
+        var modern = Boolean(opts.modern);
         var tree = null, shown = null, sizer = null, zoom = 1;
         var selected = null;
         var rightInfo = false, dataTips = false;
@@ -968,7 +972,8 @@
             });
         }
         pane.appendChild(mastersPanel ? el('div.wo-layout', mastersPanel,
-            el('div', toolbar, canvasWrap)) : el('div', toolbar, canvasWrap));
+            el('div', toolbar, canvasWrap)) : el('div' + (modern ?
+                '.nl-eng-modern' : ''), toolbar, canvasWrap));
 
         var masters = [];
         function loadMasters(text) {
@@ -1022,6 +1027,9 @@
             if (result && typeof result === 'object' && result.cards) {
                 tree = result;
                 render();
+                if (opts.onChange) {
+                    opts.onChange(result);
+                }
                 return result;
             }
             return load();
@@ -1985,7 +1993,7 @@
                 }}]);
         }
 
-        function reveal(target) {
+        function reveal(target, quiet) {
             if (!target || !target.el) {
                 return;
             }
@@ -1993,6 +2001,9 @@
                 canvasWrap.clientWidth / 3);
             canvasWrap.scrollTop = Math.max(0, (target.y + target.h) * zoom -
                 canvasWrap.clientHeight + 40);
+            if (quiet) {
+                return;
+            }
             target.el.classList.remove('flash');
             void target.el.offsetWidth;
             target.el.classList.add('flash');
@@ -2009,6 +2020,9 @@
             selected = n;
             if (n && n.el) {
                 n.el.classList.add('selected');
+            }
+            if (opts.onSelect) {
+                opts.onSelect(n);
             }
         }
 
@@ -2074,7 +2088,9 @@
             if (kind === 'bom' && d.order_status === 'inactive') {
                 head += ' · Inactive';
             }
-            head = '(' + (LETTER[statusOf(d)] || 'U') + ') ' + head;
+            if (!modern) {
+                head = '(' + (LETTER[statusOf(d)] || 'U') + ') ' + head;
+            }
             return el('div.node.prod', {style: pos(n), title: (parts.code ?
                 parts.code + ' ' : '') + parts.name},
                 el('div.hd', el('span.t', {title: head}, head), icons(d, n)),
@@ -2095,11 +2111,14 @@
             var closed = w.state === 'done' || w.state === 'finished';
             return el('div.node.card.op' + (w.outside ? '.outside' : '') +
                 (closed ? '.closed' : ''), {style: pos(n)},
-                el('div.hd', cardHead('(' + (closed ? 'C' :
+                el('div.hd', modern ? [el('b.nl-eng-seq', w.sequence !== null ?
+                    String(w.sequence) : ''), cardHead(w.work_center ||
+                    w.operation)] : cardHead('(' + (closed ? 'C' :
                     LETTER[statusOf(n.root)] || 'U') + ') ' + (w.sequence !==
                     null ? w.sequence + ' - ' : '') + (w.work_center ||
                     w.operation)), w.outside ?
-                    el('span.tag', 'OUTSIDE') : null, icons(w, n)),
+                    el('span.tag', modern ? 'outside' : 'OUTSIDE') : null,
+                    icons(w, n)),
                 el('div.bd', where || ' '));
         }
         function matNode(n) {
@@ -2113,12 +2132,19 @@
                 perm.can('production', 'create');
             var tag = c.supply === 'leg' ? 'LEG' : c.supply === 'job' ?
                 'JOB ' + (c.job || '') : c.short ? 'SHORT' : 'STOCK';
+            if (modern) {
+                tag = tag === 'STOCK' ? null : tag.toLowerCase();
+            }
             var node = el('div' + classes + (droppable ? '.droppable' : ''),
                 {style: pos(n)},
-                el('div.hd', cardHead('(' + (c.state === 'done' ? 'C' :
-                    LETTER[statusOf(n.root)] || 'U') + ') ' + (c.piece ?
-                    c.piece + ' - ' : '') + (parts.code || parts.name)),
-                    el('span.tag', tag), icons(c, n)),
+                el('div.hd', modern ? [el('b.nl-eng-seq', c.piece ?
+                    String(c.piece) : ''), cardHead((parts.code ||
+                    parts.name) + (parts.code && parts.name ? ' · ' +
+                    parts.name : ''))] : cardHead('(' + (c.state === 'done' ?
+                    'C' : LETTER[statusOf(n.root)] || 'U') + ') ' +
+                    (c.piece ? c.piece + ' - ' : '') + (parts.code ||
+                    parts.name)), tag ? el('span.tag', tag) : null,
+                    icons(c, n)),
                 el('div.bd', num(c.quantity) + ' ' + jobshopUnit(c.unit) +
                     (c.revision ?
                     ' · Eng ' + c.revision : '') + ' · ' + (parts.code ?
@@ -2176,19 +2202,31 @@
                 path.setAttribute('d', 'M' + sx + ' ' + sy + ' L' + tx + ' ' +
                     sy);
                 path.setAttribute('fill', 'none');
-                path.setAttribute('stroke', '#333');
+                path.setAttribute('stroke', modern ? '#8a76b3' : '#333');
                 path.setAttribute('stroke-width', '1.5');
                 path.setAttribute('marker-end', 'url(#nl-eng-arrow)');
                 svg.appendChild(path);
+                if (modern) {
+                    /* (a small dot where the line leaves the card) */
+                    var dot = document.createElementNS(svgNS, 'circle');
+                    dot.setAttribute('cx', sx);
+                    dot.setAttribute('cy', sy);
+                    dot.setAttribute('r', '3.5');
+                    dot.setAttribute('fill', '#8a76b3');
+                    svg.appendChild(dot);
+                }
             });
             var defs = document.createElementNS(svgNS, 'defs');
             defs.innerHTML = '<marker id="nl-eng-arrow" viewBox="0 0 10 10" ' +
                 'refX="9" refY="5" markerWidth="7" markerHeight="7" ' +
                 'orient="auto"><path d="M0 0 L10 5 L0 10 z" ' +
-                'fill="#333"/></marker>';
+                'fill="' + (modern ? '#8a76b3' : '#333') + '"/></marker>';
             svg.appendChild(defs);
             canvas.appendChild(svg);
             var keep = selected;
+            if (!selected && opts.keep) {
+                keep = {kind: opts.keep.kind, data: opts.keep};
+            }
             selected = null;
             plan.nodes.forEach(function (n) {
                 var node = n.kind === 'prod' ? prodNode(n) : n.kind === 'op' ?
@@ -2224,7 +2262,8 @@
                     UI.contextMenu(event, menuOf(n));
                 });
                 if (keep && keep.kind === n.kind && keep.data.id ===
-                        n.data.id && keep.data.step_id === n.data.step_id) {
+                        n.data.id && (keep.data.step_id || null) ===
+                        (n.data.step_id || null)) {
                     selected = n;
                     node.classList.add('selected');
                 }
@@ -2244,6 +2283,18 @@
             shown = plan;
             applyZoom();
             canvasWrap.scrollTop = canvasWrap.scrollHeight;
+            if (modern) {
+                if (!selected) {
+                    selected = plan.nodes[0];
+                    selected.el.classList.add('selected');
+                }
+                if (opts.onSelect) {
+                    opts.onSelect(selected);
+                }
+                if (selected.data.id !== tree.id || selected.kind !== 'prod') {
+                    reveal(selected, true);
+                }
+            }
         }
         function applyZoom() {
             if (!sizer || !shown) {
@@ -2283,7 +2334,97 @@
         if (opts.masters) {
             loadMasters('');
         }
-        load();
+        if (opts.tree) {
+            /* (the modern page read it already) */
+            tree = opts.tree;
+            render();
+        } else {
+            load();
+        }
+
+        /* The modern page's keys and inspector: what a card's double-click,
+         * Ins, L and R do */
+        function editCard(n) {
+            if (n.kind === 'op') {
+                editOperation(n.data, n.root);
+            } else if (n.kind === 'mat') {
+                editMaterial(n.data, n.root);
+            } else if (!n.card && opts.onEdit) {
+                opts.onEdit();
+            } else {
+                editItem(n).onclick();
+            }
+        }
+        function addAfter(n) {
+            var node = n.kind === 'prod' ? n.data : n.root;
+            if (n.kind === 'mat') {
+                if (!editable(node)) {
+                    return false;
+                }
+                var op = null;
+                var items = order(node);
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].kind === 'op' && (items[i].data.sequence ||
+                            0) >= (n.data.operation || 0)) {
+                        op = items[i].data;
+                        break;
+                    }
+                }
+                addMaterial(node, op);
+                return true;
+            }
+            if (!opsEditable(node)) {
+                return false;
+            }
+            /* An operation after this one: the next free sequence */
+            var seqs = (node.works || []).map(function (w) {
+                return w.sequence || 0;
+            });
+            var at = n.kind === 'op' ? n.data.sequence || 0 : 0;
+            var next = seqs.filter(function (q) {
+                return q > at;
+            }).sort(function (a, b) {
+                return a - b;
+            })[0];
+            var seq = next === undefined ? at + 10 : at + Math.max(1,
+                Math.floor((next - at) / 2));
+            operationDialog({sequence: seq}, function (values) {
+                return Rpc.desk('eng_operation_save', [kind, node.id, null,
+                    values]).then(done);
+            });
+            return true;
+        }
+        function legFor(n) {
+            if (n.kind === 'mat' && n.data.supply === 'stock' &&
+                    n.data.producible && kind === 'production' &&
+                    editable(n.root) && perm.can('production', 'create')) {
+                makeLeg(n.data, null);
+                return true;
+            }
+            var node = n.kind === 'prod' ? n.data : n.root;
+            var mayMat = editable(node) && (kind === 'bom' || perm.can(
+                'production.material_card', 'write')) && (kind === 'bom' ||
+                perm.can('production', 'create'));
+            if (!mayMat || n.kind === 'mat') {
+                return false;
+            }
+            addLeg(node, n.kind === 'op' ? n.data : null);
+            return true;
+        }
+        function laborFor(n, event) {
+            var item = laborMenu(n);
+            if (!item) {
+                return false;
+            }
+            if (event) {
+                lastXY = {x: event.clientX - 40, y: event.clientY};
+            } else if (n.el) {
+                var r = n.el.getBoundingClientRect();
+                lastXY = {x: r.left, y: r.bottom};
+            }
+            item.onclick();
+            return true;
+        }
 
         /* The Tools / View / Options menus of the window act on the selected
          * card, or the header */
@@ -2295,6 +2436,29 @@
             tree: function () {
                 return tree;
             },
+            nodes: function () {
+                return shown ? shown.nodes : [];
+            },
+            selected: function () {
+                return selected;
+            },
+            select: function (n) {
+                select(n);
+                reveal(n, true);
+            },
+            focus: function () {
+                canvasWrap.focus({preventScroll: true});
+            },
+            edit: editCard,
+            addAfter: addAfter,
+            leg: legFor,
+            labor: laborFor,
+            menu: menuOf,
+            purchase: purchaseDialog,
+            canLabor: function (n) {
+                return Boolean(laborMenu(n));
+            },
+            describe: describe,
             tools: function () {
                 var n = target();
                 if (!n) {
@@ -2658,7 +2822,20 @@
             }}]);
     }
 
+    /* The Work Order window: the modern page (default) or Jobshop's
+     * classic window (••• > Classic view; its ribbon's New View goes back) */
     Screens.jsWorkOrder = function (main, params, options) {
+        UI.clear(main);
+        main.classList.remove('dp-main');
+        if (UI.docPage && UI.docView('wo') === 'modern') {
+            woModern(main, params && params[0] ? parseInt(params[0], 10) :
+                null);
+            return;
+        }
+        classicWorkOrder(main, params, options);
+    };
+
+    function classicWorkOrder(main, params, options) {
         var perm = null;
         var details = null;
         var win = null;
@@ -2787,6 +2964,11 @@
             single: true,
             open: params && params[0] ? parseInt(params[0], 10) : null,
             extra: [
+                {label: 'New View', title: 'The modern work order page',
+                    onclick: function (r) {
+                        UI.setDocView('wo', 'modern');
+                        Screens.jsWorkOrder(main, r && r.id ? [r.id] : []);
+                    }},
                 /* (N-Line's buttons, kept: Jobshop has them as Change
                  * Status > Release and the traveler report) */
                 workflow('wait', 'Release'),
@@ -2988,7 +3170,7 @@
         if (options && options.tab) {
             showTab(main, options.tab);
         }
-    };
+    }
     /* (the shop floor's name of the window) */
     Screens.workOrderWindow = Screens.jsWorkOrder;
 
@@ -3120,6 +3302,14 @@
             single: true,
             open: params && params[0] ? parseInt(params[0], 10) : null,
             extra: [
+                {label: 'New View', title: 'The modern ' +
+                    title.toLowerCase() + ' page', onclick: function (r) {
+                        UI.setDocView(quote ? 'quote-master' : 'master',
+                            'modern');
+                        Screens[quote ? 'jsQuoteMaster' :
+                            'jsEngineeringMaster'](main, r && r.id ? [r.id] :
+                                []);
+                    }},
                 {label: 'Copy', onclick: function (r) {
                     if (r) {
                         copyInto(r, type);
@@ -3298,12 +3488,24 @@
         browseOneLine(main);
     }
 
+    /* The master windows: the modern page (default) or the classic one */
+    function masterScreen(main, params, type) {
+        UI.clear(main);
+        main.classList.remove('dp-main');
+        if (UI.docPage && UI.docView(type === 'quote' ? 'quote-master' :
+                'master') === 'modern') {
+            masterModern(main, params && params[0] ? parseInt(params[0], 10) :
+                null, type);
+            return;
+        }
+        masterWindow(main, params, type);
+    }
     Screens.jsEngineeringMaster = function (main, params) {
-        masterWindow(main, params, 'engineering');
+        masterScreen(main, params, 'engineering');
     };
     Screens.engineeringMaster = Screens.jsEngineeringMaster;
     Screens.jsQuoteMaster = function (main, params) {
-        masterWindow(main, params, 'quote');
+        masterScreen(main, params, 'quote');
     };
 
     /* ---- Operation Templates --------------------------------------------------- */
@@ -3514,6 +3716,116 @@
         });
     }
 
+    /* A quantity's unit cost and calculated price (Cost From, markup) */
+    function quoteCost(line, price, markupPct) {
+        return Rpc.desk('eng_quote_cost', [{product: line.product ?
+            line.product.id : null, cost_from: line.cost_from, bom:
+            line.bom ? line.bom.id : null, quote_master: line.quote_master ?
+            line.quote_master.id : null, quantity: price.quantity ||
+            1}]).then(function (c) {
+                var pct = function (v, d) {
+                    return 1 + (v === null || v === undefined || v === '' ?
+                        d : Number(v)) / 100;
+                };
+                var m = markupPct || 0;
+                price.unit_cost = Number(c.unit_cost);
+                price.calc_unit_price = Math.round((Number(c.material) *
+                    pct(price.material_markup, m) + Number(c.fabricated) *
+                    pct(price.fab_markup, m) + Number(c.labor) *
+                    pct(price.labor_markup, m) + Number(c.burden) *
+                    pct(price.burden_markup, m) + Number(c.service) *
+                    pct(price.service_markup, m)) * 100) / 100;
+                return price;
+            });
+    }
+
+    /* The Quote Line window (Line, Quantities Quoted, Specs): -> Promise of
+     * the changed line, its prices costed (rejected on Cancel) */
+    function quoteLineDialog(source, writable, markupPct) {
+        var line = source ? JSON.parse(JSON.stringify(source)) : {cost_from:
+            'engineering', status: 'open', prices: [{quantity: 1,
+                in_total: true}]};
+        /* (Cancel leaves the promise unsettled: nothing to do) */
+        return new Promise(function (resolve) {
+            var grid;
+            dialog(source ? 'Quote Line ' + (line.line_no || '') :
+                'Add Quote Line', [
+                    {title: 'Line', fields: [
+                        {name: 'product', label: 'Part ID', type: 'many2one',
+                            model: 'product.product', domain: [['salable', '=',
+                                true]], span: 2},
+                        {name: 'description', label: 'Description', type: 'char',
+                            span: 3},
+                        {name: 'customer_part', label: 'Customer Part ID',
+                            type: 'char'},
+                        {name: 'unit', label: 'Selling U/M', type: 'many2one',
+                            model: 'product.uom'},
+                        {name: 'status', label: 'Line Status', type: 'selection',
+                            options: [['open', 'Open'], ['closed', 'Closed']]},
+                        {name: 'cost_from', label: 'Cost From', type: 'selection',
+                            options: COST_FROM},
+                        {name: 'bom', label: 'Engineering Master', type:
+                            'many2one', model: 'production.bom', domain: [[
+                                'master_type', '=', 'engineering']]},
+                        {name: 'quote_master', label: 'Quote Master', type:
+                            'many2one', model: 'production.bom', domain: [[
+                                'master_type', '=', 'quote']]},
+                        {name: 'drawing_number', label: 'Drawing ID',
+                            type: 'char'},
+                        {name: 'drawing_revision', label: 'Rev', type: 'char'},
+                        {name: 'product_code', label: 'Product Code', type:
+                            'many2one', model: 'nline.product_code'},
+                        {name: 'commodity_code', label: 'Commodity Code', type:
+                            'many2one', model: 'nline.commodity_code'},
+                        {name: 'desired_ship_date', label: 'Ship Date',
+                            type: 'date'},
+                        {name: 'promise_date', label: 'Promise Date',
+                            type: 'date'},
+                        {name: 'win_probability', label: 'Win Probability %',
+                            type: 'float'}]},
+                    {title: 'Quantities Quoted', render: function (p, v) {
+                        grid = rowsGrid([
+                            {name: 'quantity', label: 'Qty', type: 'float'},
+                            {name: 'unit_cost', label: 'Unit Cost', type: 'float',
+                                readonly: true},
+                            {name: 'calc_unit_price', label: 'Calc Unit Price',
+                                type: 'float', readonly: true},
+                            {name: 'unit_price', label: 'Unit Price',
+                                type: 'float'},
+                            {name: 'trade_discount', label: 'Trade Disc %',
+                                type: 'float'},
+                            {name: 'leadtime', label: 'Leadtime', type: 'integer'},
+                            {name: 'in_total', label: 'In Total',
+                                type: 'boolean'},
+                            {name: 'in_proforma', label: 'In Proforma',
+                                type: 'boolean'}], v.prices || []);
+                        p.appendChild(grid.node);
+                        p.appendChild(el('p.nl-eng-muted', 'Enter the ' +
+                            'quantities; Calculate prices fills the unit cost ' +
+                            'and the calculated price (Cost From, markup ' +
+                            markupPct + '%) of each.'));
+                        return function () {
+                            return {prices: grid.get()};
+                        };
+                    }},
+                    {title: 'Specs', fields: [{name: 'specifications', label:
+                        'Specs', type: 'text', rows: 8}]}
+                ], line, writable ? function (values) {
+                    var merged = Object.assign({}, line, values);
+                    merged.prices = values.prices.filter(function (p) {
+                        return p.quantity;
+                    });
+                    /* Jobshop calculates each quantity's cost from the
+                     * master */
+                    return Promise.all(merged.prices.map(function (p) {
+                        return quoteCost(merged, p, markupPct);
+                    })).then(function () {
+                        resolve(merged);
+                    });
+                } : null, {readonly: !writable});
+        });
+    }
+
     /* The quote lines (Quote tab table): part, Quantities Quoted, Cost From,
      * the unit cost and price of each quantity */
     function quoteLines(pane, record, writable) {
@@ -3576,110 +3888,18 @@
             total.textContent = UI.money(sum, true);
         }
         function cost(line, price) {
-            return Rpc.desk('eng_quote_cost', [{product: line.product ?
-                line.product.id : null, cost_from: line.cost_from, bom:
-                line.bom ? line.bom.id : null, quote_master: line.quote_master ?
-                line.quote_master.id : null, quantity: price.quantity ||
-                1}]).then(function (c) {
-                    var pct = function (v, d) {
-                        return 1 + (v === null || v === undefined || v === '' ?
-                            d : Number(v)) / 100;
-                    };
-                    var m = UI.parseMoney(markup.value) || 0;
-                    price.unit_cost = Number(c.unit_cost);
-                    price.calc_unit_price = Math.round((Number(c.material) *
-                        pct(price.material_markup, m) + Number(c.fabricated) *
-                        pct(price.fab_markup, m) + Number(c.labor) *
-                        pct(price.labor_markup, m) + Number(c.burden) *
-                        pct(price.burden_markup, m) + Number(c.service) *
-                        pct(price.service_markup, m)) * 100) / 100;
-                    return price;
-                });
+            return quoteCost(line, price, UI.parseMoney(markup.value) || 0);
         }
         function edit(index) {
-            var line = index === null ? {cost_from: 'engineering', status:
-                'open', prices: [{quantity: 1, in_total: true}]} :
-                JSON.parse(JSON.stringify(lines[index]));
-            var grid;
-            dialog(index === null ? 'Add Quote Line' : 'Quote Line ' +
-                (line.line_no || ''), [
-                {title: 'Line', fields: [
-                    {name: 'product', label: 'Part ID', type: 'many2one',
-                        model: 'product.product', domain: [['salable', '=',
-                            true]], span: 2},
-                    {name: 'description', label: 'Description', type: 'char',
-                        span: 3},
-                    {name: 'customer_part', label: 'Customer Part ID',
-                        type: 'char'},
-                    {name: 'unit', label: 'Selling U/M', type: 'many2one',
-                        model: 'product.uom'},
-                    {name: 'status', label: 'Line Status', type: 'selection',
-                        options: [['open', 'Open'], ['closed', 'Closed']]},
-                    {name: 'cost_from', label: 'Cost From', type: 'selection',
-                        options: COST_FROM},
-                    {name: 'bom', label: 'Engineering Master', type:
-                        'many2one', model: 'production.bom', domain: [[
-                            'master_type', '=', 'engineering']]},
-                    {name: 'quote_master', label: 'Quote Master', type:
-                        'many2one', model: 'production.bom', domain: [[
-                            'master_type', '=', 'quote']]},
-                    {name: 'drawing_number', label: 'Drawing ID',
-                        type: 'char'},
-                    {name: 'drawing_revision', label: 'Rev', type: 'char'},
-                    {name: 'product_code', label: 'Product Code', type:
-                        'many2one', model: 'nline.product_code'},
-                    {name: 'commodity_code', label: 'Commodity Code', type:
-                        'many2one', model: 'nline.commodity_code'},
-                    {name: 'desired_ship_date', label: 'Ship Date',
-                        type: 'date'},
-                    {name: 'promise_date', label: 'Promise Date',
-                        type: 'date'},
-                    {name: 'win_probability', label: 'Win Probability %',
-                        type: 'float'}]},
-                {title: 'Quantities Quoted', render: function (p, v) {
-                    grid = rowsGrid([
-                        {name: 'quantity', label: 'Qty', type: 'float'},
-                        {name: 'unit_cost', label: 'Unit Cost', type: 'float',
-                            readonly: true},
-                        {name: 'calc_unit_price', label: 'Calc Unit Price',
-                            type: 'float', readonly: true},
-                        {name: 'unit_price', label: 'Unit Price',
-                            type: 'float'},
-                        {name: 'trade_discount', label: 'Trade Disc %',
-                            type: 'float'},
-                        {name: 'leadtime', label: 'Leadtime', type: 'integer'},
-                        {name: 'in_total', label: 'In Total',
-                            type: 'boolean'},
-                        {name: 'in_proforma', label: 'In Proforma',
-                            type: 'boolean'}], v.prices || []);
-                    p.appendChild(grid.node);
-                    p.appendChild(el('p.nl-eng-muted', 'Enter the ' +
-                        'quantities; Calculate prices fills the unit cost ' +
-                        'and the calculated price (Cost From, markup ' +
-                        markup.value + '%) of each.'));
-                    return function () {
-                        return {prices: grid.get()};
-                    };
-                }},
-                {title: 'Specs', fields: [{name: 'specifications', label:
-                    'Specs', type: 'text', rows: 8}]}
-            ], line, writable ? function (values) {
-                var merged = Object.assign({}, line, values);
-                merged.prices = values.prices.filter(function (p) {
-                    return p.quantity;
-                });
-                /* Jobshop calculates each quantity's cost from the master */
-                return Promise.all(merged.prices.map(function (p) {
-                    return cost(merged, p);
-                })).then(function () {
+            quoteLineDialog(index === null ? null : lines[index], writable,
+                UI.parseMoney(markup.value) || 0).then(function (merged) {
                     if (index === null) {
                         lines.push(merged);
                     } else {
                         lines[index] = merged;
                     }
                     render();
-                });
-            } : null, {readonly: !writable});
+                }, function () {});
         }
         function save() {
             return Rpc.desk('eng_quote_save', [record.id, lines.map(
@@ -3780,6 +4000,13 @@
     }
 
     Screens.jsQuotes = function (main, params) {
+        UI.clear(main);
+        main.classList.remove('dp-main');
+        if (UI.docPage && UI.docView('quote') === 'modern') {
+            quoteModern(main, params && params[0] ? parseInt(params[0], 10) :
+                null);
+            return;
+        }
         /* Etc., Mobile and Copy Notes to Sales Order are new fields of
          * the module: shown once the database has them */
         Rpc.model('nline.quote', 'fields_get', [['copy_notes', 'addr_etc',
@@ -3823,6 +4050,11 @@
             order: [['quote_date', 'DESC'], ['number', 'DESC']],
             open: params && params[0] ? parseInt(params[0], 10) : null,
             extra: [
+                {label: 'New View', title: 'The modern quote page',
+                    onclick: function (r) {
+                        UI.setDocView('quote', 'modern');
+                        Screens.jsQuotes(main, r && r.id ? [r.id] : []);
+                    }},
                 {label: 'Print Quote', onclick: function (r, load) {
                     if (r) {
                         printQuote(r);
@@ -4117,4 +4349,2857 @@
     }
     /* (the planning screen's name of the window) */
     Screens.quotes = Screens.jsQuotes;
+
+    /* ==== The modern pages (owner's design, 29 Oct 2026) ====================
+     * "The answers first, the fields second": UI.docPage (docpage.js) with
+     * the route tracker and the card stack kept as the centrepiece, an
+     * inspector beside it showing the selected card. */
+
+    if (!document.getElementById('nl-js-engineering-modern-css')) {
+        document.head.appendChild(el('style', {id:
+            'nl-js-engineering-modern-css'},
+            /* The calmer cards: sage operations, dusty-blue outside services,
+             * terracotta materials, purple legs, short = a red outline */
+            '.nl-eng-modern .canvas-wrap { height: 460px; min-height: 0; ' +
+            'border: 0; border-radius: 0; background: var(--paper); ' +
+            'outline: none; }\n' +
+            '.nl-eng-modern .legend { margin: 0; padding: 8px 14px; ' +
+            'border-bottom: 1px solid var(--line-soft); color: var(--muted); }\n' +
+            '.nl-eng-modern .legend i { border-radius: 3px; }\n' +
+            '.nl-eng-modern .legend i.card-op { background: #dfe8da; ' +
+            'border-color: #9db497; }\n' +
+            '.nl-eng-modern .legend i.card-out { background: #dde6ef; ' +
+            'border-color: #93abc3; }\n' +
+            '.nl-eng-modern .legend i.card-mat { background: #f4e3da; ' +
+            'border-color: #c99178; }\n' +
+            '.nl-eng-modern .legend i.card-closed { background: #eceeef; ' +
+            'border-color: #b9bec4; }\n' +
+            '.nl-eng-modern .node { border-radius: 8px; box-shadow: 0 1px 2px ' +
+            'rgba(20,30,40,.12); color: #2b2f33; }\n' +
+            '.nl-eng-modern .node.card { border: 1px solid #b9bec4; ' +
+            'font-size: 11.5px; }\n' +
+            '.nl-eng-modern .node.card .hd { height: 20px; gap: 5px; ' +
+            'font-weight: 500; padding: 2px 8px; }\n' +
+            '.nl-eng-modern .node.card .bd { background: rgba(255,255,255,.6); ' +
+            'color: #3a3f44; border-radius: 5px; margin: 0 4px 4px; }\n' +
+            '.nl-eng-modern .nl-eng-seq { font-weight: 600; min-width: 0; ' +
+            'flex: none; opacity: .75; }\n' +
+            '.nl-eng-modern .node.card.op { background: #dfe8da; ' +
+            'border-color: #9db497; color: #33472f; }\n' +
+            '.nl-eng-modern .node.card.op .hd { background: transparent; }\n' +
+            '.nl-eng-modern .node.card.op.outside { background: #dde6ef; ' +
+            'border-color: #93abc3; color: #2c4257; }\n' +
+            '.nl-eng-modern .node.card.mat { background: #f4e3da; ' +
+            'border-color: #c99178; color: #6b3a24; border-left-width: 1px; }\n' +
+            '.nl-eng-modern .node.card.mat.leg { background: #ebe5f4; ' +
+            'border-color: #a796c6; color: #4c3a73; border-left: 4px solid ' +
+            '#8a76b3; }\n' +
+            '.nl-eng-modern .node.card.mat.short { box-shadow: 0 0 0 2px ' +
+            'var(--bad); }\n' +
+            '.nl-eng-modern .node.card.closed { background: #eceeef; ' +
+            'border-color: #b9bec4; color: #5d646b; }\n' +
+            '.nl-eng-modern .node.card .tag { background: rgba(255,255,255,.7); ' +
+            'color: inherit; font-weight: 500; text-transform: none; }\n' +
+            '.nl-eng-modern .node.card.mat.short .tag { color: var(--bad); }\n' +
+            '.nl-eng-modern .node.prod { border: 1px solid #aab3bc; ' +
+            'background: #fff; }\n' +
+            '.nl-eng-modern .node.prod .hd { background: #eef1f4; color: ' +
+            '#2b2f33; font-weight: 600; }\n' +
+            '.nl-eng-modern .node.prod .bd { background: #fff !important; ' +
+            'color: #3a3f44; }\n' +
+            '.nl-eng-modern .node.prod.nl-eng-legprod { border-color: #a796c6; ' +
+            'border-left: 4px solid #8a76b3; }\n' +
+            '.nl-eng-modern .node.prod.nl-eng-legprod .hd { background: ' +
+            '#ebe5f4; color: #4c3a73; }\n' +
+            '.nl-eng-modern .node.card.selected, .nl-eng-modern .node.prod' +
+            '.selected { outline: 2px solid var(--accent); outline-offset: ' +
+            '1px; }\n' +
+            '.nl-eng-modern .node .icons button { border-radius: 3px; ' +
+            'background: rgba(255,255,255,.8); }\n' +
+            /* The stack and its inspector */
+            '.nl-eng-stack { display: grid; grid-template-columns: ' +
+            'minmax(0, 1fr) 330px; border-top: 1px solid var(--line-soft); }\n' +
+            '.nl-eng-stack > .nl-eng-insp { border-left: 1px solid ' +
+            'var(--line-soft); padding: 12px 14px; max-height: 505px; ' +
+            'overflow: auto; }\n' +
+            '@media (max-width: 900px) { .nl-eng-stack { ' +
+            'grid-template-columns: 1fr; } .nl-eng-stack > .nl-eng-insp { ' +
+            'border-left: 0; border-top: 1px solid var(--line-soft); ' +
+            'max-height: none; } }\n' +
+            '.nl-eng-insp h4 { margin: 0 0 2px; font-size: 15px; ' +
+            'font-weight: 600; }\n' +
+            '.nl-eng-insp .nl-eng-kicker { font-size: 11px; color: ' +
+            'var(--muted); text-transform: uppercase; letter-spacing: .04em; }\n' +
+            '.nl-eng-insp .dp-kv { margin-top: 10px; }\n' +
+            '.nl-eng-insp .nl-eng-group { font-size: 12px; font-weight: 600; ' +
+            'color: var(--muted); margin: 14px 0 6px; }\n' +
+            '.nl-eng-insp .nl-eng-group:first-of-type { margin-top: 8px; }\n' +
+            '.nl-eng-insp .dp-form { grid-template-columns: 1fr 1fr; gap: ' +
+            '8px 10px; }\n' +
+            '.nl-eng-insp .dp-field.dp-wide { grid-column: 1 / -1; }\n' +
+            '.nl-eng-insp .nl-eng-buttons { display: flex; flex-wrap: wrap; ' +
+            'gap: 6px; margin-top: 12px; }\n' +
+            '.nl-eng-insp .nl-eng-req::after { content: " *"; color: ' +
+            'var(--bad); }\n' +
+            '.nl-eng-hint { padding: 7px 14px; font-size: 12px; color: ' +
+            'var(--muted); border-top: 1px solid var(--line-soft); }\n' +
+            '.dp-title.nl-eng-clickable { cursor: pointer; }\n' +
+            '.dp-title.nl-eng-clickable:hover { text-decoration: underline ' +
+            'dotted; text-underline-offset: 4px; }\n' +
+            /* The route tracker: legs, then the operations */
+            '.nl-eng-route { display: flex; gap: 6px; overflow-x: auto; ' +
+            'padding-bottom: 2px; }\n' +
+            '.nl-eng-route .st { flex: 1 0 92px; min-width: 92px; ' +
+            'max-width: 170px; cursor: pointer; border-radius: 6px; ' +
+            'padding: 2px 2px 4px; }\n' +
+            '.nl-eng-route .st:hover { background: var(--row-hover); }\n' +
+            '.nl-eng-route .st b { display: block; height: 6px; ' +
+            'border-radius: 3px; margin-bottom: 6px; background: ' +
+            'var(--table-head); }\n' +
+            '.nl-eng-route .st .n { font-size: 12px; white-space: nowrap; ' +
+            'overflow: hidden; text-overflow: ellipsis; }\n' +
+            '.nl-eng-route .st .v { font-size: 11.5px; color: var(--muted); ' +
+            'white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\n' +
+            '.nl-eng-route .st.out b { background: #b9cadb; }\n' +
+            '.nl-eng-route .st.leg b { background: #cbbfe0; }\n' +
+            '.nl-eng-route .st.done b { background: var(--accent); }\n' +
+            '.nl-eng-route .st.now b { background: var(--accent); ' +
+            'opacity: .55; }\n' +
+            '.nl-eng-route .st.bad b { background: var(--bad); }\n' +
+            '.nl-eng-route .st.bad .v { color: var(--bad); }\n' +
+            '.nl-eng-route .sep { flex: none; width: 1px; background: ' +
+            'var(--line); margin: 0 4px; }\n' +
+            '.nl-eng-short-list td { white-space: nowrap; }\n' +
+            '.nl-eng-short-list td:nth-child(2) { white-space: normal; ' +
+            'min-width: 240px; }\n' +
+            '.nl-eng-short-list td button { padding: 1px 10px; }\n'));
+    }
+
+    function today() {
+        return UI.today ? UI.today() : new Date().toISOString().slice(0, 10);
+    }
+
+    /* The address of the record now shown (a new one once saved), without
+     * opening it again */
+    function setUrl(path, label) {
+        /* (the page's finder shows it too: docPage sets it on load only) */
+        var finder = document.querySelector('.dp-page .dp-finder input');
+        if (finder && label) {
+            finder.value = label;
+        }
+        if (UI.setUrl) {
+            UI.setUrl(path);
+        } else if (global.history && global.history.replaceState) {
+            global.history.replaceState(null, '', '#/' + path);
+        }
+    }
+
+    function n0(v) {
+        var n = parseFloat(v);
+        return isNaN(n) ? 0 : n;
+    }
+
+    /* A many2one read as {id, rec_name} (Tryton's "field." values) */
+    function m2o(record, name) {
+        var id = record[name];
+        if (!id) {
+            return null;
+        }
+        var related = record[name + '.'] || {};
+        return {id: id, rec_name: related.rec_name || String(id),
+            code: related.code};
+    }
+
+    /* The values to write: many2one as ids; nothing that did not change */
+    function writable(values, data) {
+        var out = {};
+        Object.keys(values).forEach(function (k) {
+            if (k === 'id') {
+                return;
+            }
+            var v = values[k];
+            if (v && typeof v === 'object' && v.id !== undefined &&
+                    !v.__class__) {
+                v = v.id;
+            }
+            var old = data ? data[k] : undefined;
+            if (old && typeof old === 'object' && old.id !== undefined) {
+                old = old.id;
+            }
+            if (v && typeof v === 'object' && v.__class__ === 'date') {
+                var iso = v.year + '-' + ('0' + v.month).slice(-2) + '-' +
+                    ('0' + v.day).slice(-2);
+                if (iso === String(old || '').slice(0, 10)) {
+                    return;
+                }
+            } else if (data && (v === old || (v === null && (old ===
+                    undefined || old === '' || old === null)) || (v === '' &&
+                    !old))) {
+                return;
+            } else if (!data && (v === null || v === '')) {
+                /* (a new record: the server's defaults) */
+                return;
+            }
+            out[k] = v;
+        });
+        return out;
+    }
+
+    function partParts(name) {
+        return code(name);
+    }
+
+    var OPEN_STATES = ['request', 'draft', 'waiting', 'assigned', 'running'];
+
+    /* What blocks an operation: a short material used at it */
+    function opBlocked(node, work) {
+        var items = order(node);
+        var blocked = false;
+        var mats = [];
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].kind === 'mat') {
+                mats.push(items[i].data);
+            } else {
+                if (items[i].data === work) {
+                    blocked = mats.some(function (c) {
+                        return c.short || (c.leg && c.leg.shortage &&
+                            OPEN_STATES.indexOf(c.leg.state) >= 0 &&
+                            c.leg.state !== 'running');
+                    });
+                    break;
+                }
+                mats = [];
+            }
+        }
+        return blocked;
+    }
+
+    /* The legs of a node (first level) */
+    function legsOf(node) {
+        return (node.cards || []).filter(function (c) {
+            return c.leg;
+        }).map(function (c) {
+            return c.leg;
+        });
+    }
+
+    /* The short materials of a node and, deeper, its legs */
+    function shortCards(node, deep) {
+        var out = [];
+        (node.cards || []).forEach(function (c) {
+            if (c.short && c.supply !== 'leg') {
+                out.push({card: c, node: node});
+            }
+            if (deep && c.leg) {
+                out = out.concat(shortCards(c.leg, true));
+            }
+        });
+        return out;
+    }
+
+    /* "Order them": the short materials, each with its Create Purchase
+     * Order (VShopFloor PurchaseMaterial), or all at once */
+    function orderShort(list, perm, after) {
+        var mayPo = perm.can('purchase.purchase', 'create');
+        var rows = list.map(function (x) {
+            var parts = partParts(x.card.product);
+            var cell = el('td');
+            var row = el('tr', el('td', {title: x.card.product}, parts.code ||
+                parts.name), el('td', parts.code ? parts.name : ''),
+                el('td.num', num(x.card.quantity) + ' ' +
+                    jobshopUnit(x.card.unit)), el('td', x.node.number), cell);
+            if (mayPo) {
+                cell.appendChild(el('button', {type: 'button', onclick:
+                    function (event) {
+                        var b = event.currentTarget;
+                        b.disabled = true;
+                        Rpc.desk('eng_purchase', ['card', x.card.id]).then(
+                            function (pid) {
+                                x.done = pid;
+                                UI.clear(cell).appendChild(el('a', {href:
+                                    '#/purchase-orders/' + pid}, 'PO made'));
+                            }, function (e) {
+                                b.disabled = false;
+                                UI.showError(e);
+                            });
+                    }}, 'Order'));
+            }
+            return row;
+        });
+        UI.modal('Order the short materials', [el('p.nl-eng-muted', mayPo ?
+            'Each Order makes a draft purchase order from the part\'s ' +
+            'supplier, linked to the work order.' : 'You may not make ' +
+            'purchase orders: these are the parts to ask for.'),
+            el('div.nl-eng-short-list', table(['Part ID', 'Description',
+                '#Qty', 'Work order', ''], rows))], mayPo ? [
+            {label: 'Close', onclick: function () {
+                if (after && list.some(function (x) {
+                    return x.done;
+                })) {
+                    after();
+                }
+            }},
+            {label: 'Order all', primary: true, onclick: function (close) {
+                list.filter(function (x) {
+                    return !x.done;
+                }).reduce(function (p, x) {
+                    return p.then(function () {
+                        return Rpc.desk('eng_purchase', ['card', x.card.id])
+                            .then(function (pid) {
+                                x.done = pid;
+                            });
+                    });
+                }, Promise.resolve()).then(function () {
+                    UI.toast('Purchase orders made for the short materials',
+                        'ok');
+                    close();
+                    if (after) {
+                        after();
+                    }
+                }, UI.showError);
+                return true;
+            }}] : [{label: 'Close', primary: true}]);
+    }
+
+    /* The route tracker: the legs first, then the operations (outside
+     * services tinted, blocked in red, done in the accent) */
+    function routeStrip(pane, node, opts) {
+        var strip = el('div.nl-eng-route');
+        var legs = opts.legs ? legsOf(node) : [];
+        legs.forEach(function (leg) {
+            var parts = partParts(leg.product);
+            var done = leg.state === 'done';
+            var blocked = leg.shortage && OPEN_STATES.indexOf(leg.state) >= 0;
+            strip.appendChild(el('div.st.leg' + (done ? '.done' : blocked ?
+                '.bad' : leg.state === 'running' ? '.now' : ''), {title: 'Leg ' +
+                leg.number + ': ' + leg.product, onclick: function () {
+                    opts.pick({kind: 'prod', id: leg.id});
+                }}, el('b'), el('div.n', 'Leg ' + (parts.code || leg.number)),
+                el('div.v', done ? 'done' : blocked ? 'materials short' :
+                    TRYTON_STATE[leg.state] || leg.state)));
+        });
+        if (legs.length) {
+            strip.appendChild(el('span.sep'));
+        }
+        var works = (node.works || []).slice().sort(function (a, b) {
+            return (a.sequence || 0) - (b.sequence || 0);
+        });
+        works.forEach(function (w) {
+            var done = w.state === 'done' || w.state === 'finished';
+            var blocked = !done && opts.blocked && opBlocked(node, w);
+            var hours = w.planned_duration ? num(w.planned_duration, 2) + ' h' :
+                '';
+            strip.appendChild(el('div.st' + (w.outside ? '.out' : '') +
+                (done ? '.done' : blocked ? '.bad' : w.state === 'running' ?
+                    '.now' : ''), {title: (w.sequence || '') + ' ' +
+                    (w.work_center || w.operation) + (w.description ? ': ' +
+                        w.description : ''), onclick: function () {
+                    opts.pick({kind: 'op', id: w.id, step_id: w.step_id});
+                }}, el('b'), el('div.n', (w.sequence !== null ? w.sequence +
+                    ' ' : '') + (w.work_center || w.operation)),
+                el('div.v', blocked ? 'blocked: short' : w.outside ?
+                    (w.supplier ? code(w.supplier).code || w.supplier :
+                        'outside') + (w.purchase ? ' · ' + w.purchase : '') :
+                    done ? 'done' : hours)));
+        });
+        if (!works.length && !legs.length) {
+            strip.appendChild(el('p.dp-muted', {style: {margin: 0}},
+                'No operations yet: right-click the header card (or Ins) to ' +
+                'add one.'));
+        }
+        pane.appendChild(strip);
+    }
+
+    /* The inspector beside the card stack: the selected card's details, the
+     * header card's grouped fields (editable) */
+    function inspector(box, ctx) {
+        var state = {node: null, editing: false};
+
+        function kv(rows) {
+            return el('div.dp-kv', rows.filter(Boolean).map(function (r) {
+                var v = r[1];
+                return [el('span.dp-muted', r[0]), el('span' + (r[2] ?
+                    '.dp-' + r[2] : ''), v instanceof Node ? v :
+                    v === null || v === undefined || v === '' ?
+                        el('span.dp-unset', 'Not set') : String(v))];
+            }));
+        }
+        function buttons(list) {
+            list = list.filter(Boolean);
+            return list.length ? el('div.nl-eng-buttons', list.map(
+                function (b) {
+                    return el('button' + (b.primary ? '.primary' : ''), {type:
+                        'button', title: b.title || b.label, onclick:
+                        b.onclick}, b.label);
+                })) : null;
+        }
+        function opView(n) {
+            var w = n.data;
+            var closed = w.state === 'done' || w.state === 'finished';
+            var reported = el('span', w.id && ctx.kind === 'production' ?
+                '…' : '');
+            if (w.id && ctx.kind === 'production') {
+                Rpc.searchRead('production.work.cycle', [['work', '=', w.id]],
+                    ['duration', 'state']).then(function (rows) {
+                        var secs = 0;
+                        rows.forEach(function (r) {
+                            if (r.state !== 'cancelled') {
+                                secs += n0(r.duration);
+                            }
+                        });
+                        reported.textContent = rows.length ? num(secs / 3600,
+                            2) + ' h (' + rows.length + ' ticket' +
+                            (rows.length > 1 ? 's' : '') + ')' : 'none yet';
+                    }, function () {
+                        reported.textContent = '';
+                    });
+            }
+            var blocked = !closed && ctx.kind === 'production' &&
+                opBlocked(n.root, w);
+            return [el('div.nl-eng-kicker', w.outside ? 'Outside service' :
+                'Operation'), el('h4', (w.sequence !== null ? w.sequence +
+                ' · ' : '') + (w.work_center || w.operation)),
+                kv([
+                    ['Resource', w.work_center || w.operation],
+                    ['Description', w.description],
+                    ['Status', closed ? 'Done' : blocked ? 'Blocked: ' +
+                        'materials short' : ctx.kind === 'production' ?
+                        (TRYTON_STATE[w.state] || w.state) : 'Standard',
+                        blocked ? 'bad' : null],
+                    [ctx.kind === 'production' ? 'Planned hours' :
+                        'Standard hours', w.planned_duration ?
+                        num(w.planned_duration, 2) + ' h' : null],
+                    ['Setup', w.setup_hours ? num(w.setup_hours, 2) + ' h' :
+                        null],
+                    ['Run', w.run ? num(w.run) + ' ' + ((RUN_TYPES.filter(
+                        function (r) {
+                            return r[0] === w.run_type;
+                        })[0] || [])[1] || '') : null],
+                    ctx.kind === 'production' ? ['Reported', reported] : null,
+                    w.outside ? ['Supplier', w.supplier] : null,
+                    w.outside ? ['Service', w.service] : null,
+                    w.outside && ctx.kind === 'production' ? ['Purchase order',
+                        w.purchase] : null,
+                    w.outside && w.expected_date ? ['Expected',
+                        UI.date(w.expected_date)] : null]),
+                buttons([
+                    {label: closed ? 'View' : 'Edit', title: 'Edit the ' +
+                        'operation (Enter)', primary: true, onclick:
+                        function () {
+                            ctx.api().edit(n);
+                        }},
+                    ctx.kind === 'production' && ctx.api().canLabor(n) ?
+                        {label: 'Report labor', title: 'Start a labor ' +
+                            'ticket (R)', onclick: function (event) {
+                                ctx.api().labor(n, event);
+                            }} : null,
+                    {label: 'Add after', title: 'Add an operation after ' +
+                        'this one (Ins)', onclick: function () {
+                            ctx.api().addAfter(n);
+                        }},
+                    w.outside && ctx.kind === 'production' && w.id ?
+                        {label: w.purchase_id ? 'Purchase order' : 'Order ' +
+                            'service', onclick: function () {
+                                ctx.api().purchase(n);
+                            }} : null])];
+        }
+        function matView(n) {
+            var c = n.data;
+            var parts = partParts(c.product);
+            var issued = c.state === 'done';
+            var leg = c.leg;
+            return [el('div.nl-eng-kicker', c.supply === 'leg' ? 'Material ' +
+                'made in a leg' : 'Material'), el('h4', {title: c.product},
+                parts.code || parts.name),
+                kv([
+                    ['Part', el('span', {title: c.product}, parts.code ||
+                        parts.name)],
+                    ['Description', c.description || parts.name],
+                    ['Quantity', num(c.quantity) + ' ' + jobshopUnit(c.unit)],
+                    ctx.kind === 'production' ? ['Issued', c.supply === 'leg' ?
+                        (leg && leg.state === 'done' ? 'made' : 'from the leg') :
+                        issued ? num(c.quantity) + ' ' + jobshopUnit(c.unit) :
+                            '0'] : null,
+                    ctx.kind === 'production' ? ['Short', c.short ? 'Yes' :
+                        'No', c.short ? 'bad' : null] : null,
+                    ['Supply', c.supply === 'leg' ? 'Leg' + (leg ? ' ' +
+                        leg.number : '') : c.supply === 'job' ? 'Job ' +
+                        (c.job || '') : 'Stock'],
+                    ['Used at', c.operation ? 'Seq ' + c.operation + (c.piece ?
+                        ', piece ' + c.piece : '') : null],
+                    c.revision ? ['Pinned Eng ID', c.revision] : null,
+                    c.supplier ? ['Supplier', c.supplier] : null,
+                    c.reference ? ['Reference', c.reference] : null]),
+                buttons([
+                    {label: ctx.kind === 'production' && issued ? 'View' :
+                        'Edit', primary: true, title: 'Edit the material ' +
+                        '(Enter)', onclick: function () {
+                            ctx.api().edit(n);
+                        }},
+                    ctx.kind === 'production' && c.short ? {label: 'Order it',
+                        onclick: function () {
+                            orderShort([{card: c, node: n.root}], ctx.perm,
+                                ctx.reload);
+                        }} : null,
+                    leg ? {label: 'Go to leg', onclick: function () {
+                        ctx.pick({kind: 'prod', id: leg.id});
+                    }} : c.producible && c.supply !== 'leg' ? {label:
+                        'Make a leg', title: 'Make it in a leg (L)', onclick:
+                        function () {
+                            ctx.api().leg(n);
+                        }} : null,
+                    c.product_id && ctx.kind === 'production' ? {label:
+                        'Supply and demand', onclick: function () {
+                            supplyDemandDialog(c.product_id);
+                        }} : null])];
+        }
+        function legView(n) {
+            var d = n.data;
+            var parts = partParts(d.product);
+            return [el('div.nl-eng-kicker', ctx.kind === 'production' ?
+                'Leg' : 'Leg/Detail master'), el('h4', {title: d.product},
+                d.description || parts.name),
+                kv([
+                    [ctx.kind === 'production' ? 'Leg' : 'Master', d.number],
+                    ['Part', el('span', {title: d.product}, parts.code)],
+                    ['Eng ID', d.revision],
+                    ['Quantity', num(d.quantity) + ' ' + jobshopUnit(d.unit)],
+                    ctx.kind === 'production' ? ['Status', STATUS[
+                        d.order_status] || TRYTON_STATE[d.state]] : null,
+                    ctx.kind === 'production' ? ['Want date',
+                        UI.date(d.planned_date)] : null,
+                    ctx.kind === 'production' ? ['Short', d.shortage ?
+                        'Yes' : 'No', d.shortage ? 'bad' : null] : null,
+                    ['Operations', (d.works || []).length],
+                    ['Materials', (d.cards || []).length]]),
+                buttons([
+                    {label: 'Open', primary: true, onclick: function () {
+                        UI.openScreen(ctx.kind === 'production' ?
+                            'work-orders/' + d.id : (d.master_type ===
+                                'quote' ? 'quote-masters/' : 'masters/') +
+                            d.id);
+                    }},
+                    ctx.kind === 'production' && d.shortage ? {label:
+                        'Order short', onclick: function () {
+                            orderShort(shortCards(d, true), ctx.perm,
+                                ctx.reload);
+                        }} : null,
+                    {label: 'Availability', onclick: function () {
+                        availabilityDialog(ctx.kind, d.id);
+                    }}])];
+        }
+        /* The header card: the record's own details, grouped */
+        function headerView() {
+            var data = ctx.data();
+            var groups = ctx.groups(data);
+            var out = [el('div.nl-eng-kicker', ctx.headerKicker),
+                el('h4', ctx.headerTitle(data))];
+            groups.forEach(function (g) {
+                out.push(el('div.nl-eng-group', g.title));
+                out.push(kv(g.fields.map(function (f) {
+                    return [f.label, f.show ? f.show(data) : showValue(f,
+                        data[f.name])];
+                })));
+            });
+            out.push(buttons([ctx.canEdit(data) ? {label: 'Edit', primary:
+                true, title: 'Edit the details (Enter, or double-click the ' +
+                'header card)', onclick: function () {
+                    state.editing = true;
+                    draw();
+                }} : null]));
+            return out;
+        }
+        function showValue(f, v) {
+            if (v === null || v === undefined || v === '') {
+                return null;
+            }
+            if (f.type === 'many2one') {
+                /* An ID with its name in the tooltip (owner's rule) */
+                var parts = code(v.rec_name);
+                return parts.code ? el('span', {title: v.rec_name},
+                    parts.code) : v.rec_name;
+            }
+            if (f.type === 'date') {
+                return UI.date(v);
+            }
+            if (f.type === 'boolean') {
+                return v ? 'Yes' : 'No';
+            }
+            if (f.type === 'selection') {
+                return ((f.options || []).filter(function (o) {
+                    return o[0] === v;
+                })[0] || [v, v])[1];
+            }
+            if (f.type === 'float') {
+                return num(v);
+            }
+            return v;
+        }
+        function headerEdit() {
+            var data = ctx.data();
+            var controls = [];
+            var out = [el('div.nl-eng-kicker', data.id ? 'Editing' :
+                'New ' + ctx.headerKicker.toLowerCase()),
+                el('h4', ctx.headerTitle(data))];
+            ctx.groups(data).forEach(function (g) {
+                var fields = g.fields.filter(function (f) {
+                    /* (a new record: only what can be filled in) */
+                    return (!f.show || f.name) && (data.id ||
+                        f.readonly !== true);
+                });
+                if (!fields.length) {
+                    return;
+                }
+                out.push(el('div.nl-eng-group', g.title));
+                out.push(el('div.dp-form', fields.map(function (f) {
+                    var ro = f.readonly === true || (typeof f.readonly ===
+                        'function' && f.readonly(data));
+                    var spec = Object.assign({}, f, {readonly: ro});
+                    var control = UI.fieldControl(spec);
+                    var value = data[f.name];
+                    control.set(value === undefined ? null : value);
+                    if (ro && control.node.querySelector) {
+                        Array.prototype.forEach.call(control.node
+                            .querySelectorAll('button'), function (b) {
+                                b.disabled = true;
+                            });
+                    }
+                    if (!ro) {
+                        controls.push({f: f, control: control});
+                    }
+                    return el('label.dp-field' + (f.wide || f.type === 'text' ?
+                        '.dp-wide' : ''), el('span.dp-muted' + (f.required ?
+                        '.nl-eng-req' : ''), f.label), control.node);
+                })));
+            });
+            out.push(el('div.nl-eng-buttons',
+                el('button', {type: 'button', onclick: function () {
+                    if (!data.id) {
+                        ctx.cancelNew();
+                        return;
+                    }
+                    state.editing = false;
+                    draw();
+                }}, 'Cancel'),
+                el('button.primary', {type: 'button', onclick: function () {
+                    var values = {};
+                    var missing = [];
+                    controls.forEach(function (x) {
+                        values[x.f.name] = x.control.get();
+                        if (x.f.required && (values[x.f.name] === null ||
+                                values[x.f.name] === '')) {
+                            missing.push(x.f.label);
+                        }
+                    });
+                    if (missing.length) {
+                        UI.toast('Fill in ' + missing.join(', '), 'error');
+                        return;
+                    }
+                    ctx.save(values).then(function () {
+                        state.editing = false;
+                    }, function () {});
+                }}, data.id ? 'Save' : 'Create')));
+            setTimeout(function () {
+                var first = box.querySelector('input:not([readonly]), ' +
+                    'select:not([disabled]), textarea');
+                if (first) {
+                    first.focus();
+                }
+            }, 0);
+            return out;
+        }
+        function draw() {
+            UI.clear(box);
+            var n = state.node;
+            var data = ctx.data();
+            if (!data.id || !n || (n.kind === 'prod' && !n.card)) {
+                box.appendChild(el('div', !data.id || state.editing ?
+                    headerEdit() : headerView()));
+                return;
+            }
+            box.appendChild(el('div', n.kind === 'op' ? opView(n) :
+                n.kind === 'mat' ? matView(n) : legView(n)));
+        }
+        return {
+            show: function (n) {
+                if (state.node !== n) {
+                    state.editing = false;
+                }
+                state.node = n;
+                draw();
+            },
+            edit: function () {
+                state.editing = true;
+                draw();
+            },
+            editing: function () {
+                return state.editing;
+            }
+        };
+    }
+
+    /* The card stack section and its keys (arrows move between the cards,
+     * Enter edits, Ins adds after, L makes a leg, R reports labor) */
+    function stackSection(pane, d, page, ctx) {
+        var insp = el('div.nl-eng-insp');
+        var stackBox = el('div');
+        var api = null;
+        var inspector_ = inspector(insp, {
+            kind: ctx.kind,
+            perm: ctx.perm,
+            data: page.data,
+            api: function () {
+                return api;
+            },
+            reload: function () {
+                page.reload();
+            },
+            pick: function (key) {
+                pick(key);
+            },
+            groups: ctx.groups,
+            headerKicker: ctx.headerKicker,
+            headerTitle: ctx.headerTitle,
+            canEdit: ctx.canEdit,
+            save: function (values) {
+                return page.save(values);
+            },
+            cancelNew: ctx.cancelNew
+        });
+        ctx.state.inspector = inspector_;
+        pane.appendChild(el('div.nl-eng-stack', stackBox, insp));
+        if (!d.id) {
+            pane.classList.add('nl-eng-new');
+            stackBox.appendChild(el('p.dp-muted.dp-pad', 'The cards appear ' +
+                'once it is saved: fill in the part and the quantity, then ' +
+                'Create.'));
+            inspector_.show(null);
+            return;
+        }
+        pane.appendChild(el('div.nl-eng-hint', 'Arrows move between the ' +
+            'cards · Enter edits · Ins adds after · L makes a leg' +
+            (ctx.kind === 'production' ? ' · R reports labor' : '') +
+            ' · right-click a card for all its commands' + (ctx.kind ===
+                'production' ? '' : '')));
+        function pick(key) {
+            var nodes = api ? api.nodes() : [];
+            var hit = nodes.filter(function (m) {
+                return m.kind === key.kind && m.data.id === key.id &&
+                    (m.data.step_id || null) === (key.step_id || null);
+            })[0];
+            if (hit) {
+                api.select(hit);
+            }
+        }
+        ctx.state.pick = pick;
+        api = cards(stackBox, {kind: ctx.kind, id: d.id, perm: ctx.perm,
+            modern: true, tree: d.tree, keep: ctx.state.keep,
+            onSelect: function (n) {
+                ctx.state.keep = n ? {kind: n.kind, id: n.data.id, step_id:
+                    n.data.step_id} : null;
+                inspector_.show(n);
+            },
+            onChange: ctx.changed,
+            onHeader: ctx.changed,
+            onEdit: function () {
+                pick({kind: 'prod', id: d.id});
+                inspector_.edit();
+            },
+            onSpecs: ctx.onSpecs});
+        ctx.state.api = api;
+        /* The leg header cards in purple */
+        (function tint() {
+            api.nodes().forEach(function (m) {
+                if (m.kind === 'prod' && m.card && m.el) {
+                    m.el.classList.add('nl-eng-legprod');
+                }
+            });
+        }());
+        /* Clicking the title opens the header card's details */
+        var title = page.node && page.node.querySelector('.dp-title');
+        if (title && d.id) {
+            title.classList.add('nl-eng-clickable');
+            title.title = 'Edit the details';
+            title.addEventListener('click', function () {
+                pick({kind: 'prod', id: d.id});
+                if (ctx.canEdit(d)) {
+                    inspector_.edit();
+                }
+            });
+        }
+    }
+
+    /* Move between the cards with the arrows: up / down along the stack,
+     * right into a leg, left back to the card it hangs off */
+    function stackMove(api, key) {
+        var nodes = api.nodes();
+        var cur = api.selected() || nodes[0];
+        if (!cur) {
+            return;
+        }
+        var root = cur.kind === 'prod' ? cur.data : cur.root;
+        var stack = nodes.filter(function (m) {
+            return (m.kind === 'prod' ? m.data : m.root) === root;
+        });
+        var i = stack.indexOf(cur);
+        var next = null;
+        if (key === 'ArrowUp') {
+            next = stack[i + 1];
+        } else if (key === 'ArrowDown') {
+            next = stack[i - 1];
+        } else if (key === 'ArrowRight') {
+            var legRoot = null;
+            if (cur.kind === 'mat' && cur.data.leg) {
+                legRoot = cur.data.leg;
+            } else {
+                /* the first leg at or after this card */
+                for (var j = Math.max(i, 1); j < stack.length && !legRoot;
+                        j++) {
+                    if (stack[j].kind === 'mat' && stack[j].data.leg) {
+                        legRoot = stack[j].data.leg;
+                    }
+                }
+            }
+            next = legRoot ? nodes.filter(function (m) {
+                return m.kind === 'prod' && m.data === legRoot;
+            })[0] : null;
+        } else if (key === 'ArrowLeft') {
+            if (cur.kind !== 'prod') {
+                next = stack[0];
+            } else if (cur.card) {
+                next = nodes.filter(function (m) {
+                    return m.kind === 'mat' && m.data === cur.card;
+                })[0];
+            }
+        }
+        if (next) {
+            api.select(next);
+        }
+    }
+
+    function stackKeys(pageNode, state, ctx) {
+        document.addEventListener('keydown', function (event) {
+            if (!pageNode.isConnected || event.ctrlKey || event.altKey ||
+                    event.metaKey || document.querySelector('.overlay, ' +
+                        '.modal')) {
+                return;
+            }
+            var t = event.target;
+            if (t && (/^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) ||
+                    t.isContentEditable)) {
+                return;
+            }
+            var api = state.api;
+            if (!api || !api.nodes().length) {
+                return;
+            }
+            var n = api.selected() || api.nodes()[0];
+            if (/^Arrow/.test(event.key)) {
+                event.preventDefault();
+                stackMove(api, event.key);
+            } else if (event.key === 'Enter') {
+                event.preventDefault();
+                if (n.kind === 'prod' && !n.card) {
+                    if (ctx.canEdit(ctx.data())) {
+                        state.inspector.edit();
+                    }
+                } else {
+                    api.edit(n);
+                }
+            } else if (event.key === 'Insert') {
+                event.preventDefault();
+                if (!api.addAfter(n)) {
+                    UI.toast('Nothing can be added here.', 'error');
+                }
+            }
+        });
+    }
+
+    /* The page's single keys, only while this page is shown (docPage keeps
+     * its key listener after the window went back to the classic view) */
+    function guardKeys(keys, holder) {
+        Object.keys(keys).forEach(function (k) {
+            var run = keys[k].run;
+            keys[k].run = function (d, page) {
+                if (holder.node && !holder.node.isConnected) {
+                    return;
+                }
+                run(d, page);
+            };
+        });
+        return keys;
+    }
+
+    /* The page's New button: hidden from who may not create */
+    function hideNew(main, hidden) {
+        Array.prototype.forEach.call(main.querySelectorAll('.dp-top button'),
+            function (b) {
+                if (b.textContent === 'New') {
+                    b.hidden = hidden;
+                }
+            });
+    }
+
+    /* A Notes window (the record's notes) */
+    function notesDialog(model, id, title) {
+        var pane = el('div', {style: {minWidth: '480px'}});
+        UI.notesTab(pane, model, id, true);
+        UI.modal('Notes: ' + title, pane);
+    }
+
+    /* ---- Work Order (modern) ------------------------------------------ */
+
+    var WO_READ = ['number', 'work_id', 'lot_id', 'split_id', 'product',
+        'product.code', 'product.rec_name', 'bom', 'bom.rec_name',
+        'bom.revision', 'description', 'quantity', 'unit', 'unit.symbol',
+        'order_status', 'state', 'planned_start_date', 'planned_date',
+        'received_quantity', 'printed_date', 'closed_date',
+        'schedule_start_date', 'schedule_finish_date', 'warehouse',
+        'warehouse.rec_name', 'product_code', 'product_code.rec_name',
+        'commodity_code', 'commodity_code.rec_name', 'drawing_number',
+        'drawing_revision', 'drawing_page', 'drawing_file', 'other_info',
+        'specifications', 'engineered_by', 'engineered_date', 'create_date',
+        'parent', 'parent.rec_name'];
+
+    /* The part's account set (read-only: accounting stays QuickBooks) */
+    function accountSetOf(productId) {
+        if (!productId) {
+            return Promise.resolve(null);
+        }
+        return Rpc.model('product.product', 'read', [[productId],
+            ['template']]).then(function (rows) {
+                var template = rows[0] && rows[0].template;
+                return template ? Rpc.model('product.template', 'read',
+                    [[template], ['account_category',
+                        'account_category.rec_name']]) : [];
+            }).then(function (rows) {
+                var row = rows[0] || {};
+                return row.account_category ? (row['account_category.'] ||
+                    {}).rec_name : null;
+            }, function () {
+                return null;
+            });
+    }
+
+    function woLoad(id) {
+        return Promise.all([
+            Rpc.model('production', 'read', [[id], WO_READ]),
+            Rpc.desk('eng_tree', ['production', id])
+        ]).then(function (r) {
+            var row = r[0][0];
+            if (!row) {
+                throw new Error('Work order not found.');
+            }
+            var d = Object.assign({}, row);
+            ['product', 'bom', 'warehouse', 'product_code', 'commodity_code',
+                'parent'].forEach(function (name) {
+                    d[name] = m2o(row, name);
+                });
+            d.unit_symbol = (row['unit.'] || {}).symbol || r[1].unit;
+            d.revision = (row['bom.'] || {}).revision || r[1].revision;
+            d.tree = r[1];
+            d.rec_name = d.number;
+            return accountSetOf(row.product).then(function (set) {
+                d.account_set = set;
+                return d;
+            });
+        });
+    }
+
+    function woModern(main, openId) {
+        var holder = {};
+        var perm = null;
+        var page = null;
+        var state = {keep: null};
+        var reloading = false;
+        function changed() {
+            /* (one reload for the cards' change and its header) */
+            if (reloading || !page) {
+                return;
+            }
+            reloading = true;
+            setTimeout(function () {
+                reloading = false;
+                page.reload();
+            }, 50);
+        }
+        function can(model, mode) {
+            return perm ? perm.can(model, mode) : false;
+        }
+        function isDraft(d) {
+            return !d.id || ['request', 'draft'].indexOf(d.state) >= 0;
+        }
+        function open(d) {
+            return d.state && OPEN_STATES.indexOf(d.state) >= 0;
+        }
+        function canEdit(d) {
+            return !d.id ? can('production', 'create') : can('production',
+                'write') && open(d);
+        }
+        function late(d) {
+            return d.planned_date && d.planned_date < today() && open(d);
+        }
+        function statusOfWo(d) {
+            return STATUS[d.order_status] || TRYTON_STATE[d.state] || '';
+        }
+
+        function setStatus(d, status) {
+            var go = function () {
+                UI.service('eng_change_status', {kind: 'production', id: d.id,
+                    status: status}).then(function () {
+                        UI.toast('Status: ' + STATUS[status], 'ok');
+                        page.reload();
+                    }, failed);
+            };
+            if (status === 'released' && !d.planned_start_date) {
+                UI.docEdit('Set Work Order Release Date', [{name:
+                    'planned_start_date', label: 'Release Date', type:
+                    'date'}], {planned_start_date: today()}).then(function (v) {
+                        Rpc.model('production', 'write', [[d.id], {
+                            planned_start_date: v.planned_start_date}]).then(
+                            go, UI.showError);
+                    }, function () {});
+                return;
+            }
+            if (status === 'closed' || status === 'cancelled') {
+                UI.confirm('Change status', 'Set work order ' + d.number +
+                    ' to ' + STATUS[status] + '?').then(function (ok) {
+                        if (ok) {
+                            go();
+                        }
+                    });
+                return;
+            }
+            go();
+        }
+        function start(d) {
+            var call = d.state === 'waiting' ? Rpc.model('production',
+                'assign_try', [[d.id]]) : Promise.resolve(true);
+            call.then(function () {
+                return Rpc.model('production', 'read', [[d.id], ['state']]);
+            }).then(function (rows) {
+                if (rows[0].state !== 'assigned') {
+                    UI.toast('Not started: the materials could not be ' +
+                        'assigned (short)', 'error');
+                    page.reload();
+                    return null;
+                }
+                return Rpc.model('production', 'run', [[d.id]]).then(
+                    function () {
+                        UI.toast('Work order ' + d.number + ' started', 'ok');
+                        page.reload();
+                    });
+            }).then(null, UI.showError);
+        }
+        function receive(d) {
+            UI.service('work_order_receive', {production: d.id}).then(
+                function (x) {
+                    UI.toast('Work order ' + x.state, 'ok');
+                    page.reload();
+                }, failed);
+        }
+        function traveler(d) {
+            Rpc.report('production.traveler', [d.id]).then(function (r) {
+                UI.openReport(r, 'Traveler');
+                Rpc.desk('eng_printed', [d.id]).then(function () {
+                    page.reload();
+                }, function () {});
+            }, UI.showError);
+        }
+        function reschedule(d) {
+            UI.docEdit('Reschedule ' + d.number, [
+                {name: 'planned_date', label: 'Want date', type: 'date'},
+                {name: 'planned_start_date', label: 'Release date',
+                    type: 'date'}], d).then(function (v) {
+                    page.save(v).then(function () {
+                        return Rpc.desk('eng_schedule', [d.id, null]);
+                    }).then(function () {
+                        page.reload();
+                    }, function () {});
+                }, function () {});
+        }
+        function mainAction(d) {
+            if (!d.id || !can('production', 'write')) {
+                return null;
+            }
+            if (isDraft(d) && d.order_status !== 'released') {
+                return {label: 'Release', primary: true, onclick: function () {
+                    setStatus(d, 'released');
+                }};
+            }
+            if (d.state === 'waiting' || d.state === 'assigned') {
+                return {label: 'Start', primary: true, onclick: function () {
+                    start(d);
+                }};
+            }
+            if (d.state === 'running') {
+                return {label: 'Receive', primary: true, onclick: function () {
+                    receive(d);
+                }};
+            }
+            return null;
+        }
+        function countShort(d) {
+            return shortCards(d.tree, true).length;
+        }
+        function groups(d) {
+            var draft = function (x) {
+                return !isDraft(x);
+            };
+            return [
+                {title: 'What to make', fields: [
+                    {name: 'product', label: 'Part', type: 'many2one',
+                        model: 'product.product', required: true, domain: [[
+                            'producible', '=', true]], readonly: draft},
+                    {name: 'bom', label: 'From engineering master rev',
+                        type: 'many2one', model: 'production.bom', domain: [[
+                            'master_type', '=', 'engineering']], readonly:
+                        function (x) {
+                            return Boolean(x.id);
+                        }, show: function (x) {
+                            return x.bom ? 'Rev ' + (x.revision || '-') : null;
+                        }},
+                    {name: 'quantity', label: 'Quantity', type: 'float',
+                        required: true, readonly: draft},
+                    {name: 'description', label: 'Description', type: 'char',
+                        wide: true}]},
+                {title: 'When', fields: [
+                    {name: 'planned_date', label: 'Wanted by', type: 'date'},
+                    {name: 'planned_start_date', label: 'Release on',
+                        type: 'date'},
+                    {name: 'schedule_start_date', label: 'Scheduled start',
+                        type: 'char', readonly: true, show: function (x) {
+                            return x.schedule_start_date ? UI.date(String(
+                                x.schedule_start_date).slice(0, 10)) : null;
+                        }},
+                    {name: 'schedule_finish_date', label: 'Scheduled finish',
+                        type: 'char', readonly: true, show: function (x) {
+                            return x.schedule_finish_date ? UI.date(String(
+                                x.schedule_finish_date).slice(0, 10)) : null;
+                        }}]},
+                {title: 'For and from', fields: [
+                    {label: 'Customer order', show: function (x) {
+                        var t = x.tree || {};
+                        if (!t.origin) {
+                            return null;
+                        }
+                        return t.sale_id && perm && perm.screen('orders') ?
+                            el('a', {href: '#/orders/' + t.sale_id}, t.origin) :
+                            t.origin;
+                    }},
+                    {name: 'warehouse', label: 'Warehouse', type: 'many2one',
+                        model: 'stock.location', domain: [['type', '=',
+                            'warehouse']], readonly: draft},
+                    {name: 'product_code', label: 'Product code',
+                        type: 'many2one', model: 'nline.product_code'},
+                    {name: 'commodity_code', label: 'Commodity code',
+                        type: 'many2one', model: 'nline.commodity_code'},
+                    {name: 'drawing_number', label: 'Drawing', type: 'char'},
+                    {name: 'drawing_revision', label: 'Drawing rev',
+                        type: 'char'},
+                    {label: 'Account set', show: function (x) {
+                        return x.account_set;
+                    }}]},
+                {title: 'Progress', fields: [
+                    {name: 'received_quantity', label: 'Received',
+                        type: 'float', readonly: true, show: function (x) {
+                            return x.id ? num(x.received_quantity || 0) +
+                                ' of ' + num(x.quantity) : null;
+                        }},
+                    {name: 'lot_id', label: 'Lot / split', type: 'char',
+                        readonly: true, show: function (x) {
+                            return x.id ? (x.lot_id || '1') + ' / ' +
+                                (x.split_id || '0') : null;
+                        }}]}];
+        }
+
+        page = UI.docPage(main, {
+            title: 'Work Order',
+            crumbs: ['Shop floor', 'Work orders'],
+            model: 'production', label: 'Work Order ID',
+            domain: [['parent', '=', null]],
+            order: [['number', 'DESC']],
+            openId: null,
+            load: function (id) {
+                state.lastId = id;
+                return woLoad(id);
+            },
+            values: function (d) {
+                return {id: d.id};
+            },
+            save: function (values, d) {
+                var changes = writable(values, d.id ? d : null);
+                if (!d.id) {
+                    if (!values.product || !values.quantity) {
+                        return Promise.reject({message: 'Choose the part and ' +
+                            'the quantity first.'});
+                    }
+                    /* (Tryton wants a start date: the want date, or today,
+                     * as the classic window) */
+                    changes.planned_start_date = changes.planned_start_date ||
+                        changes.planned_date || Rpc.date(today());
+                    return Rpc.model('production', 'create', [[changes]]).then(
+                        function (ids) {
+                            return Rpc.desk('eng_work_order_ready', [ids[0]])
+                                .then(function () {
+                                    return woLoad(ids[0]);
+                                }).then(function (x) {
+                                    setUrl('work-orders/' + ids[0], x.number);
+                                    return x;
+                                });
+                        });
+                }
+                if (!Object.keys(changes).length) {
+                    return woLoad(d.id);
+                }
+                return Rpc.model('production', 'write', [[d.id], changes])
+                    .then(function () {
+                        return woLoad(d.id);
+                    });
+            },
+            blank: function () {
+                return {id: null, number: '', product: null, bom: null,
+                    quantity: 1, state: 'draft', order_status: 'unreleased',
+                    planned_date: null, planned_start_date: null,
+                    tree: {cards: [], works: []}};
+            },
+            head: function (d) {
+                if (!d.id) {
+                    return {title: 'New work order', sub: ['Not saved yet: ' +
+                        'choose the part and the quantity']};
+                }
+                var parts = partParts(d.product ? d.product.rec_name : '');
+                var isLate = late(d);
+                return {
+                    title: d.description || parts.name || d.number,
+                    chips: [d.product ? (d.product.code || parts.code) : null,
+                        d.revision ? 'Eng ' + d.revision : null].filter(
+                        Boolean),
+                    sub: [(d.parent ? 'Leg ' : 'WO ') + d.number,
+                        num(d.quantity) + ' ' + jobshopUnit(d.unit_symbol),
+                        d.planned_date ? {text: (isLate ? 'wanted ' :
+                            'want date ') + UI.date(d.planned_date) +
+                            (isLate ? ', overdue' : ''), tone: isLate ? 'bad' :
+                            d.planned_date === today() ? 'warn' : null,
+                            icon: 'clock'} : {text: 'no want date', tone:
+                            'warn'}],
+                    amount: d.tree && d.tree.cost !== null &&
+                        d.tree.cost !== undefined ? {value: '$' +
+                            UI.money(d.tree.cost), label: 'cost so far'} : null
+                };
+            },
+            status: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var tone = {released: 'accent', closed: 'ok', hold: 'warn',
+                    cancelled: 'bad', firm: 'accent'}[d.order_status];
+                var short = countShort(d);
+                var legs = legsOf(d.tree);
+                return [{text: statusOfWo(d), tone: tone},
+                    d.state === 'running' ? {text: 'Started', tone: 'accent'} :
+                        null,
+                    short ? {text: short + (short > 1 ? ' materials' :
+                        ' material') + ' short', tone: 'bad'} : null,
+                    legs.length ? {text: legs.length + (legs.length > 1 ?
+                        ' legs' : ' leg')} : null,
+                    {text: d.printed_date ? 'Traveler printed' :
+                        'Traveler not printed'}].filter(Boolean);
+            },
+            actions: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                return [mainAction(d), {label: 'Traveler', key: 't',
+                    onclick: traveler}];
+            },
+            more: function (d) {
+                if (!d.id) {
+                    return [{label: 'Classic view', onclick: function () {
+                        UI.setDocView('wo', 'classic');
+                        Screens.jsWorkOrder(main, []);
+                    }}];
+                }
+                var api = state.api;
+                var mayWrite = can('production', 'write');
+                var s = d.order_status;
+                return [
+                    mayWrite && s !== 'closed' ? {label: 'Change status',
+                        items: ['unreleased', 'firm', 'hold', 'released',
+                            'closed', 'cancelled'].filter(function (x) {
+                                return x !== s && !(s === 'cancelled' &&
+                                    x === 'closed');
+                            }).map(function (x) {
+                                return {label: STATUS[x], onclick: function () {
+                                    setStatus(d, x);
+                                }};
+                            })} : null,
+                    mayWrite && open(d) ? {label: 'Schedule work order',
+                        onclick: function () {
+                            Rpc.desk('eng_schedule', [d.id, null]).then(
+                                function (r) {
+                                    UI.toast('Scheduled: ' + r.hours +
+                                        ' h, start ' + UI.date(r.start) +
+                                        ', finish ' + UI.date(r.finish), 'ok');
+                                    page.reload();
+                                }, UI.showError);
+                        }} : null,
+                    mayWrite && d.state === 'waiting' ? {label: 'Assign stock',
+                        onclick: function () {
+                            Rpc.model('production', 'assign_try', [[d.id]])
+                                .then(function () {
+                                    page.reload();
+                                }, UI.showError);
+                        }} : null,
+                    mayWrite && open(d) ? {label: 'Reschedule...', onclick:
+                        function () {
+                            reschedule(d);
+                        }} : null,
+                    '-',
+                    {label: 'Material availability', onclick: function () {
+                        availabilityDialog('production', d.id);
+                    }},
+                    {label: 'Show costs', onclick: function () {
+                        costsDialog('production', d.id, d.number);
+                    }},
+                    {label: 'Links', items: [
+                        {label: 'Sales order links', onclick: function () {
+                            salesLinksDialog(d.id, perm, d.number);
+                        }},
+                        {label: 'Purchase order links', onclick: function () {
+                            poLinksDialog(d.id, perm, d.number);
+                        }},
+                        {label: 'Labor transactions', onclick: function () {
+                            transactionsDialog(d.id, 'labor');
+                        }},
+                        {label: 'Inventory transactions', onclick:
+                            function () {
+                                transactionsDialog(d.id, 'inventory');
+                            }}]},
+                    api ? {label: 'Card tools', items: api.menu(
+                        api.nodes()[0]).filter(function (i) {
+                            return i !== '-';
+                        })} : null,
+                    '-',
+                    can('production', 'create') ? {label: 'Copy into a new ' +
+                        'work order', onclick: function () {
+                            UI.confirm('Copy', 'Copy ' + d.number + ' into ' +
+                                'a new work order (its operations, materials ' +
+                                'and legs)?').then(function (ok) {
+                                    if (ok) {
+                                        Rpc.desk('eng_work_order_copy', [d.id])
+                                            .then(function (id) {
+                                                UI.toast('Work order copied',
+                                                    'ok');
+                                                page.load(id);
+                                            }, UI.showError);
+                                    }
+                                });
+                        }} : null,
+                    can('production', 'create') ? {label: 'New work order ' +
+                        'from', items: [
+                        {label: 'Engineering master...', onclick: function () {
+                            newWorkOrderFrom('engineering', page.load);
+                        }},
+                        {label: 'Quote master...', onclick: function () {
+                            newWorkOrderFrom('quote', page.load);
+                        }}]} : null,
+                    can('production', 'delete') && ['request', 'draft',
+                        'cancelled'].indexOf(d.state) >= 0 ? {label: 'Delete',
+                        onclick: function () {
+                            UI.confirm('Delete', 'Delete the work order ' +
+                                d.number + ' with its legs?').then(
+                                function (ok) {
+                                    if (ok) {
+                                        Rpc.model('production', 'delete',
+                                            [[d.id]]).then(function () {
+                                                UI.toast('Deleted', 'ok');
+                                                page.clear();
+                                            }, UI.showError);
+                                    }
+                                });
+                        }} : null,
+                    d.product && perm && perm.screen('parts') ? {label:
+                        'Open part', onclick: function () {
+                            UI.openScreen('parts/' + d.tree.template_id);
+                        }} : null,
+                    d.bom && perm && perm.screen('masters') ? {label:
+                        'Open engineering master', onclick: function () {
+                            UI.openScreen('masters/' + d.bom.id);
+                        }} : null,
+                    {label: 'Notes', onclick: function () {
+                        notesDialog('production', d.id, d.number);
+                    }},
+                    '-',
+                    {label: 'Classic view', onclick: function () {
+                        UI.setDocView('wo', 'classic');
+                        Screens.jsWorkOrder(main, [d.id]);
+                    }}].filter(Boolean).filter(function (item, i, all) {
+                        return item !== '-' || (i > 0 && all[i - 1] !== '-' &&
+                            i < all.length - 1);
+                    });
+            },
+            attention: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var out = [];
+                var t = d.tree;
+                legsOf(t).forEach(function (leg) {
+                    var shorts = shortCards(leg, true);
+                    if (shorts.length && OPEN_STATES.indexOf(leg.state) >= 0 &&
+                            leg.state !== 'running') {
+                        var parts = partParts(leg.product);
+                        out.push({tone: 'bad', title: 'Leg ' + leg.number +
+                            ' can\'t start: ' + shorts.length + (shorts.length >
+                                1 ? ' materials' : ' material') + ' short',
+                            detail: (parts.code || '') + ' ' + parts.name +
+                                ': ' + shorts.slice(0, 3).map(function (x) {
+                                    return partParts(x.card.product).code ||
+                                        x.card.product;
+                                }).join(', ') + (shorts.length > 3 ? '…' : ''),
+                            action: {label: 'Order them', onclick: function () {
+                                orderShort(shorts, perm, changed);
+                            }}});
+                    }
+                });
+                var own = shortCards(t, false);
+                if (own.length && open(d)) {
+                    out.push({tone: 'bad', title: own.length + (own.length > 1 ?
+                        ' materials are' : ' material is') + ' short for ' +
+                        'this order', detail: own.slice(0, 4).map(function (x) {
+                            return partParts(x.card.product).code ||
+                                x.card.product;
+                        }).join(', '), action: {label: 'Order them',
+                            onclick: function () {
+                                orderShort(own, perm, changed);
+                            }}});
+                }
+                if (late(d)) {
+                    out.push({tone: 'bad', icon: 'clock', title: 'Overdue: ' +
+                        'wanted ' + UI.date(d.planned_date), detail: num(
+                            d.received_quantity || 0) + ' of ' +
+                        num(d.quantity) + ' received.', action:
+                        can('production', 'write') ? {label: 'Reschedule',
+                            onclick: function () {
+                                reschedule(d);
+                            }} : null});
+                }
+                if (!d.bom) {
+                    out.push({tone: 'warn', title: 'No engineering master',
+                        detail: 'The order has no master: its operations and ' +
+                            'materials are its own.', action: perm &&
+                            perm.screen('masters') ? {label: 'Masters',
+                                onclick: function () {
+                                    UI.openScreen('masters');
+                                }} : null});
+                }
+                if (!(t.works || []).length) {
+                    out.push({tone: 'warn', title: 'No operations',
+                        detail: 'Nothing to schedule or report labor on.',
+                        action: canEdit(d) ? {label: 'Add one', onclick:
+                            function () {
+                                if (state.api) {
+                                    state.api.addAfter(state.api.nodes()[0]);
+                                }
+                            }} : null});
+                }
+                if (!d.planned_date && open(d)) {
+                    out.push({tone: 'warn', icon: 'clock', title: 'No want ' +
+                        'date', action: can('production', 'write') ? {label:
+                            'Set it', onclick: function () {
+                                reschedule(d);
+                            }} : null});
+                }
+                (t.works || []).forEach(function (w) {
+                    if (w.outside && w.id && !w.purchase_id &&
+                            ['done', 'finished'].indexOf(w.state) < 0 &&
+                            can('purchase.purchase', 'create')) {
+                        out.push({tone: 'warn', title: 'Outside service ' +
+                            w.sequence + ' has no purchase order', detail:
+                            w.supplier || '', action: {label: 'Order it',
+                                onclick: function () {
+                                    Rpc.desk('eng_purchase', ['work', w.id])
+                                        .then(function (pid) {
+                                            UI.toast('Purchase order made',
+                                                'ok');
+                                            if (perm.screen(
+                                                    'purchase-orders')) {
+                                                UI.openScreen(
+                                                    'purchase-orders/' + pid);
+                                            }
+                                            changed();
+                                        }, UI.showError);
+                                }}});
+                    }
+                });
+                if (isDraft(d) && d.order_status !== 'released' &&
+                        can('production', 'write') && d.order_status !==
+                        'cancelled') {
+                    out.push({tone: 'info', title: 'Not released yet',
+                        detail: 'The shop floor and planning see it once it ' +
+                            'is released.', action: {label: 'Release',
+                            onclick: function () {
+                                setStatus(d, 'released');
+                            }}});
+                } else if (!d.printed_date && open(d)) {
+                    out.push({tone: 'info', title: 'The traveler is not ' +
+                        'printed', action: {label: 'Print', onclick:
+                            function () {
+                                traveler(d);
+                            }}});
+                }
+                return out;
+            },
+            sections: [
+                {title: 'Route', note: function (d) {
+                    return d.id ? 'legs first, then the operations' : '';
+                }, visible: function (d) {
+                    return Boolean(d.id);
+                }, render: function (pane, d) {
+                    routeStrip(pane, d.tree, {legs: true, blocked: true,
+                        pick: function (key) {
+                            if (state.pick) {
+                                state.pick(key);
+                            }
+                        }});
+                }},
+                {title: 'Cards', note: function (d) {
+                    return d.id ? 'click a card to see it here; ' +
+                        'double-click to edit' : '';
+                }, render: function (pane, d, pg) {
+                    stackSection(pane, d, Object.assign({node: main}, pg), {
+                        kind: 'production', perm: perm, state: state,
+                        groups: groups, headerKicker: 'Work order',
+                        headerTitle: function (x) {
+                            return x.id ? (x.parent ? 'Leg ' : 'WO ') +
+                                x.number : 'New work order';
+                        },
+                        canEdit: canEdit,
+                        cancelNew: function () {
+                            if (state.lastId) {
+                                page.load(state.lastId);
+                            } else {
+                                page.clear();
+                            }
+                        },
+                        changed: changed,
+                        onSpecs: function () {
+                            var card = Array.prototype.filter.call(
+                                main.querySelectorAll('.dp-card'), function (c) {
+                                    return c.querySelector('h3') &&
+                                        c.querySelector('h3').textContent ===
+                                        'Specs';
+                                })[0];
+                            if (card) {
+                                card.scrollIntoView({behavior: 'smooth'});
+                            }
+                        }});
+                }}],
+            cards: [
+                {title: 'Specs', rows: function (d) {
+                    return [['Specifications', d.specifications ?
+                        el('span', {style: {whiteSpace: 'pre-line'}},
+                            String(d.specifications).slice(0, 600)) : null],
+                        ['Project / ref', d.other_info],
+                        ['Engineered by', d.engineered_by ? d.engineered_by +
+                            (d.engineered_date ? ', ' +
+                                UI.date(d.engineered_date) : '') : null]];
+                }, fields: [
+                    {name: 'specifications', label: 'Specifications',
+                        type: 'text'},
+                    {name: 'other_info', label: 'Project/Ref/Other',
+                        type: 'char'},
+                    {name: 'engineered_by', label: 'Engineered by',
+                        type: 'char'},
+                    {name: 'engineered_date', label: 'Engineered date',
+                        type: 'date'}],
+                    editable: function (d) {
+                        return Boolean(d.id) && canEdit(d);
+                    }}],
+            trail: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var t = d.tree;
+                var mats = [];
+                (function walk(node) {
+                    (node.cards || []).forEach(function (c) {
+                        if (c.supply !== 'leg') {
+                            mats.push(c);
+                        }
+                        if (c.leg) {
+                            walk(c.leg);
+                        }
+                    });
+                }(t));
+                var issued = mats.filter(function (c) {
+                    return c.state === 'done';
+                }).length;
+                var legs = legsOf(t);
+                var legsDone = legs.filter(function (l) {
+                    return l.state === 'done';
+                }).length;
+                var released = ['released', 'closed'].indexOf(
+                    d.order_status) >= 0 || ['waiting', 'assigned', 'running',
+                        'done'].indexOf(d.state) >= 0;
+                return [
+                    {done: true, text: 'Created', when: d.create_date ?
+                        UI.date(String(d.create_date).slice(0, 10)) : ''},
+                    {done: released, text: 'Released', when: released ?
+                        (d.planned_start_date ? UI.date(d.planned_start_date) :
+                            '') : 'not yet'},
+                    {done: Boolean(d.printed_date), text: 'Traveler printed',
+                        when: d.printed_date ? UI.date(String(d.printed_date)
+                            .slice(0, 10)) : 'not yet'},
+                    {done: mats.length > 0 && issued === mats.length, text:
+                        'Material issued ' + issued + ' of ' + mats.length,
+                        when: issued ? '' : 'none yet'},
+                    legs.length ? {done: legsDone === legs.length, text:
+                        'Legs done ' + legsDone + ' of ' + legs.length} : null,
+                    {done: n0(d.received_quantity) >= n0(d.quantity) &&
+                        n0(d.quantity) > 0, text: 'Received to stock ' +
+                        num(d.received_quantity || 0) + ' of ' +
+                        num(d.quantity), when: ''},
+                    {done: d.state === 'done', text: 'Closed', when:
+                        d.closed_date ? UI.date(d.closed_date) : 'open'},
+                    {text: 'Notes', onclick: function () {
+                        notesDialog('production', d.id, d.number);
+                    }}];
+            },
+            keys: guardKeys({
+                t: {label: 'traveler', run: function (d) {
+                    if (d.id) {
+                        traveler(d);
+                    }
+                }},
+                l: {label: 'make a leg', run: function () {
+                    var api = state.api;
+                    var n = api && api.selected();
+                    if (n && !api.leg(n)) {
+                        UI.toast('No leg can be made from this card.',
+                            'error');
+                    }
+                }},
+                r: {label: 'report labor', run: function () {
+                    var api = state.api;
+                    var n = api && api.selected();
+                    if (n && !api.labor(n)) {
+                        UI.toast('Select a released operation to report ' +
+                            'labor on.', 'error');
+                    }
+                }}
+            }, holder),
+            classic: function (d) {
+                UI.setDocView('wo', 'classic');
+                Screens.jsWorkOrder(main, d && d.id ? [d.id] : []);
+            }
+        });
+        holder.node = main.querySelector('.dp-page');
+        stackKeys(holder.node, state, {canEdit: canEdit, data: page.data});
+        permissions().then(function (p) {
+            perm = p;
+            hideNew(main, !p.can('production', 'create'));
+            if (openId) {
+                page.load(openId);
+            } else {
+                page.clear();
+                if (state.inspector) {
+                    state.inspector.edit();
+                }
+            }
+        }, UI.showError);
+        return page;
+    }
+
+    /* ---- Engineering Master and Quote Master (modern) -------------------- */
+
+    var BOM_READ = ['name', 'revision', 'description', 'desired_quantity',
+        'part', 'part.code', 'part.rec_name', 'private', 'inactive',
+        'master_type', 'product_code', 'product_code.rec_name',
+        'commodity_code', 'commodity_code.rec_name', 'engineered_by',
+        'engineered_date', 'drawing_number', 'drawing_revision',
+        'drawing_page', 'drawing_file', 'global_rank', 'forward_schedule',
+        'workorder_instructions', 'specifications', 'create_date',
+        'rec_name'];
+
+    function quiet(promise, fallback) {
+        return promise.then(null, function () {
+            return fallback;
+        });
+    }
+
+    function masterLoad(id) {
+        return Promise.all([
+            Rpc.model('production.bom', 'read', [[id], BOM_READ]),
+            Rpc.desk('eng_tree', ['bom', id])
+        ]).then(function (r) {
+            var row = r[0][0];
+            if (!row) {
+                throw new Error('Master not found.');
+            }
+            var d = Object.assign({}, row);
+            ['part', 'product_code', 'commodity_code'].forEach(function (name) {
+                d[name] = m2o(row, name);
+            });
+            d.tree = r[1];
+            d.number = row.name;
+            var ids = [];
+            (d.tree.cards || []).forEach(function (c) {
+                if (ids.indexOf(c.product_id) < 0) {
+                    ids.push(c.product_id);
+                }
+            });
+            return Promise.all([
+                ids.length ? quiet(Rpc.searchRead('product.product', [['id',
+                    'in', ids], ['active', 'in', [true, false]]], ['code',
+                    'cost_price', 'active']), []) : [],
+                quiet(Rpc.searchRead('production', [['bom', '=', id]],
+                    ['number', 'state', 'order_status', 'planned_date',
+                        'parent'], {limit: 6, order: [['id', 'DESC']]}), []),
+                quiet(Rpc.model('production', 'search_count', [[['bom', '=',
+                    id]]]), 0),
+                row.part ? quiet(Rpc.searchRead(
+                    'product.product-production.bom', [['product', '=',
+                        row.part]], ['bom', 'bom.revision', 'bom.master_type',
+                        'sequence'], {order: [['sequence', 'ASC']]}), []) : [],
+                accountSetOf(row.part)
+            ]).then(function (x) {
+                d.parts = {};
+                x[0].forEach(function (p) {
+                    d.parts[p.id] = p;
+                });
+                d.workOrders = x[1];
+                d.workOrderCount = x[2];
+                d.revisions = x[3].filter(function (l) {
+                    return (l['bom.'] || {}).master_type !== 'quote';
+                });
+                d.account_set = x[4];
+                return d;
+            });
+        });
+    }
+
+    function masterModern(main, openId, type) {
+        var quote = type === 'quote';
+        var title = quote ? 'Quote Master' : 'Engineering Master';
+        var view = quote ? 'quote-master' : 'master';
+        var holder = {};
+        var perm = null;
+        var page = null;
+        var state = {keep: null};
+        var reloading = false;
+        function changed() {
+            if (reloading || !page) {
+                return;
+            }
+            reloading = true;
+            setTimeout(function () {
+                reloading = false;
+                page.reload();
+            }, 50);
+        }
+        function can(model, mode) {
+            return perm ? perm.can(model, mode) : false;
+        }
+        function canEdit(d) {
+            return !d.id ? can('production.bom', 'create') :
+                can('production.bom', 'write');
+        }
+        function classic(d) {
+            UI.setDocView(view, 'classic');
+            Screens[quote ? 'jsQuoteMaster' : 'jsEngineeringMaster'](main,
+                d && d.id ? [d.id] : []);
+        }
+        function makeWorkOrder(d) {
+            if (!d.part) {
+                UI.toast('The master makes no part.', 'error');
+                return;
+            }
+            UI.docEdit('Make a work order from ' + (quote ? 'quote master ' +
+                d.name : 'Eng ' + (d.revision || '-')), [
+                {name: 'quantity', label: 'Quantity', type: 'float'},
+                {name: 'planned_date', label: 'Want date', type: 'date'}],
+                {quantity: d.desired_quantity || 1}).then(function (v) {
+                    var values = {product: d.part.id, bom: d.id, quantity:
+                        v.quantity || 1};
+                    if (v.planned_date) {
+                        values.planned_date = v.planned_date;
+                    }
+                    return Rpc.model('production', 'create', [[values]]).then(
+                        function (ids) {
+                            return Rpc.desk('eng_work_order_ready', [ids[0]])
+                                .then(function () {
+                                    UI.toast('Work order made', 'ok');
+                                    UI.openScreen('work-orders/' + ids[0],
+                                        'Work Order');
+                                    changed();
+                                });
+                        });
+                }, function () {}).then(null, UI.showError);
+        }
+        function copyInto(d, intoType) {
+            UI.docEdit(intoType === 'quote' ? 'Copy into a new quote master' :
+                'Copy into a new engineering master', [
+                {name: 'product', label: 'Part', type: 'many2one', model:
+                    'product.product', domain: [['producible', '=', true]]},
+                intoType === 'quote' ? null : {name: 'revision', label:
+                    'Eng ID (revision)', type: 'char'}].filter(Boolean),
+                {product: d.part}).then(function (v) {
+                    return Rpc.desk('eng_master_copy', [d.id, {master_type:
+                        intoType, product: v.product, revision: v.revision ||
+                            null}]).then(function (id) {
+                                UI.toast(title + ' copied', 'ok');
+                                if (intoType === type) {
+                                    page.load(id);
+                                } else {
+                                    UI.openScreen((intoType === 'quote' ?
+                                        'quote-masters/' : 'masters/') + id);
+                                }
+                            });
+                }, function () {}).then(null, UI.showError);
+        }
+        function problems(d) {
+            var out = {cost: [], inactive: []};
+            (d.tree.cards || []).forEach(function (c) {
+                var p = d.parts[c.product_id];
+                if (!p) {
+                    return;
+                }
+                if (p.active === false) {
+                    out.inactive.push(c);
+                } else if (!c.leg && !n0(p.cost_price)) {
+                    out.cost.push(c);
+                }
+            });
+            return out;
+        }
+        function groups() {
+            var saved = function (x) {
+                return Boolean(x.id);
+            };
+            return [
+                {title: 'What it makes', fields: [
+                    quote ? {name: 'name', label: 'Quote master ID',
+                        type: 'char', readonly: saved} : null,
+                    {name: 'part', label: 'Part', type: 'many2one', model:
+                        'product.product', domain: [['producible', '=',
+                            true]], required: !quote, readonly: saved},
+                    quote ? null : {name: 'revision', label: 'Eng ID ' +
+                        '(revision)', type: 'char'},
+                    {name: 'desired_quantity', label: 'Quantity',
+                        type: 'float'},
+                    {name: 'description', label: 'Description', type: 'char',
+                        wide: true}].filter(Boolean)},
+                {title: 'Drawing', fields: [
+                    {name: 'drawing_number', label: 'Drawing', type: 'char'},
+                    {name: 'drawing_revision', label: 'Rev', type: 'char'},
+                    {name: 'drawing_page', label: 'Page', type: 'char'},
+                    {name: 'drawing_file', label: 'Drawing file',
+                        type: 'char', wide: true}]},
+                {title: 'Codes', fields: [
+                    {name: 'product_code', label: 'Product code',
+                        type: 'many2one', model: 'nline.product_code'},
+                    {name: 'commodity_code', label: 'Commodity code',
+                        type: 'many2one', model: 'nline.commodity_code'},
+                    {label: 'Account set', show: function (x) {
+                        return x.account_set;
+                    }}]},
+                {title: 'Engineering', fields: [
+                    {name: 'engineered_by', label: 'Engineered by',
+                        type: 'char'},
+                    {name: 'engineered_date', label: 'Engineered date',
+                        type: 'date'},
+                    {name: 'global_rank', label: 'Global rank',
+                        type: 'integer'},
+                    {name: 'forward_schedule', label: 'Forward schedule',
+                        type: 'boolean'},
+                    {name: 'private', label: 'Locked', type: 'boolean'},
+                    quote ? null : {name: 'inactive', label: 'Inactive',
+                        type: 'boolean'}].filter(Boolean)},
+                {title: 'Work order special instructions', fields: [
+                    {name: 'workorder_instructions', label: 'Instructions',
+                        type: 'text'}]}];
+        }
+
+        page = UI.docPage(main, {
+            title: title,
+            crumbs: ['Engineering', quote ? 'Quote masters' :
+                'Engineering masters'],
+            model: 'production.bom', label: quote ? 'Quote Master ID' :
+                'Master',
+            domain: [['master_type', '=', type]],
+            order: [['name', 'ASC'], ['revision', 'ASC']],
+            openId: null,
+            load: function (id) {
+                state.lastId = id;
+                return masterLoad(id);
+            },
+            values: function (d) {
+                return {id: d.id};
+            },
+            save: function (values, d) {
+                var changes = writable(values, d.id ? d : null);
+                if (!d.id) {
+                    var part = changes.part;
+                    delete changes.part;
+                    if (!quote && !part) {
+                        return Promise.reject({message: 'Choose the part ' +
+                            'first.'});
+                    }
+                    changes.master_type = type;
+                    changes.name = changes.name || '-';
+                    return Rpc.model('production.bom', 'create', [[changes]])
+                        .then(function (ids) {
+                            return Rpc.desk('eng_master_ready', [ids[0],
+                                part || null]).then(function () {
+                                    return masterLoad(ids[0]);
+                                }).then(function (x) {
+                                    setUrl((quote ? 'quote-masters/' :
+                                        'masters/') + ids[0], x.rec_name);
+                                    return x;
+                                });
+                        });
+                }
+                delete changes.part;
+                if (!Object.keys(changes).length) {
+                    return masterLoad(d.id);
+                }
+                return Rpc.model('production.bom', 'write', [[d.id], changes])
+                    .then(function () {
+                        return masterLoad(d.id);
+                    });
+            },
+            blank: function () {
+                return {id: null, name: '', part: null, desired_quantity: 1,
+                    master_type: type, tree: {cards: [], works: []},
+                    parts: {}, workOrders: [], revisions: []};
+            },
+            head: function (d) {
+                if (!d.id) {
+                    return {title: 'New ' + title.toLowerCase(), sub: [
+                        'Not saved yet: choose the part' + (quote ? '' :
+                            ' and its Eng ID')]};
+                }
+                var parts = partParts(d.part ? d.part.rec_name : '');
+                return {
+                    title: d.description || parts.name || d.name,
+                    chips: [quote ? 'Quote master ' + d.name : null,
+                        d.part ? d.part.code || parts.code : null,
+                        !quote && d.revision ? 'Eng ' + d.revision : null]
+                        .filter(Boolean),
+                    sub: [quote ? 'Quote master ' + d.name : 'Master for ' +
+                        (d.part ? d.part.code || parts.code : 'no part'),
+                        'quantity ' + num(d.desired_quantity || 1),
+                        d.engineered_by || d.engineered_date ? 'engineered' +
+                            (d.engineered_by ? ' by ' + d.engineered_by : '') +
+                            (d.engineered_date ? ' ' +
+                                UI.date(d.engineered_date) : '') : null]
+                };
+            },
+            status: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var mats = (d.tree.cards || []).length;
+                var legs = legsOf(d.tree).length;
+                return [
+                    d.inactive ? {text: 'Inactive', tone: 'bad'} : {text:
+                        'Active', tone: 'accent'},
+                    d.private ? {text: 'Locked', tone: 'warn'} : null,
+                    {text: (d.tree.works || []).length + ' operations'},
+                    {text: mats + ' materials'},
+                    legs ? {text: legs + (legs > 1 ? ' legs' : ' leg')} : null,
+                    d.workOrderCount ? {text: d.workOrderCount +
+                        ' work orders'} : null].filter(Boolean);
+            },
+            actions: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                return [
+                    can('production', 'create') && d.part && !d.inactive ?
+                        {label: 'Make a work order', primary: true, key: 'w',
+                            onclick: makeWorkOrder} : null,
+                    {label: 'Costs', onclick: function () {
+                        costsDialog('bom', d.id, d.name);
+                    }}];
+            },
+            more: function (d) {
+                if (!d.id) {
+                    return [{label: 'Classic view', onclick: function () {
+                        classic(null);
+                    }}];
+                }
+                var api = state.api;
+                return [
+                    can('production.bom', 'create') ? {label: quote ?
+                        'Copy into a new engineering master' :
+                        'Copy into a new quote master', onclick: function () {
+                            copyInto(d, quote ? 'engineering' : 'quote');
+                        }} : null,
+                    can('production.bom', 'create') ? {label: 'Copy into a ' +
+                        'new ' + (quote ? 'quote master' : 'revision'),
+                        onclick: function () {
+                            copyInto(d, type);
+                        }} : null,
+                    {label: 'Material availability', onclick: function () {
+                        availabilityDialog('bom', d.id);
+                    }},
+                    api && api.nodes().length ? {label: 'Card tools', items:
+                        api.menu(api.nodes()[0]).filter(function (i) {
+                            return i !== '-';
+                        })} : null,
+                    d.part && perm && perm.screen('parts') ?
+                        {label: 'Open part', onclick: function () {
+                            UI.openScreen('parts/' + d.tree.template_id);
+                        }} : null,
+                    {label: 'Notes', onclick: function () {
+                        notesDialog('production.bom', d.id, d.name);
+                    }},
+                    can('production.bom', 'delete') ? {label: 'Delete',
+                        onclick: function () {
+                            UI.confirm('Delete', 'Delete the ' +
+                                title.toLowerCase() + ' ' + d.rec_name + '?')
+                                .then(function (ok) {
+                                    if (ok) {
+                                        Rpc.model('production.bom', 'delete',
+                                            [[d.id]]).then(function () {
+                                                UI.toast('Deleted', 'ok');
+                                                page.clear();
+                                            }, UI.showError);
+                                    }
+                                });
+                        }} : null,
+                    '-',
+                    {label: 'Classic view', onclick: function () {
+                        classic(d);
+                    }}].filter(Boolean);
+            },
+            attention: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var out = [];
+                var p = problems(d);
+                var cardsOf = function (list) {
+                    return list.slice(0, 4).map(function (c) {
+                        return partParts(c.product).code || c.product;
+                    }).join(', ') + (list.length > 4 ? '…' : '');
+                };
+                if (!d.part) {
+                    out.push({tone: 'warn', title: 'No part', detail: 'A ' +
+                        'work order needs the part the master makes.',
+                        action: can('production.bom', 'write') ? {label:
+                            'Choose the part', onclick: function () {
+                                UI.docEdit('Part', [{name: 'part', label:
+                                    'Part', type: 'many2one', model:
+                                    'product.product', domain: [[
+                                        'producible', '=', true]]}], {}).then(
+                                    function (v) {
+                                        if (!v.part) {
+                                            return null;
+                                        }
+                                        return Rpc.desk('eng_master_ready',
+                                            [d.id, v.part]).then(function () {
+                                                page.reload();
+                                            });
+                                    }, function () {}).then(null,
+                                    UI.showError);
+                            }} : null});
+                }
+                if (d.inactive) {
+                    out.push({tone: 'warn', title: 'This master is inactive',
+                        detail: 'Work orders do not use it.', action:
+                        can('production.bom', 'write') ? {label: 'Activate',
+                            onclick: function () {
+                                page.save({inactive: false});
+                            }} : null});
+                }
+                if (p.inactive.length) {
+                    out.push({tone: 'bad', title: p.inactive.length +
+                        (p.inactive.length > 1 ? ' materials are inactive ' +
+                            'parts' : ' material is an inactive part'),
+                        detail: cardsOf(p.inactive), action: {label: 'Show',
+                            onclick: function () {
+                                state.pick({kind: 'mat', id:
+                                    p.inactive[0].id});
+                            }}});
+                }
+                if (p.cost.length) {
+                    out.push({tone: 'warn', title: p.cost.length +
+                        (p.cost.length > 1 ? ' materials have' :
+                            ' material has') + ' no cost', detail:
+                        cardsOf(p.cost) + ': the costs and quotes understate.',
+                        action: perm && perm.screen('parts') ? {label:
+                            'Open part', onclick: function () {
+                                UI.openScreen('parts/' +
+                                    p.cost[0].template_id);
+                            }} : null});
+                }
+                if (!(d.tree.works || []).length) {
+                    out.push({tone: 'warn', title: 'No operations',
+                        detail: 'Work orders made from it have nothing to ' +
+                            'schedule.', action: canEdit(d) && !d.private ? {
+                            label: 'Add one', onclick: function () {
+                                if (state.api) {
+                                    state.api.addAfter(state.api.nodes()[0]);
+                                }
+                            }} : null});
+                }
+                if (d.private) {
+                    out.push({tone: 'info', title: 'Locked', detail: 'Its ' +
+                        'cards cannot be changed until it is unlocked.',
+                        action: can('production.bom', 'write') ? {label:
+                            'Unlock', onclick: function () {
+                                page.save({'private': false});
+                            }} : null});
+                }
+                return out;
+            },
+            sections: [
+                {title: 'Route', note: 'standard hours per operation',
+                    visible: function (d) {
+                        return Boolean(d.id);
+                    }, render: function (pane, d) {
+                        routeStrip(pane, d.tree, {legs: true, standard: true,
+                            pick: function (key) {
+                                if (state.pick) {
+                                    state.pick(key);
+                                }
+                            }});
+                    }},
+                {title: 'Cards', note: function (d) {
+                    return d.id ? 'click a card to see it here; ' +
+                        'double-click to edit' : '';
+                }, render: function (pane, d, pg) {
+                    var p = perm;
+                    if (quote && p) {
+                        /* A quote master is the sales group's */
+                        p.access['production.bom'] = Object.assign({},
+                            p.access['production.bom'], {write: p.can(
+                                'production.bom', 'write') || p.can(
+                                'nline.quote', 'write')});
+                    }
+                    stackSection(pane, d, Object.assign({node: main}, pg), {
+                        kind: 'bom', perm: p, state: state, groups: groups,
+                        headerKicker: title,
+                        headerTitle: function (x) {
+                            return x.id ? (quote ? 'Quote master ' + x.name :
+                                'Eng ' + (x.revision || '-')) : 'New ' +
+                                title.toLowerCase();
+                        },
+                        canEdit: canEdit,
+                        cancelNew: function () {
+                            if (state.lastId) {
+                                page.load(state.lastId);
+                            } else {
+                                page.clear();
+                            }
+                        },
+                        changed: changed});
+                }}],
+            cards: [
+                {title: 'Specs', rows: function (d) {
+                    return [['Specifications', d.specifications ?
+                        el('span', {style: {whiteSpace: 'pre-line'}},
+                            String(d.specifications).slice(0, 600)) : null]];
+                }, fields: [{name: 'specifications', label: 'Specifications',
+                    type: 'text'}], editable: function (d) {
+                        return Boolean(d.id) && canEdit(d);
+                    }}],
+            trail: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var rows = [
+                    {done: true, text: 'Created', when: d.create_date ?
+                        UI.date(String(d.create_date).slice(0, 10)) : ''},
+                    {done: Boolean(d.engineered_date), text: 'Engineered' +
+                        (d.engineered_by ? ' by ' + d.engineered_by : ''),
+                        when: d.engineered_date ? UI.date(d.engineered_date) :
+                            'not yet'}];
+                if (!quote) {
+                    d.revisions.forEach(function (l, i) {
+                        var rev = (l['bom.'] || {}).revision || '-';
+                        var self = l.bom === d.id;
+                        rows.push({done: self, text: 'Revision ' + rev +
+                            (i === 0 ? ' (current)' : '') + (self ?
+                                ': this one' : ''), when: '', onclick: self ?
+                            null : function () {
+                                page.load(l.bom);
+                            }});
+                    });
+                }
+                rows.push({done: d.workOrderCount > 0, text: d.workOrderCount ?
+                    d.workOrderCount + ' work order' + (d.workOrderCount > 1 ?
+                        's' : '') + ' made from it' : 'No work order made ' +
+                    'from it yet', when: ''});
+                d.workOrders.filter(function (w) {
+                    return !w.parent;
+                }).forEach(function (w) {
+                    rows.push({text: 'WO ' + w.number + ' · ' + (STATUS[
+                        w.order_status] || TRYTON_STATE[w.state] || ''),
+                        when: w.planned_date ? UI.date(w.planned_date) : '',
+                        onclick: function () {
+                            UI.openScreen('work-orders/' + w.id, 'Work Order');
+                        }});
+                });
+                rows.push({text: 'Notes', onclick: function () {
+                    notesDialog('production.bom', d.id, d.name);
+                }});
+                return rows;
+            },
+            keys: guardKeys({
+                w: {label: 'make a work order', run: function (d) {
+                    if (d.id && can('production', 'create')) {
+                        makeWorkOrder(d);
+                    }
+                }},
+                l: {label: 'make a leg', run: function () {
+                    var api = state.api;
+                    var n = api && api.selected();
+                    if (n && !api.leg(n)) {
+                        UI.toast('No leg can be added here.', 'error');
+                    }
+                }}
+            }, holder),
+            classic: classic
+        });
+        holder.node = main.querySelector('.dp-page');
+        stackKeys(holder.node, state, {canEdit: canEdit, data: page.data});
+        permissions().then(function (p) {
+            perm = p;
+            hideNew(main, !p.can('production.bom', 'create'));
+            if (openId) {
+                page.load(openId);
+            } else {
+                page.clear();
+            }
+        }, UI.showError);
+        return page;
+    }
+
+    /* ---- Estimating Quotes (modern) -------------------------------------- */
+
+    var QUOTE_READ = ['number', 'party', 'party.rec_name', 'party.code',
+        'quote_date', 'customer_reference', 'status', 'desired_ship_date',
+        'quoted_leadtime', 'win_probability', 'promise_date',
+        'followup_date', 'expiration_date', 'expected_win_date',
+        'won_loss_date', 'won_loss_reason', 'printed_date', 'sales_rep',
+        'fob_point', 'fob_point.rec_name', 'ship_via', 'ship_via.rec_name',
+        'freight_terms', 'payment_term', 'payment_term.rec_name',
+        'total_amount', 'sale', 'sale.rec_name', 'name', 'street', 'city',
+        'state', 'postal_code', 'country', 'contact_name', 'contact_phone',
+        'contact_email', 'ship_name', 'ship_street', 'ship_city',
+        'ship_state', 'ship_postal_code', 'ship_country',
+        'ship_contact_name', 'ship_contact_phone', 'specifications',
+        'footer', 'create_date', 'tax_group', 'carrier', 'created_by'];
+
+    function quotePrice(p) {
+        var price = p.unit_price !== null && p.unit_price !== undefined &&
+            p.unit_price !== '' ? Number(p.unit_price) :
+            Number(p.calc_unit_price || 0);
+        return price * (1 - (Number(p.trade_discount) || 0) / 100);
+    }
+
+    function quoteLineTotal(line) {
+        var p = (line.prices || []).filter(function (x) {
+            return x.in_total;
+        })[0] || (line.prices || [])[0];
+        return p ? quotePrice(p) * Number(p.quantity || 0) : 0;
+    }
+
+    function quoteLoad(id) {
+        return Promise.all([
+            Rpc.model('nline.quote', 'read', [[id], QUOTE_READ]),
+            Rpc.desk('eng_quote_get', [id]),
+            quiet(Rpc.searchRead('nline.quote.charge', [['quote', '=', id]],
+                ['description', 'amount']), [])
+        ]).then(function (r) {
+            var row = r[0][0];
+            if (!row) {
+                throw new Error('Quote not found.');
+            }
+            var d = Object.assign({}, row);
+            ['party', 'fob_point', 'ship_via', 'payment_term', 'sale']
+                .forEach(function (name) {
+                    d[name] = m2o(row, name);
+                });
+            d.lines = r[1];
+            d.charges = r[2];
+            d.rec_name = d.number;
+            return d;
+        });
+    }
+
+    function quoteModern(main, openId) {
+        var holder = {};
+        var perm = null;
+        var page = null;
+        var MARKUP = 35;
+        function can(model, mode) {
+            return perm ? perm.can(model, mode) : false;
+        }
+        function isOpen(d) {
+            return ['active', 'ready'].indexOf(d.status) >= 0;
+        }
+        function mayWrite(d) {
+            return can('nline.quote', 'write') && (!d.id || isOpen(d));
+        }
+        function money$(v) {
+            return '$' + UI.money(n0(v));
+        }
+        function linesTotal(d) {
+            return (d.lines || []).reduce(function (s, l) {
+                return s + quoteLineTotal(l);
+            }, 0);
+        }
+        function chargesTotal(d) {
+            return (d.charges || []).reduce(function (s, c) {
+                return s + n0(c.amount);
+            }, 0);
+        }
+        function noPrice(l) {
+            var p = (l.prices || []).filter(function (x) {
+                return x.in_total;
+            })[0] || (l.prices || [])[0];
+            return l.status !== 'closed' && (!p || !quotePrice(p));
+        }
+        function soon(date) {
+            return date <= new Date(Date.now() + 7 * 864e5).toISOString()
+                .slice(0, 10);
+        }
+        function saveLines(d, lines) {
+            return Rpc.desk('eng_quote_save', [d.id, lines.map(function (line) {
+                var row = Object.assign({}, line);
+                ['product', 'unit', 'bom', 'quote_master', 'product_code',
+                    'commodity_code'].forEach(function (n) {
+                        row[n] = row[n] && typeof row[n] === 'object' ?
+                            row[n].id : row[n] || null;
+                    });
+                return row;
+            })]).then(function () {
+                UI.toast('Quote lines saved', 'ok');
+                page.reload();
+            }, UI.showError);
+        }
+        function editLine(d, index) {
+            quoteLineDialog(index === null ? null : d.lines[index],
+                mayWrite(d), MARKUP).then(function (merged) {
+                    var lines = d.lines.slice();
+                    if (index === null) {
+                        lines.push(merged);
+                    } else {
+                        lines[index] = merged;
+                    }
+                    saveLines(d, lines);
+                });
+        }
+        function win(d) {
+            UI.confirm('Win Quote', 'Make the sales order of quote ' +
+                d.number + ' (the quantities In Total of its open lines and ' +
+                'its charges)?').then(function (ok) {
+                    if (!ok) {
+                        return;
+                    }
+                    Rpc.desk('eng_quote_win', [d.id, true]).then(function (s) {
+                        UI.toast('Sales order made from the quote', 'ok');
+                        page.reload();
+                        if (perm && perm.screen('orders')) {
+                            UI.openScreen('orders/' + s, 'Order');
+                        }
+                    }, UI.showError);
+                });
+        }
+        function lose(d, status) {
+            UI.docEdit(status === 'cancelled' ? 'Cancel quote' : 'Lose quote',
+                [{name: 'reason', label: 'Won/Loss reason', type: 'char'}],
+                {}).then(function (v) {
+                    Rpc.desk('eng_quote_lose', [d.id, v.reason || null,
+                        status]).then(function () {
+                            page.reload();
+                        }, UI.showError);
+                }, function () {});
+        }
+        function print(d) {
+            printQuote(d);
+            setTimeout(function () {
+                page.reload();
+            }, 1500);
+        }
+        function addresses(d) {
+            return Rpc.desk('eng_party_address', [d.party.id]).then(
+                function (a) {
+                    var values = Object.assign({}, a);
+                    values.payment_term = a.payment_term ? a.payment_term.id :
+                        null;
+                    return Rpc.model('nline.quote', 'write', [[d.id], values]);
+                });
+        }
+        function classic(d) {
+            UI.setDocView('quote', 'classic');
+            Screens.jsQuotes(main, d && d.id ? [d.id] : []);
+        }
+        function addressText(d, prefix) {
+            return [d[prefix + 'name'], d[prefix + 'street'], [d[prefix +
+                'city'], d[prefix + 'state'], d[prefix + 'postal_code']]
+                .filter(Boolean).join(' ')].filter(Boolean).join(', ');
+        }
+        function setDate(d, name, label) {
+            UI.docEdit(label, [{name: name, label: label, type: 'date'}], d)
+                .then(function (v) {
+                    page.save(v);
+                }, function () {});
+        }
+
+        page = UI.docPage(main, {
+            title: 'Quote',
+            crumbs: ['Estimating', 'Quotes'],
+            model: 'nline.quote', label: 'Quote ID',
+            order: [['quote_date', 'DESC'], ['number', 'DESC']],
+            openId: null,
+            load: quoteLoad,
+            values: function (d) {
+                return {id: d.id};
+            },
+            save: function (values, d) {
+                var changes = writable(values, d.id ? d : null);
+                if (!d.id) {
+                    if (!changes.party) {
+                        return Promise.reject({message: 'Choose the ' +
+                            'customer first.'});
+                    }
+                    changes.status = changes.status || 'active';
+                    changes.quote_date = changes.quote_date ||
+                        Rpc.date(today());
+                    return Rpc.model('nline.quote', 'create', [[changes]])
+                        .then(function (ids) {
+                            return addresses({id: ids[0], party: {id:
+                                changes.party}}).then(null, function () {})
+                                .then(function () {
+                                    return quoteLoad(ids[0]);
+                                }).then(function (x) {
+                                    setUrl('quotes/' + ids[0], x.number);
+                                    return x;
+                                });
+                        });
+                }
+                if (!Object.keys(changes).length) {
+                    return quoteLoad(d.id);
+                }
+                return Rpc.model('nline.quote', 'write', [[d.id], changes])
+                    .then(function () {
+                        return quoteLoad(d.id);
+                    });
+            },
+            blank: function () {
+                return {id: null, number: '', party: null, status: 'active',
+                    quote_date: today(), lines: [], charges: []};
+            },
+            head: function (d) {
+                if (!d.id) {
+                    return {title: 'New quote', sub: ['Not saved yet: choose ' +
+                        'the customer (Customer card below)']};
+                }
+                var exp = d.expiration_date;
+                var expired = exp && exp < today() && isOpen(d);
+                var party = d.party ? d.party.rec_name : '';
+                var name = /^\[[^\]]+\]\s*/.test(party) ? code(party).name :
+                    party;
+                return {
+                    title: name || d.name || 'Quote ' + d.number,
+                    chips: d.party && d.party.code ? [d.party.code] : [],
+                    sub: ['Quote ' + d.number, d.quote_date ? 'dated ' +
+                        UI.date(d.quote_date) : null, d.sales_rep ? 'rep ' +
+                        d.sales_rep : null, d.customer_reference ? 'ref ' +
+                        d.customer_reference : null, exp ? {text: (expired ?
+                            'expired ' : 'expires ') + UI.date(exp), tone:
+                            expired ? 'bad' : isOpen(d) && soon(exp) ? 'warn' :
+                            null, icon: 'clock'} : null],
+                    amount: {value: money$(d.total_amount !== null &&
+                        d.total_amount !== undefined ? d.total_amount :
+                        linesTotal(d) + chargesTotal(d)), label:
+                        (d.lines || []).length + ' line' + ((d.lines ||
+                            []).length === 1 ? '' : 's')}
+                };
+            },
+            status: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var tone = {active: 'accent', ready: 'accent', won: 'ok',
+                    lost: 'bad', cancelled: 'bad'}[d.status];
+                return [{text: (QUOTE_STATUS.filter(function (s) {
+                    return s[0] === d.status;
+                })[0] || ['', d.status])[1], tone: tone},
+                    {text: d.printed_date ? 'Printed ' + UI.date(String(
+                        d.printed_date).slice(0, 10)) : 'Not printed'},
+                    d.win_probability ? {text: num(d.win_probability) +
+                        '% to win'} : null].filter(Boolean);
+            },
+            actions: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var mayWin = isOpen(d) && can('nline.quote', 'write') &&
+                    can('sale.sale', 'create');
+                return [
+                    mayWin ? {label: 'Win Quote', primary: true, key: 'w',
+                        onclick: win} : null,
+                    d.status === 'active' && can('nline.quote', 'write') ?
+                        {label: 'Mark ready', onclick: function () {
+                            page.save({status: 'ready'});
+                        }} : null,
+                    {label: 'Print', key: 'p', onclick: print}];
+            },
+            more: function (d) {
+                if (!d.id) {
+                    return [{label: 'Classic view', onclick: function () {
+                        classic(null);
+                    }}];
+                }
+                var w = can('nline.quote', 'write');
+                return [
+                    w && isOpen(d) ? {label: 'Lose quote', onclick:
+                        function () {
+                            lose(d, 'lost');
+                        }} : null,
+                    w && isOpen(d) ? {label: 'Cancel quote', onclick:
+                        function () {
+                            lose(d, 'cancelled');
+                        }} : null,
+                    w && d.status === 'ready' ? {label: 'Back to active',
+                        onclick: function () {
+                            page.save({status: 'active'});
+                        }} : null,
+                    w && d.party ? {label: 'Addresses from customer', onclick:
+                        function () {
+                            addresses(d).then(function () {
+                                page.reload();
+                            }, UI.showError);
+                        }} : null,
+                    d.sale && perm && perm.screen('orders') ? {label:
+                        'Open sales order', onclick: function () {
+                            UI.openScreen('orders/' + d.sale.id, 'Order');
+                        }} : null,
+                    {label: 'Notes', onclick: function () {
+                        notesDialog('nline.quote', d.id, 'Quote ' + d.number);
+                    }},
+                    '-',
+                    {label: 'Classic view', onclick: function () {
+                        classic(d);
+                    }}].filter(Boolean);
+            },
+            attention: function (d) {
+                var out = [];
+                var open = isOpen(d);
+                if (!d.party) {
+                    out.push({tone: 'info', title: 'Choose the customer',
+                        detail: 'A quote needs its customer before it can ' +
+                            'be saved.', action: mayWrite(d) ? {label:
+                            'Choose', onclick: function () {
+                                UI.docEdit('Customer', [{name: 'party', label:
+                                    'Customer', type: 'many2one', model:
+                                    'party.party'}], d).then(function (v) {
+                                        page.save(v);
+                                    }, function () {});
+                            }} : null});
+                }
+                if (!d.id) {
+                    return out;
+                }
+                if (open && !(d.lines || []).length) {
+                    out.push({tone: 'warn', title: 'No lines yet', detail:
+                        'Add the parts quoted with their quantities.',
+                        action: mayWrite(d) ? {label: 'Add a line', onclick:
+                            function () {
+                                editLine(d, null);
+                            }} : null});
+                }
+                (d.lines || []).forEach(function (l, i) {
+                    if (open && noPrice(l)) {
+                        out.push({tone: 'warn', title: 'Line ' + (l.line_no ||
+                            i + 1) + ' has no price', detail: (l.description ||
+                            (l.product && l.product.rec_name) || '') +
+                            ': calculate it from the master or type one.',
+                            action: {label: 'Set price', onclick: function () {
+                                editLine(d, i);
+                            }}});
+                    }
+                });
+                var exp = d.expiration_date;
+                if (open && exp && soon(exp)) {
+                    var past = exp < today();
+                    out.push({tone: past ? 'bad' : 'warn', icon: 'clock',
+                        title: (past ? 'Expired ' : 'Expires ') +
+                            UI.date(exp), detail: 'The prices are no longer ' +
+                            'held after it expires.', action: mayWrite(d) ? {
+                            label: 'Extend', onclick: function () {
+                                setDate(d, 'expiration_date', 'Expires');
+                            }} : null});
+                }
+                if (open && d.followup_date && d.followup_date <= today()) {
+                    out.push({tone: 'info', icon: 'clock', title: 'Follow ' +
+                        'up due ' + UI.date(d.followup_date), action:
+                        mayWrite(d) ? {label: 'Next follow-up', onclick:
+                            function () {
+                                setDate(d, 'followup_date', 'Follow up');
+                            }} : null});
+                }
+                if (d.status === 'won' && !d.sale) {
+                    out.push({tone: 'warn', title: 'Won without a sales ' +
+                        'order'});
+                }
+                return out;
+            },
+            tracker: function (d) {
+                if (!d.id) {
+                    return null;
+                }
+                var s = d.status;
+                var end = s === 'lost' ? 'Lost' : s === 'cancelled' ?
+                    'Cancelled' : 'Won';
+                return {title: 'Quote', note: d.won_loss_reason || '', steps: [
+                    {label: 'Active', value: d.quote_date ?
+                        UI.date(d.quote_date) : '', state: s === 'active' ?
+                        'now' : 'done'},
+                    {label: 'Ready', value: s === 'ready' ? 'to send' : '',
+                        state: s === 'ready' ? 'now' : s === 'active' ?
+                            'todo' : 'done'},
+                    {label: end, value: s === 'won' ? (d.sale ?
+                        d.sale.rec_name : 'yes') : d.won_loss_date ?
+                        UI.date(d.won_loss_date) : '', state: s === 'won' ?
+                        'done' : s === 'lost' || s === 'cancelled' ? 'bad' :
+                        'todo'}]};
+            },
+            sections: [{title: 'Lines', note: function (d) {
+                return mayWrite(d) ? 'Click a line to change it' :
+                    'Click a line for its quantities';
+            }, visible: function (d) {
+                return Boolean(d.id);
+            }, render: function (pane, d) {
+                UI.docLines(pane, {
+                    items: (d.lines || []).map(function (l, i) {
+                        return {line: l, index: i};
+                    }),
+                    kind: function () {
+                        return {icon: 'part', tone: 'part'};
+                    },
+                    title: function (x) {
+                        return x.line.description || (x.line.product &&
+                            code(x.line.product.rec_name).name) || 'Line ' +
+                            (x.line.line_no || x.index + 1);
+                    },
+                    chips: function (x) {
+                        var l = x.line;
+                        var c = [];
+                        if (l.product) {
+                            c.push(code(l.product.rec_name).code ||
+                                l.product.rec_name);
+                        }
+                        c.push('cost from ' + ((COST_FROM.filter(function (f) {
+                            return f[0] === l.cost_from;
+                        })[0] || ['', 'none'])[1]).toLowerCase());
+                        if (noPrice(l)) {
+                            c.push({text: 'no price', tone: 'warn'});
+                        }
+                        if (l.status === 'closed') {
+                            c.push({text: 'closed', tone: 'ok'});
+                        }
+                        return c;
+                    },
+                    right: function (x) {
+                        var l = x.line;
+                        return [money$(quoteLineTotal(l)), (l.prices || [])
+                            .map(function (p) {
+                                return num(p.quantity) + ' @ ' +
+                                    money$(quotePrice(p));
+                            }).join(' · ') || 'no quantity', noPrice(l) ?
+                            'warn' : null];
+                    },
+                    onclick: function (x) {
+                        editLine(d, x.index);
+                    },
+                    add: mayWrite(d) ? {placeholder: 'Add a part to quote',
+                        onclick: function () {
+                            editLine(d, null);
+                        }} : null,
+                    footer: ['Lines ' + money$(linesTotal(d)), 'Charges ' +
+                        money$(chargesTotal(d)), 'Total ' + money$(
+                            linesTotal(d) + chargesTotal(d))]
+                });
+            }}],
+            cards: [
+                {title: 'Customer', rows: function (d) {
+                    return [['Customer', d.party ? d.party.rec_name : null],
+                        ['Sold to', addressText(d, '')],
+                        ['Contact', d.contact_name],
+                        ['Phone', d.contact_phone],
+                        ['E-mail', d.contact_email],
+                        ['Their reference', d.customer_reference]];
+                }, fields: [
+                    {name: 'party', label: 'Customer', type: 'many2one',
+                        model: 'party.party'},
+                    {name: 'customer_reference', label: 'Their reference',
+                        type: 'char'},
+                    {name: 'name', label: 'Sold to name', type: 'char'},
+                    {name: 'street', label: 'Address', type: 'text'},
+                    {name: 'city', label: 'City', type: 'char'},
+                    {name: 'state', label: 'State', type: 'char'},
+                    {name: 'postal_code', label: 'Postal code', type: 'char'},
+                    {name: 'contact_name', label: 'Contact', type: 'char'},
+                    {name: 'contact_phone', label: 'Phone', type: 'char'},
+                    {name: 'contact_email', label: 'E-mail', type: 'char'}],
+                    editable: mayWrite},
+                {title: 'Ship to', rows: function (d) {
+                    return [['Ship to', addressText(d, 'ship_') ||
+                        'Same as sold to'],
+                        ['Contact', d.ship_contact_name],
+                        ['Phone', d.ship_contact_phone],
+                        ['Ship via', d.ship_via && d.ship_via.rec_name],
+                        ['FOB', d.fob_point && d.fob_point.rec_name],
+                        ['Freight', d.freight_terms ? d.freight_terms.charAt(0)
+                            .toUpperCase() + d.freight_terms.slice(1) : null]];
+                }, fields: [
+                    {name: 'ship_name', label: 'Ship to name', type: 'char'},
+                    {name: 'ship_street', label: 'Address', type: 'text'},
+                    {name: 'ship_city', label: 'City', type: 'char'},
+                    {name: 'ship_state', label: 'State', type: 'char'},
+                    {name: 'ship_postal_code', label: 'Postal code',
+                        type: 'char'},
+                    {name: 'ship_contact_name', label: 'Contact',
+                        type: 'char'},
+                    {name: 'ship_contact_phone', label: 'Phone', type: 'char'},
+                    {name: 'ship_via', label: 'Ship via', type: 'many2one',
+                        model: 'nline.ship_via'},
+                    {name: 'fob_point', label: 'FOB point', type: 'many2one',
+                        model: 'nline.fob_point'},
+                    {name: 'freight_terms', label: 'Freight terms',
+                        type: 'selection', options: [[null, ''], ['billed',
+                            'Billed'], ['collect', 'Collect'], ['prepaid',
+                            'Prepaid']]}],
+                    editable: function (d) {
+                        return Boolean(d.id) && mayWrite(d);
+                    }},
+                {title: 'Dates', rows: function (d) {
+                    return [['Quote date', d.quote_date ?
+                        UI.date(d.quote_date) : null],
+                        ['Ship on', d.desired_ship_date ?
+                            UI.date(d.desired_ship_date) : null],
+                        ['Leadtime', d.quoted_leadtime ? d.quoted_leadtime +
+                            ' days' : null],
+                        ['Promised', d.promise_date ? UI.date(d.promise_date) :
+                            null],
+                        ['Follow up', d.followup_date ?
+                            UI.date(d.followup_date) : null],
+                        ['Expires', d.expiration_date ?
+                            UI.date(d.expiration_date) : null],
+                        ['Expected win', d.expected_win_date ?
+                            UI.date(d.expected_win_date) : null]];
+                }, fields: [
+                    {name: 'quote_date', label: 'Quote date', type: 'date'},
+                    {name: 'desired_ship_date', label: 'Ship on',
+                        type: 'date'},
+                    {name: 'quoted_leadtime', label: 'Leadtime (days)',
+                        type: 'integer'},
+                    {name: 'promise_date', label: 'Promised', type: 'date'},
+                    {name: 'followup_date', label: 'Follow up', type: 'date'},
+                    {name: 'expiration_date', label: 'Expires', type: 'date'},
+                    {name: 'expected_win_date', label: 'Expected win',
+                        type: 'date'},
+                    {name: 'win_probability', label: 'Win probability %',
+                        type: 'float'}],
+                    editable: function (d) {
+                        return Boolean(d.id) && mayWrite(d);
+                    }},
+                {title: 'Terms', rows: function (d) {
+                    return [['Terms', d.payment_term &&
+                        d.payment_term.rec_name],
+                        ['Sales rep', d.sales_rep],
+                        ['Tax group', d.tax_group],
+                        ['Carrier', d.carrier]];
+                }, fields: [
+                    {name: 'payment_term', label: 'Terms', type: 'many2one',
+                        model: 'account.invoice.payment_term'},
+                    {name: 'sales_rep', label: 'Sales rep ID', type: 'char'},
+                    {name: 'tax_group', label: 'Tax group ID', type: 'char'},
+                    {name: 'carrier', label: 'Carrier ID', type: 'char'}],
+                    editable: function (d) {
+                        return Boolean(d.id) && mayWrite(d);
+                    }},
+                {title: 'Specs and footer', rows: function (d) {
+                    return [['Specs', d.specifications ? String(
+                        d.specifications).slice(0, 200) : null],
+                        ['Footer', d.footer ? String(d.footer).slice(0, 160) :
+                            null]];
+                }, fields: [
+                    {name: 'specifications', label: 'Specifications',
+                        type: 'text'},
+                    {name: 'footer', label: 'Quote footer', type: 'text'}],
+                    editable: function (d) {
+                        return can('nline.quote', 'write') && Boolean(d.id);
+                    }}],
+            trail: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var closed = ['won', 'lost', 'cancelled'].indexOf(
+                    d.status) >= 0;
+                return [
+                    {done: true, text: 'Quoted' + (d.created_by ? ' (' +
+                        String(d.created_by).split(' ')[0] + ')' : ''), when:
+                        d.quote_date ? UI.date(d.quote_date) : ''},
+                    {done: d.status !== 'active', text: 'Ready', when:
+                        d.status === 'active' ? 'not yet' : ''},
+                    {done: Boolean(d.printed_date), text: 'Printed / sent',
+                        when: d.printed_date ? UI.date(String(d.printed_date)
+                            .slice(0, 10)) : 'not yet'},
+                    {done: closed, text: d.status === 'won' ? 'Won' :
+                        d.status === 'lost' ? 'Lost' : d.status ===
+                        'cancelled' ? 'Cancelled' : 'Won or lost', when:
+                        d.won_loss_date ? UI.date(d.won_loss_date) +
+                        (d.won_loss_reason ? ' · ' + d.won_loss_reason : '') :
+                        closed ? '' : 'open'},
+                    d.sale ? {done: true, text: 'Sales order ' +
+                        d.sale.rec_name, onclick: perm && perm.screen(
+                            'orders') ? function () {
+                                UI.openScreen('orders/' + d.sale.id, 'Order');
+                            } : null} : null,
+                    {text: 'Notes', onclick: function () {
+                        notesDialog('nline.quote', d.id, 'Quote ' + d.number);
+                    }}];
+            },
+            keys: guardKeys({
+                w: {label: 'win', run: function (d) {
+                    if (d.id && isOpen(d) && can('sale.sale', 'create') &&
+                            can('nline.quote', 'write')) {
+                        win(d);
+                    }
+                }},
+                p: {label: 'print', run: function (d) {
+                    if (d.id) {
+                        print(d);
+                    }
+                }},
+                a: {label: 'add a line', run: function (d) {
+                    if (d.id && mayWrite(d)) {
+                        editLine(d, null);
+                    }
+                }}
+            }, holder),
+            classic: classic
+        });
+        holder.node = main.querySelector('.dp-page');
+        permissions().then(function (p) {
+            perm = p;
+            hideNew(main, !p.can('nline.quote', 'create'));
+            if (openId) {
+                page.load(openId);
+            } else {
+                page.clear();
+            }
+        }, UI.showError);
+        return page;
+    }
 }(window));

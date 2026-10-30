@@ -1575,7 +1575,7 @@
             }, function () {});
     }
 
-    Screens.customerWindow = function (main, params) {
+    function classicCustomerWindow(main, params) {
         injectCss();
         var openInvoices = false;
         UI.screenAllowed('invoicing').then(function (ok) {
@@ -1794,6 +1794,10 @@
                         }
                     })}
             ],
+            extra: [{label: 'New View', onclick: function (record) {
+                UI.setDocView('customer', 'modern');
+                Screens.customerWindow(main, record ? [record.id] : []);
+            }}],
             browse: [
                 {name: 'code', label: 'Customer ID'},
                 {name: 'name', label: 'Name'},
@@ -1827,7 +1831,7 @@
             ['Discount Class ID', [339, 246, 802, 266]],
             ['SIC Code ID', [339, 268, 802, 288]],
             ['Receivables Acct ID', [339, 290, 802, 310]]]);
-    };
+    }
 
     /* ---- Sales Orders ----------------------------------------------------- */
 
@@ -1920,8 +1924,9 @@
             at: at, split: split === undefined ? 120 : split};
     }
 
-    Screens.salesOrder = function (main, params) {
+    function classicSalesOrder(main, params) {
         injectCss();
+        var root = main;
         var order = null;
         var copied = null;
         var openId = params && params[0] ? parseInt(params[0], 10) : null;
@@ -1940,6 +1945,11 @@
                     {field: 'total_amount', label: 'Total', money: true},
                     {field: 'js_status', label: 'Status'}]},
             extra: [
+                {label: 'New View', title: 'The modern sales order page',
+                    onclick: function () {
+                        UI.setDocView('so', 'modern');
+                        Screens.salesOrder(root, order ? [order.id] : []);
+                    }},
                 {label: 'New From Quote', title: 'File > New Document ' +
                     'From > Quote...', onclick: fromQuote},
                 {label: 'Copy Document', title: 'Edit > Copy Document: a ' +
@@ -3486,7 +3496,7 @@
             fillShipTo(null, null);
             updateTotals();
         }
-    };
+    }
 
     /* ---- Shipping ---------------------------------------------------------- */
 
@@ -3504,9 +3514,23 @@
     /* The Shipping window: Shipping Activity, Shipper (header, its sub-tabs
      * Shipper Lines, Sold To, Ship To, Specs, Notes, Charges, the details
      * under them), Browse */
-    Screens.shipping = function (main, params) {
+    function classicShipping(main, params, isReturn) {
         injectCss();
-        var form = UI.form(main, {title: 'Shipping'});
+        var root = main;
+        var form = UI.form(main, {title: 'Shipping', extra: [
+            {label: 'New View', title: 'The shipper as a document',
+                onclick: function () {
+                    if (!shipper) {
+                        UI.toast('Double-click a shipper: it opens as a ' +
+                            'document', 'ok');
+                        UI.setDocView('shipper', 'modern');
+                        return;
+                    }
+                    UI.setDocView('shipper', 'modern');
+                    global.history.replaceState(null, '', '#/shipping/' +
+                        shipper.id + (shipper['return'] ? '?return=1' : ''));
+                    Screens.shipping(root, [shipper.id], shipper['return']);
+                }}]});
         main = form.body;
         main.classList.add('js-sales');
         var shipped = false;
@@ -3720,6 +3744,10 @@
                         {label: 'Ship To Name'}, {label: 'Message'}],
                         rows.map(function (row) {
                             var open = function () {
+                                if (modernOpen('shipper', row.id,
+                                        row.model)) {
+                                    return;
+                                }
                                 loadShipper(row.id, row.model);
                                 shipTabs.show(1);
                             };
@@ -4066,6 +4094,10 @@
                             {label: 'Shipper Status'},
                             {label: 'Shipper Type'}], rows.map(function (r) {
                                 return {ondblclick: function () {
+                                    if (modernOpen('shipper', r.id,
+                                            r.model)) {
+                                        return;
+                                    }
                                     loadShipper(r.id, r.model);
                                     shipTabs.show(1);
                                 }, cells: [r.number, r.sales, r.customer,
@@ -4100,20 +4132,34 @@
         });
 
         if (params && params[0]) {
-            loadShipper(parseInt(params[0], 10)).then(function () {
+            loadShipper(parseInt(params[0], 10), isReturn ?
+                'stock.shipment.out.return' : null).then(function () {
                 shipTabs.show(1);
             });
         }
-    };
+    }
 
     /* ---- Invoicing ------------------------------------------------------------ */
 
     /* The Invoicing window: Invoicing Activity, Invoice (header, sub-tabs
      * Invoice Lines, Bill To, Ship To, Specs, Notes, Charges, Taxes, the
      * details and totals under them), Browse */
-    Screens.invoicing = function (main, params) {
+    function classicInvoicing(main, params) {
         injectCss();
+        var root = main;
         var form = UI.form(main, {title: 'Invoicing', extra: [
+            {label: 'New View', title: 'The invoice as a document',
+                onclick: function () {
+                    UI.setDocView('invoice', 'modern');
+                    if (!invoice) {
+                        UI.toast('Double-click an invoice: it opens as a ' +
+                            'document', 'ok');
+                        return;
+                    }
+                    global.history.replaceState(null, '', '#/invoicing/' +
+                        invoice.id);
+                    Screens.invoicing(root, [invoice.id]);
+                }},
             {label: 'Post Selected', title: 'Tools > Invoicing > Invoice: ' +
                 'post and print the ticked invoices', onclick: function () {
                     postSelected();
@@ -4347,6 +4393,9 @@
                             'aria-label': 'Post'});
                         row.box.hidden = !can.write;
                         var open = function () {
+                            if (modernOpen('invoice', row.id)) {
+                                return;
+                            }
                             loadInvoice(row.id);
                             invoiceTabs.show(1);
                         };
@@ -4619,6 +4668,9 @@
                             {label: 'Shipper Type'}, {label: 'Posted'}],
                             rows.map(function (r) {
                                 return {ondblclick: function () {
+                                    if (modernOpen('invoice', r.id)) {
+                                        return;
+                                    }
                                     loadInvoice(r.id);
                                     invoiceTabs.show(1);
                                 }, cells: [r.number, r.shippers.map(
@@ -4667,5 +4719,3396 @@
                 invoiceTabs.show(1);
             });
         }
+    }
+
+    /* ==== The modern document pages (UI.docPage, owner's design of 29 Oct
+     * 2026): the answers first, the fields second. Each window keeps its
+     * Jobshop (classic) view: More > Classic view; the classic ribbon's
+     * New View comes back. ================================================ */
+
+    function money(v) {
+        var n = Number(v) || 0;
+        return (n < 0 ? '-$' : '$') + UI.money(Math.abs(n));
+    }
+
+    function amountOf(v) {
+        var n = Number(v);
+        return isNaN(n) ? 0 : n;
+    }
+
+    /* A code with its full name in the tooltip (the owner's ID rule) */
+    function idSpan(v) {
+        return v && name(v) ? el('span', {title: name(v)}, codeOf(v)) : null;
+    }
+
+    /* The sub-line's due date: amber today, red when late */
+    function dueSub(word, date, open) {
+        var day = iso(date);
+        if (!day) {
+            return null;
+        }
+        var t = UI.today();
+        var late = open && day < t;
+        var isToday = open && day === t;
+        return {text: word + (late ? ' ' : isToday ? ' today, ' : ' by ') +
+            UI.date(day) + (late ? ', late' : ''), tone: late ? 'bad' :
+            isToday ? 'warn' : null, icon: 'clock'};
+    }
+
+    /* A page's single keys only while it is the page shown (the shell's
+     * #main is reused by every screen and view; token.root = the page) */
+    function pageKeys(main, token, keys) {
+        var out = {};
+        Object.keys(keys).forEach(function (k) {
+            out[k] = {label: keys[k].label, run: function (d, page) {
+                if (main._salesPage === token && token.root &&
+                        token.root.isConnected) {
+                    keys[k].run(d, page);
+                }
+            }};
+        });
+        return out;
+    }
+
+    function startPage(main) {
+        UI.clear(main);
+        main.classList.remove('dp-main');
+        main.classList.remove('js-sales');
+        var token = {};
+        main._salesPage = token;
+        return token;
+    }
+
+    function queryParam(key) {
+        var query = global.location.hash.split('?')[1] || '';
+        var m = new RegExp('(?:^|&)' + key + '=([^&]*)').exec(query);
+        return m ? decodeURIComponent(m[1]) : null;
+    }
+
+    function notesDialog(model, id, title, editable) {
+        var pane = el('div', {style: {minWidth: '480px'}});
+        UI.notesTab(pane, model, id, editable);
+        UI.modal('Notes: ' + title, [pane], [{label: 'Close',
+            primary: true}]);
+    }
+
+    /* The ID chip of a line: its full name in the tooltip (docLines draws
+     * the chips; the first chip of each row is the part) */
+    function chipTooltips(pane, items, nameOf) {
+        var rows = pane.querySelectorAll('.dp-line');
+        items.forEach(function (item, i) {
+            var full = nameOf(item);
+            var first = rows[i] && rows[i].querySelector('.dp-line-chips ' +
+                '.dp-chip');
+            if (full && first) {
+                first.title = full;
+            }
+        });
+    }
+
+    /* A line's text without the part's [ID] in front (its chip has it) */
+    function plainTitle(text) {
+        return String(text || '').replace(/^\[[^\]]*\]\s*/, '');
+    }
+
+    function addressLine(p) {
+        return [p.addr_1, p.addr_2, [p.city, p.state, p.postal]
+            .filter(Boolean).join(' '), p.country].filter(Boolean)
+            .join(', ');
+    }
+
+    function addressRows(p) {
+        return [['Name', p.name], ['Address', addressLine(p)],
+            ['Contact', [p.contact, p.title].filter(Boolean).join(', ')],
+            ['Phone', p.phone], ['E-mail', p.email]];
+    }
+
+    /* Opens a shipper / invoice of the activity lists as its modern page
+     * when that is the window's view */
+    function modernOpen(view, id, model) {
+        if (!UI.docPage || UI.docView(view) !== 'modern') {
+            return false;
+        }
+        global.location.hash = view === 'shipper' ? '#/shipping/' + id +
+            (model === 'stock.shipment.out.return' ? '?return=1' : '') :
+            '#/invoicing/' + id;
+        return true;
+    }
+
+    /* ---- Customer Order Entry, modern ------------------------------------ */
+
+    var SO_STATUS_TONE = {firm: 'accent', released: 'accent', closed: 'ok',
+        hold: 'warn', cancelled: 'bad'};
+    var HEADER_REFS = ['sales_rep', 'territory', 'fob_point', 'ship_via',
+        'js_carrier', 'tax_group', 'discount_class'];
+
+    function soAllowedNext(d) {
+        return {
+            unreleased: ['firm', 'released', 'hold', 'cancelled'],
+            firm: ['unreleased', 'released', 'hold', 'cancelled'],
+            released: ['hold', 'closed'],
+            hold: d.state === 'draft' ? ['unreleased', 'firm', 'released',
+                'cancelled'] : d.state === 'quotation' ? ['firm', 'released',
+                    'cancelled'] : ['released', 'closed'],
+            closed: d.state === 'done' ? [] : ['released'],
+            cancelled: ['unreleased']
+        }[d.js_status] || [];
+    }
+
+    function storedParts(d, prefix) {
+        return ADDRESS_PARTS.some(function (k) {
+            return d[prefix + k];
+        });
+    }
+
+    function soSoldParts(d) {
+        return storedParts(d, 'js_sold_') ? unprefixed('js_sold_', d) :
+            addressParts(d.sold_to, d.customer_mobile);
+    }
+
+    function soShipParts(d) {
+        if (storedParts(d, 'js_ship_')) {
+            return unprefixed('js_ship_', d);
+        }
+        return d.shipment_address && d.ship_to && d.ship_to.id ?
+            addressParts(d.ship_to) : soSoldParts(d);
+    }
+
+    /* A line as sale_order_save takes it (the desk's fields and the
+     * Jobshop ones, written by position on a draft order) */
+    function soLine(l) {
+        var refs = {};
+        ['product_code', 'commodity_code', 'line_tax_group',
+            'js_ship_via'].forEach(function (n) {
+                refs[n] = idOf(l[n]);
+            });
+        return Object.assign(refs, {
+            id: l.id || null,
+            product: idOf(l.product),
+            unit: idOf(l.unit) || undefined,
+            description: l.description || null,
+            quantity: amountOf(l.quantity) || 1,
+            gross_unit_price: l.gross_unit_price === null ||
+                l.gross_unit_price === undefined || l.gross_unit_price ===
+                '' ? null : String(l.gross_unit_price),
+            trade_discount: String(amountOf(l.trade_discount)),
+            customer_part: l.customer_part || null,
+            customer_po_line: l.customer_po_line || null,
+            js_desired_date: iso(l.js_desired_date),
+            promise_date: iso(l.promise_date),
+            drawing_id: l.drawing_id || null,
+            drawing_rev: l.drawing_rev || null,
+            commissionable: l.commissionable !== false,
+            commission_percent: l.commission_percent === null ||
+                l.commission_percent === undefined ||
+                l.commission_percent === '' ? null :
+                String(l.commission_percent),
+            js_line_specs: l.js_line_specs || null,
+            user_0: l.user_0 || null,
+            user_1: l.user_1 || null,
+            user_2: l.user_2 || null
+        });
+    }
+
+    function soModern(main, openId, presetCustomer) {
+        var token = startPage(main);
+        var can = {save: true, create: true, del: true, workOrder: true,
+            charges: true};
+        var screens = {shipping: false, invoicing: false, workorders: false,
+            parts: false, 'customer-window': false, quotes: false};
+        var page;
+        rights(['sale.sale', 'sale.line', 'nline.sale_charge', 'production'])
+            .then(function (r) {
+                can.save = r['sale.sale'].write && r['sale.line'].create;
+                can.create = r['sale.sale'].create;
+                can.del = r['sale.sale']['delete'];
+                can.workOrder = r.production.create;
+                can.charges = r['nline.sale_charge'].write &&
+                    r['nline.sale_charge'].create;
+                if (page) {
+                    page.render();
+                }
+            }, function () {});
+        Object.keys(screens).forEach(function (s) {
+            UI.screenAllowed(s).then(function (ok) {
+                screens[s] = ok;
+                if (page && ok) {
+                    page.render();
+                }
+            });
+        });
+
+        function draft(d) {
+            return !d.id || d.state === 'draft';
+        }
+
+        function writable(d) {
+            return d.id ? can.save : can.create;
+        }
+
+        function noPrice(l) {
+            return !amountOf(l.gross_unit_price) && !amountOf(l.unit_price) &&
+                ['closed', 'cancelled'].indexOf(l.js_line_status) < 0;
+        }
+
+        function lineOpen(l) {
+            return (l.js_line_status || 'open') === 'open' &&
+                amountOf(l.shipped_quantity) < amountOf(l.quantity);
+        }
+
+        function openShipper(d) {
+            return (d.shippers || []).filter(function (s) {
+                return s.model === 'stock.shipment.out' &&
+                    ['done', 'cancelled'].indexOf(s.state) < 0;
+            })[0] || null;
+        }
+
+        function invoicesOf(d) {
+            var seen = {};
+            var out = [];
+            (d.shippers || []).forEach(function (s) {
+                var inv = s.invoice;
+                if (inv && !seen[inv.id]) {
+                    seen[inv.id] = true;
+                    out.push({id: inv.id, number: inv.number ||
+                        s.invoice_number || '', date: s.invoiced_date,
+                        posted: s.model === 'account.invoice' ?
+                            s.status === 'approved' : Boolean(inv.number),
+                        amount: s.invoiced_amount});
+                }
+            });
+            return out;
+        }
+
+        /* The payload of sale_order_save: the whole order (it writes every
+         * header field it gets); a released order sends its changed lines */
+        function values(d) {
+            var v = {id: d.id || null, number: d.number || null,
+                party: idOf(d.party), sale_date: iso(d.sale_date),
+                shipping_date: iso(d.shipping_date),
+                promise_date: iso(d.promise_date),
+                reference: d.reference || null,
+                description: d.description || null,
+                payment_term: idOf(d.payment_term_ref) || (typeof
+                    d.payment_term === 'number' ? d.payment_term : null),
+                shipment_address: idOf(d.shipment_address),
+                freight_terms: d.freight_terms || null,
+                js_specs: d.js_specs || null,
+                js_copy_notes: Boolean(d.js_copy_notes)};
+            HEADER_REFS.forEach(function (n) {
+                v[n] = idOf(d[n]);
+            });
+            ADDRESS_PARTS.forEach(function (k) {
+                v['js_sold_' + k] = d['js_sold_' + k] || '';
+                v['js_ship_' + k] = d['js_ship_' + k] || '';
+            });
+            if (can.charges) {
+                v.charges = (d.charges || []).map(function (c) {
+                    return {id: c.id || null, service_charge:
+                        idOf(c.service_charge), description: c.description ||
+                        '', amount: c.amount === null || c.amount ===
+                        undefined ? null : String(c.amount), tax_group:
+                        idOf(c.tax_group), apply: Boolean(c.apply),
+                        account: idOf(c.account)};
+                });
+            }
+            var lines = d.lines || [];
+            v.lines = (draft(d) ? lines : lines.filter(function (l) {
+                return l.changed;
+            })).map(soLine);
+            return v;
+        }
+
+        /* A new ship to address chosen: the order's Ship To becomes it */
+        function shipToAddress(v, d) {
+            if (!v.shipment_address || v.shipment_address ===
+                    idOf(d.shipment_address)) {
+                return Promise.resolve();
+            }
+            return Rpc.model('party.address', 'read', [[v.shipment_address],
+                ['party_name', 'street', 'city', 'postal_code',
+                    'subdivision.rec_name', 'country.rec_name',
+                    'ship_to_contact', 'ship_to_title', 'ship_to_phone',
+                    'ship_to_fax', 'ship_to_email']]).then(function (rows) {
+                    var a = rows[0] || {};
+                    Object.assign(v, prefixed('js_ship_', addressParts({
+                        name: a.party_name, street: a.street, city: a.city,
+                        postal_code: a.postal_code, state:
+                            (a['subdivision.'] || {}).rec_name, country:
+                            (a['country.'] || {}).rec_name, contact:
+                            a.ship_to_contact, title: a.ship_to_title,
+                        phone: a.ship_to_phone, fax: a.ship_to_fax,
+                        email: a.ship_to_email})));
+                });
+        }
+
+        /* Another customer on a draft order: its terms, details and
+         * addresses, as Jobshop fills them */
+        function customerDefaults(v, d) {
+            if (!v.party || (d.id && v.party === idOf(d.party))) {
+                return Promise.resolve();
+            }
+            return Rpc.desk('sales_order_defaults', [v.party]).then(
+                function (def) {
+                    if (def.payment_term) {
+                        v.payment_term = def.payment_term;
+                    }
+                    HEADER_REFS.forEach(function (n) {
+                        v[n] = idOf(def[n]);
+                    });
+                    v.freight_terms = def.freight_terms || null;
+                    if (!v.js_specs && def.js_specs) {
+                        v.js_specs = def.js_specs;
+                    }
+                    v.shipment_address = idOf(def.shipment_address);
+                    ADDRESS_PARTS.forEach(function (k) {
+                        v['js_sold_' + k] = '';
+                        v['js_ship_' + k] = '';
+                    });
+                    if (def.credit_status === 'hold_orders') {
+                        UI.toast('The customer has a hold type credit ' +
+                            'status', 'error');
+                    }
+                });
+        }
+
+        function print(d) {
+            Rpc.report('sale.sale', [d.id]).then(function (r) {
+                UI.openReport(r, 'Order');
+                desk('sales_order_printed', [d.id]).then(function () {
+                    page.reload();
+                }, function () {});
+            }, UI.showError);
+        }
+
+        function setStatus(d, s) {
+            var ask = s === 'cancelled' || s === 'closed' ?
+                UI.confirm('Change status', 'Set order ' + (d.number ||
+                    d.id) + ' to ' + label(JS_STATUS, s) + '?') :
+                Promise.resolve(true);
+            ask.then(function (ok) {
+                if (!ok) {
+                    return;
+                }
+                Rpc.desk('sales_order_status', [d.id, s]).then(function () {
+                    UI.toast('Order ' + (d.number || d.id) + ': ' +
+                        label(JS_STATUS, s), 'ok');
+                    page.reload();
+                }, UI.showError);
+            });
+        }
+
+        function ship(d) {
+            var s = openShipper(d);
+            if (s) {
+                UI.openScreen('shipping/' + s.id, 'Shipper ' + s.number);
+            } else {
+                UI.openScreen('shipping', 'Shipping');
+            }
+        }
+
+        function openInvoice(id, number) {
+            if (screens.invoicing) {
+                UI.openScreen('invoicing/' + id, 'Invoice ' + (number || id));
+            } else {
+                UI.openRecord('account.invoice', id, number);
+            }
+        }
+
+        function chooseCustomer(d) {
+            UI.docEdit(d.id ? 'Change the customer' : 'New sales order', [
+                {name: 'party', label: 'Customer', type: 'many2one',
+                    model: 'party.party'},
+                d.id ? null : {name: 'number', label: 'Order ID (empty: ' +
+                    'automatic)', type: 'char'},
+                {name: 'reference', label: 'Customer PO', type: 'char'},
+                {name: 'shipping_date', label: 'Desired ship date',
+                    type: 'date', value: function (x) {
+                        return iso(x.shipping_date);
+                    }}].filter(Boolean), d).then(function (v) {
+                    if (!v.party) {
+                        UI.toast('Choose the customer', 'error');
+                        return;
+                    }
+                    page.save(v).then(null, function () {});
+                }, function () {});
+        }
+
+        /* The work orders of a line (the Order Line window's Links) */
+        function linksNode(d, l) {
+            var links = l.link_details || [];
+            var box = el('div.dp-form-extra', el('div.dp-muted',
+                'Work orders'));
+            if (!links.length) {
+                box.appendChild(el('div', 'Not linked to a work order.'));
+            }
+            links.forEach(function (w) {
+                box.appendChild(el('div', screens.workorders ? el('a', {
+                    href: '#', onclick: function (event) {
+                        event.preventDefault();
+                        UI.openScreen('workorders/' + w.id, 'WO ' +
+                            w.number);
+                    }}, 'WO ' + w.number) : 'WO ' + w.number, ' · ' +
+                    w.state + ' · ' + num(w.quantity) + (w.planned_end_date ?
+                        ' · finish ' + UI.date(w.planned_end_date) : '')));
+            });
+            var released = d.state === 'confirmed' || d.state ===
+                'processing';
+            if (l.id && released && !links.length && can.workOrder) {
+                var button = el('button', {type: 'button', onclick:
+                    function () {
+                        button.disabled = true;
+                        UI.service('sale_line_work_order', l.id).then(
+                            function (wo) {
+                                button.replaceWith(el('span', 'Work order ' +
+                                    wo.number + ' created'));
+                                page.reload();
+                            }, function (error) {
+                                button.disabled = false;
+                                failed(error);
+                            });
+                    }}, 'New work order');
+                box.appendChild(button);
+            }
+            return box;
+        }
+
+        function lineFields(d, l, adding) {
+            var priceLocked = !draft(d) || !writable(d);
+            var ro = !writable(d);
+            var fields = [
+                {name: 'product', label: 'Part', type: 'many2one',
+                    model: 'product.product', readonly: priceLocked,
+                    domain: [['salable', '=', true]]},
+                {name: 'description', label: 'Description', type: 'char',
+                    wide: true, readonly: priceLocked},
+                {name: 'quantity', label: 'Order qty', type: 'float',
+                    readonly: priceLocked},
+                {name: 'gross_unit_price', label: 'Unit price (empty: ' +
+                    'the customer\'s price)', type: 'float',
+                    readonly: priceLocked},
+                {name: 'trade_discount', label: 'Trade disc %',
+                    type: 'float', readonly: priceLocked},
+                {name: 'js_desired_date', label: 'Desired ship date',
+                    type: 'date', readonly: ro, value: function (x) {
+                        return iso(x.js_desired_date);
+                    }},
+                {name: 'customer_po_line', label: 'Customer PO line',
+                    type: 'char', readonly: ro}];
+            if (adding) {
+                return fields;
+            }
+            fields[3].label = 'Unit price';
+            return fields.concat([
+                {name: 'promise_date', label: 'Promised', type: 'date',
+                    readonly: ro, value: function (x) {
+                        return iso(x.promise_date);
+                    }},
+                {name: 'customer_part', label: 'Customer part ID',
+                    type: 'char', readonly: ro},
+                {name: 'drawing_id', label: 'Drawing ID', type: 'char',
+                    readonly: ro},
+                {name: 'drawing_rev', label: 'Drawing rev', type: 'char',
+                    readonly: ro},
+                {name: 'product_code', label: 'Product code',
+                    type: 'many2one', model: 'nline.product_code',
+                    readonly: ro},
+                {name: 'commodity_code', label: 'Commodity code',
+                    type: 'many2one', model: 'nline.commodity_code',
+                    readonly: ro},
+                {name: 'line_tax_group', label: 'Tax group',
+                    type: 'many2one', model: 'nline.sales_tax_group',
+                    readonly: ro},
+                {name: 'js_ship_via', label: 'Ship via', type: 'many2one',
+                    model: 'nline.ship_via', readonly: ro},
+                {name: 'commissionable', label: 'Commissionable',
+                    type: 'boolean', readonly: ro, value: function (x) {
+                        return x.commissionable !== false;
+                    }},
+                {name: 'commission_percent', label: 'Commission %',
+                    type: 'float', readonly: ro},
+                {name: 'js_line_specs', label: 'Specs', type: 'text',
+                    wide: true, readonly: ro},
+                draft(d) && writable(d) ? {name: '_remove', label:
+                    'Remove this line', type: 'boolean'} : null])
+                .filter(Boolean);
+        }
+
+        /* The customer's price of a part (Reset Unit Price from Customer)
+         * and the part's name as the description */
+        function priceLine(d, l) {
+            var product = idOf(l.product);
+            if (!product) {
+                return Promise.resolve(l);
+            }
+            var steps = [];
+            if (l.gross_unit_price === null || l.gross_unit_price ===
+                    undefined || l.gross_unit_price === '') {
+                var args = [idOf(d.party), product, amountOf(l.quantity) ||
+                    1, iso(d.sale_date)];
+                if (idOf(l.unit)) {
+                    args.push(idOf(l.unit));
+                }
+                steps.push(Rpc.desk('sales_price', args).then(function (p) {
+                    l.gross_unit_price = p.gross_unit_price;
+                    l.trade_discount = p.trade_discount || 0;
+                    if (p.customer_part && !l.customer_part) {
+                        l.customer_part = p.customer_part;
+                    }
+                }));
+            }
+            if (!l.description) {
+                steps.push(Rpc.model('product.product', 'read', [[product],
+                    ['rec_name']]).then(function (rows) {
+                        l.description = String((rows[0] || {}).rec_name || '')
+                            .replace(/^\[[^\]]*\]\s*/, '');
+                    }));
+            }
+            return Promise.all(steps).then(function () {
+                return l;
+            });
+        }
+
+        function editLine(d, l) {
+            var ro = !writable(d);
+            UI.docEdit('Line ' + (l.line_no || '') + (l.product ? ' · ' +
+                UI.shortName('product.product', name(l.product)) : ''),
+                lineFields(d, l, false), l, linksNode(d, l)).then(
+                function (v) {
+                    if (ro) {
+                        return;
+                    }
+                    if (v._remove) {
+                        d.lines = (d.lines || []).filter(function (x) {
+                            return x !== l;
+                        });
+                        page.save({}).then(null, function () {});
+                        return;
+                    }
+                    delete v._remove;
+                    Object.assign(l, v);
+                    l.changed = true;
+                    page.save({}).then(null, function () {});
+                }, function () {});
+        }
+
+        function addLine(d) {
+            if (!d.party || !draft(d) || !writable(d)) {
+                if (d.id && !draft(d)) {
+                    UI.toast('A released order keeps its lines: add them ' +
+                        'on a new order', 'error');
+                }
+                return;
+            }
+            UI.docEdit('Add a line', lineFields(d, {}, true), {quantity: 1,
+                js_desired_date: iso(d.shipping_date)}).then(function (v) {
+                    if (!v.product && !v.description) {
+                        UI.toast('Choose a part or type a description',
+                            'error');
+                        return;
+                    }
+                    var line = Object.assign({id: null, js_line_status:
+                        'open', commissionable: true}, v);
+                    return priceLine(d, line).then(function () {
+                        d.lines = (d.lines || []).concat([line]);
+                        return page.save({});
+                    });
+                }, function () {}).then(null, function () {});
+        }
+
+        function reprice(d) {
+            Promise.all((d.lines || []).filter(function (l) {
+                return l.product;
+            }).map(function (l) {
+                l.gross_unit_price = null;
+                return priceLine(d, l);
+            })).then(function () {
+                return page.save({});
+            }).then(function () {
+                UI.toast('Unit prices reset from the customer', 'ok');
+            }, function () {});
+        }
+
+        function editCharge(d, c) {
+            var locked = !writable(d) || !can.charges || Boolean(c.invoice);
+            UI.docEdit('Charge ' + codeOf(c.service_charge), [
+                {name: 'description', label: 'Description', type: 'char',
+                    wide: true, readonly: locked},
+                {name: 'amount', label: 'Amount', type: 'float',
+                    readonly: locked},
+                {name: 'apply', label: 'Apply (on the next invoice)',
+                    type: 'boolean', readonly: locked},
+                {name: 'tax_group', label: 'Tax group', type: 'many2one',
+                    model: 'nline.sales_tax_group', readonly: locked},
+                locked ? null : {name: '_remove', label: 'Remove this ' +
+                    'charge', type: 'boolean'}].filter(Boolean), c).then(
+                function (v) {
+                    if (locked) {
+                        return;
+                    }
+                    if (v._remove) {
+                        d.charges = d.charges.filter(function (x) {
+                            return x !== c;
+                        });
+                    } else {
+                        delete v._remove;
+                        Object.assign(c, v);
+                    }
+                    page.save({}).then(null, function () {});
+                }, function () {});
+        }
+
+        function addCharge(d) {
+            UI.docEdit('Add a service charge', [
+                {name: 'service_charge', label: 'Service charge',
+                    type: 'many2one', model: 'nline.service_charge'},
+                {name: 'description', label: 'Description (empty: the ' +
+                    'charge\'s)', type: 'char', wide: true},
+                {name: 'amount', label: 'Amount (empty: the charge\'s)',
+                    type: 'float'},
+                {name: 'apply', label: 'Apply (on the next invoice)',
+                    type: 'boolean'}], {apply: true}).then(function (v) {
+                    if (!v.service_charge) {
+                        UI.toast('Choose the service charge', 'error');
+                        return;
+                    }
+                    var add = function (svc) {
+                        d.charges = (d.charges || []).concat([{id: null,
+                            service_charge: v.service_charge, description:
+                                v.description || svc.description || '',
+                            amount: v.amount === null ? svc.amount :
+                                v.amount, apply: v.apply,
+                            account: svc.account || null}]);
+                        return page.save({});
+                    };
+                    return Rpc.model('nline.service_charge', 'read',
+                        [[v.service_charge], ['description', 'amount',
+                            'account']]).then(function (rows) {
+                            return add(rows[0] || {});
+                        });
+                }, function () {}).then(null, function () {});
+        }
+
+        var shipAddressField = {name: 'shipment_address', label:
+            'Customer address', type: 'many2one', model: 'party.address',
+            domain: [['id', '=', -1]], value: function (d) {
+                return d.shipment_address && d.shipment_address.id ?
+                    d.shipment_address : null;
+            }};
+
+        function partField(prefix, part, caption, getParts) {
+            return {name: prefix + part, label: caption, type: 'char',
+                value: function (d) {
+                    return getParts(d)[part];
+                }};
+        }
+
+        function addressFieldsOf(prefix, getParts) {
+            return [['name', 'Name'], ['addr_1', 'Address'],
+                ['addr_2', 'Address 2'], ['city', 'City'],
+                ['state', 'State'], ['postal', 'Postal code'],
+                ['country', 'Country'], ['contact', 'Contact'],
+                ['phone', 'Phone'], ['email', 'E-mail']].map(function (p) {
+                    return partField(prefix, p[0], p[1], getParts);
+                });
+        }
+
+        page = UI.docPage(main, {
+            title: 'Sales Order',
+            crumbs: ['Sales', 'Customer orders'],
+            model: 'sale.sale', label: 'Order ID',
+            order: [['sale_date', 'DESC'], ['id', 'DESC']],
+            openId: openId,
+            load: function (id) {
+                return Rpc.desk('sale_order_get', [id]);
+            },
+            onload: function (d) {
+                shipAddressField.domain = [['party', '=', idOf(d.party) ||
+                    -1]];
+                UI.setTitle('Sales Order :: ' + (d.number || d.id));
+            },
+            values: values,
+            save: function (v, d) {
+                if (!v.party) {
+                    return Promise.reject({message: 'Choose the customer ' +
+                        'first.'});
+                }
+                return customerDefaults(v, d).then(function () {
+                    return shipToAddress(v, d);
+                }).then(function () {
+                    return UI.service('sale_order_save', v);
+                }).then(function (r) {
+                    if (r && r.id && r.id !== d.id) {
+                        global.history.replaceState(null, '', '#/orders/' +
+                            r.id);
+                    }
+                    shipAddressField.domain = [['party', '=',
+                        idOf(r.party) || -1]];
+                    return r;
+                });
+            },
+            blank: function () {
+                return can.create ? {id: null, number: '', state: 'draft',
+                    js_status: 'unreleased', party: null,
+                    sale_date: UI.today(), lines: [], charges: [],
+                    shippers: []} : null;
+            },
+            head: function (d) {
+                var open = ['closed', 'cancelled'].indexOf(d.js_status) < 0 &&
+                    d.shipment_state !== 'sent';
+                return {
+                    title: d.party ? d.customer_name || name(d.party) ||
+                        'New sales order' : 'New sales order',
+                    chips: d.customer_code ? [d.customer_code] : [],
+                    sub: [d.id ? (d.number ? 'SO ' + d.number :
+                        'Order not numbered yet') : 'Not saved yet',
+                        d.sale_date ? 'ordered ' + UI.date(d.sale_date) +
+                            (d.created_by ? ' by ' + String(d.created_by)
+                                .split(' ')[0] : '') : null,
+                        d.reference ? 'PO ' + d.reference : null,
+                        dueSub('ship', d.shipping_date, open && d.id)],
+                    amount: {value: money(d.id ? d.order_amount : 0),
+                        label: (d.lines || []).length + ' lines' +
+                            (d.payment_term_ref ? ' · ' +
+                                name(d.payment_term_ref) : '')}
+                };
+            },
+            status: function (d) {
+                if (!d.id) {
+                    return [{text: 'New', tone: 'muted'}];
+                }
+                var out = [{text: label(JS_STATUS, d.js_status) ||
+                    'Unreleased', tone: SO_STATUS_TONE[d.js_status]},
+                    {text: d.js_printed_date ? 'Printed ' +
+                        UI.date(d.js_printed_date) : 'Not printed'}];
+                if (d.shipment_state === 'sent') {
+                    out.push({text: 'Shipped', tone: 'ok'});
+                } else if (d.shipment_state === 'partially shipped') {
+                    out.push({text: 'Partly shipped', tone: 'accent'});
+                }
+                if (d.invoice_state === 'paid') {
+                    out.push({text: 'Paid', tone: 'ok'});
+                }
+                if (d.credit_status && d.credit_status !== 'approved') {
+                    out.push({text: label(CREDIT_STATUS, d.credit_status),
+                        tone: 'bad'});
+                }
+                return out;
+            },
+            actions: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var next = soAllowedNext(d);
+                var release = can.save && next.indexOf('released') >= 0 &&
+                    d.js_status !== 'closed';
+                var shipper = d.js_status === 'released' && screens.shipping &&
+                    openShipper(d);
+                var invoice = (d.draft_invoices || [])[0];
+                return [
+                    {label: 'Print', key: 'p', title: 'Print the ' +
+                        'acknowledgement', onclick: print},
+                    release ? {label: 'Release', key: 'r', primary: true,
+                        onclick: function () {
+                            setStatus(d, 'released');
+                        }} : null,
+                    shipper ? {label: 'Ship', key: 's', primary: !release,
+                        title: 'Open shipper ' + shipper.number,
+                        onclick: ship} : null,
+                    invoice && screens.invoicing ? {label: 'Invoice',
+                        key: 'i', primary: !release && !shipper,
+                        title: 'Open the invoice waiting to post',
+                        onclick: function () {
+                            openInvoice(invoice.id, invoice.number);
+                        }} : null];
+            },
+            more: function (d) {
+                var items = [];
+                if (d.id && can.save && soAllowedNext(d).length) {
+                    items.push({label: 'Change status', items:
+                        soAllowedNext(d).map(function (s) {
+                            return {label: label(JS_STATUS, s), onclick:
+                                function () {
+                                    setStatus(d, s);
+                                }};
+                        })});
+                }
+                if (draft(d) && writable(d)) {
+                    items.push({label: d.id ? 'Change the customer...' :
+                        'Choose the customer...', onclick: function () {
+                            chooseCustomer(d);
+                        }});
+                }
+                if (d.party && writable(d) && can.charges) {
+                    items.push({label: 'Add a service charge...', onclick:
+                        function () {
+                            addCharge(d);
+                        }});
+                }
+                if (d.id && draft(d) && can.save && (d.lines || []).length) {
+                    items.push({label: 'Re-price lines from the customer',
+                        onclick: function () {
+                            reprice(d);
+                        }});
+                }
+                if (d.id && can.create) {
+                    items.push({label: 'Copy to a new order', onclick:
+                        function () {
+                            Rpc.desk('sales_order_copy', [d.id, 'order'])
+                                .then(function (copy) {
+                                    UI.toast('Copied to a new order', 'ok');
+                                    global.history.replaceState(null, '',
+                                        '#/orders/' + copy.id);
+                                    page.load(copy.id);
+                                }, UI.showError);
+                        }});
+                }
+                if (d.id && can.del && ['unreleased', 'firm', 'cancelled']
+                        .indexOf(d.js_status) >= 0) {
+                    items.push({label: 'Delete order', onclick: function () {
+                        UI.confirm('Delete order', 'Delete order ' +
+                            (d.number || d.id) + '? It can not be ' +
+                            'recovered.').then(function (ok) {
+                                if (!ok) {
+                                    return;
+                                }
+                                Rpc.desk('sales_order_delete', [d.id]).then(
+                                    function () {
+                                        UI.toast('Order deleted', 'ok');
+                                        global.location.hash = '#/orders/' +
+                                            'new?' + Date.now();
+                                    }, UI.showError);
+                            });
+                    }});
+                }
+                if (d.party && screens['customer-window']) {
+                    items.push({label: 'Open customer', onclick: function () {
+                        UI.openScreen('customer-window/' + idOf(d.party),
+                            'Customer');
+                    }});
+                }
+                if (d.js_quote && screens.quotes) {
+                    items.push({label: 'Open quote ' + d.js_quote, onclick:
+                        function () {
+                            Rpc.searchRead('nline.quote', [['number', '=',
+                                d.js_quote]], ['number'], {limit: 1}).then(
+                                function (q) {
+                                    if (q.length) {
+                                        UI.openScreen('quotes/' + q[0].id,
+                                            'Quote ' + q[0].number);
+                                    } else {
+                                        UI.toast('Quote ' + d.js_quote +
+                                            ' is not in the ERP', 'error');
+                                    }
+                                }, UI.showError);
+                        }});
+                }
+                if (d.id) {
+                    items.push({label: 'Shipper lines...', onclick:
+                        function () {
+                            desk('sales_shipper_lines', [d.id, null]).then(
+                                function (rows) {
+                                    listDialog('Shipper Lines', ['Shipper ID',
+                                        'Status', 'Shipped Date', 'Line No',
+                                        'Part ID', 'Description',
+                                        'Shipped Qty', 'Unit Price',
+                                        'Shipped Amount'].map(function (x) {
+                                            return {label: x, num:
+                                                /Qty|Price|Amount/.test(x)};
+                                        }), rows.map(function (r) {
+                                            return {cells: [r.shipper.number,
+                                                label(SHIPPER_STATUS,
+                                                    r.status),
+                                                UI.date(r.shipped_date),
+                                                r.sales_line_no,
+                                                codeOf(r.product),
+                                                r.description,
+                                                num(r.quantity),
+                                                UI.money(r.unit_price),
+                                                UI.money(r.amount)]};
+                                        }), {empty: 'No shipper line.'});
+                                }, failed);
+                        }});
+                    items.push({label: 'Notes', onclick: function () {
+                        notesDialog('sale.sale', d.id, 'SO ' + (d.number ||
+                            d.id), can.save);
+                    }});
+                }
+                items.push('-', {label: 'Classic view', onclick: function () {
+                    UI.setDocView('so', 'classic');
+                    Screens.salesOrder(main, d.id ? [d.id] : []);
+                }});
+                return items;
+            },
+            attention: function (d) {
+                var out = [];
+                if (!d.party) {
+                    out.push({tone: 'info', title: 'Choose the customer',
+                        detail: 'Its terms, sales rep, ship to and specs ' +
+                            'fill in from the customer.', action: writable(d) ?
+                            {label: 'Choose', onclick: function () {
+                                chooseCustomer(d);
+                            }} : null});
+                    return out;
+                }
+                if (d.credit_status === 'hold_orders' ||
+                        d.credit_status === 'hold_shipments') {
+                    out.push({tone: 'bad', icon: 'bad', title: 'Credit hold: ' +
+                        label(CREDIT_STATUS, d.credit_status),
+                        detail: d.credit_status === 'hold_orders' ?
+                            'The customer is on a hold type credit status.' :
+                            'Shipping asks to accept the hold.',
+                        action: screens['customer-window'] ? {label:
+                            'Open customer', onclick: function () {
+                                UI.openScreen('customer-window/' +
+                                    idOf(d.party), 'Customer');
+                            }} : null});
+                }
+                if (d.js_status === 'hold') {
+                    out.push({tone: 'bad', icon: 'bad', title: 'The order is ' +
+                        'on hold', detail: 'It is not shipped while on hold.',
+                        action: can.save && soAllowedNext(d).indexOf(
+                            'released') >= 0 ? {label: 'Release',
+                                onclick: function () {
+                                    setStatus(d, 'released');
+                                }} : null});
+                }
+                if (d.id && !d.reference && d.js_status !== 'cancelled') {
+                    out.push({tone: 'warn', title: 'No customer PO reference',
+                        detail: 'The acknowledgement, shippers and invoices ' +
+                            'print it.', action: writable(d) ? {label:
+                            'Add PO', onclick: function () {
+                                UI.docEdit('Customer PO', [{name: 'reference',
+                                    label: 'Purchase order no', type:
+                                    'char'}], d).then(function (v) {
+                                        page.save(v).then(null,
+                                            function () {});
+                                    }, function () {});
+                            }} : null});
+                }
+                (d.lines || []).forEach(function (l) {
+                    if (noPrice(l)) {
+                        out.push({tone: 'warn', title: 'Line ' +
+                            (l.line_no || '') + ' has no price', detail:
+                            draft(d) ? 'It would ship and invoice at $0.' :
+                            'Released: the price is set on the invoice ' +
+                            '(Set Shipper Line Unit Price).', action:
+                            draft(d) && writable(d) ? {label: 'Set price',
+                                onclick: function () {
+                                    editLine(d, l);
+                                }} : null});
+                    }
+                });
+                var openLines = (d.lines || []).filter(lineOpen);
+                if (d.id && iso(d.shipping_date) && iso(d.shipping_date) <
+                        UI.today() && openLines.length &&
+                        ['closed', 'cancelled'].indexOf(d.js_status) < 0) {
+                    var shipper = d.js_status === 'released' &&
+                        screens.shipping && openShipper(d);
+                    out.push({tone: 'bad', icon: 'clock', title: 'Past the ' +
+                        'desired ship date', detail: 'Wanted ' +
+                        UI.date(d.shipping_date) + '; ' + openLines.length +
+                        ' line(s) not shipped' + (d.promise_date ?
+                            ', promised ' + UI.date(d.promise_date) : '') +
+                        '.', action: shipper ? {label: 'Ship', onclick:
+                            function () {
+                                ship(d);
+                            }} : writable(d) ? {label: 'New date',
+                            onclick: function () {
+                                UI.docEdit('Desired ship date', [{name:
+                                    'shipping_date', label: 'Desired ship ' +
+                                    'date', type: 'date', value: function (x) {
+                                        return iso(x.shipping_date);
+                                    }}, {name: 'promise_date', label:
+                                    'Promised', type: 'date', value:
+                                    function (x) {
+                                        return iso(x.promise_date);
+                                    }}], d).then(function (v) {
+                                        page.save(v).then(null,
+                                            function () {});
+                                    }, function () {});
+                            }} : null});
+                }
+                if (d.id && (d.js_status === 'unreleased' || d.js_status ===
+                        'firm') && (d.lines || []).length) {
+                    out.push({tone: 'info', title: 'Not released yet',
+                        detail: 'Shipping and the work orders see it once it ' +
+                            'is released.', action: can.save ? {label:
+                            'Release', onclick: function () {
+                                setStatus(d, 'released');
+                            }} : null});
+                }
+                (d.draft_invoices || []).forEach(function (inv) {
+                    out.push({tone: 'info', title: 'An invoice waits to be ' +
+                        'posted', detail: 'Shipped and invoiced in draft; ' +
+                        'post it on Invoicing.', action: screens.invoicing ?
+                        {label: 'Open invoice', onclick: function () {
+                            openInvoice(inv.id, inv.number);
+                        }} : null});
+                });
+                return out;
+            },
+            tracker: function (d) {
+                if (!d.id) {
+                    return null;
+                }
+                var total = amountOf(d.order_amount);
+                var shipped = amountOf(d.shipped_amount);
+                var invoiced = d.invoiced_amount !== undefined ?
+                    amountOf(d.invoiced_amount) : invoicesOf(d).filter(
+                        function (i) {
+                            return i.posted;
+                        }).reduce(function (s, i) {
+                            return s + amountOf(i.amount);
+                        }, 0);
+                var paid = d.paid_amount;
+                var cancelled = d.js_status === 'cancelled';
+                return {title: 'Order, shipment, invoice and payment',
+                    note: 'at the order\'s prices', steps: [
+                    {label: 'Ordered', value: money(total), state: cancelled ?
+                        'bad' : ['released', 'closed'].indexOf(d.js_status) >=
+                        0 || d.state !== 'draft' ? 'done' : 'now'},
+                    {label: 'Shipped', value: money(shipped), state:
+                        d.shipment_state === 'sent' ? 'done' : shipped ?
+                            'now' : 'todo'},
+                    {label: 'Invoiced', value: money(invoiced), state:
+                        invoiced && invoiced >= total - 0.005 ? 'done' :
+                            invoiced ? 'now' : 'todo'},
+                    {label: 'Paid', value: paid !== undefined ? money(paid) :
+                        d.invoice_state === 'paid' ? 'yes' : 'no', state:
+                        d.invoice_state === 'paid' ? 'done' :
+                            d.invoice_state === 'partially paid' ||
+                            amountOf(paid) ? 'now' : 'todo'}]};
+            },
+            sections: [{title: 'What was ordered', note: function (d) {
+                return draft(d) ? 'Click a line to change it' :
+                    'Released: click a line for its dates, specs and work ' +
+                    'orders';
+            }, render: function (pane, d) {
+                var items = d.lines || [];
+                var today = UI.today();
+                UI.docLines(pane, {
+                    items: items,
+                    kind: function (l) {
+                        return l.product ? {icon: 'part', tone: 'part'} :
+                            {icon: 'charge', tone: 'charge'};
+                    },
+                    title: function (l) {
+                        return plainTitle(l.description || name(l.product)) ||
+                            'Line';
+                    },
+                    chips: function (l) {
+                        var c = [];
+                        if (l.product) {
+                            c.push(UI.shortName('product.product',
+                                name(l.product)));
+                        }
+                        if (noPrice(l)) {
+                            c.push({text: 'no price', tone: 'warn'});
+                        }
+                        if (l.js_line_status === 'closed') {
+                            c.push({text: 'closed', tone: 'ok'});
+                        } else if (l.js_line_status === 'cancelled') {
+                            c.push({text: 'cancelled', tone: 'bad'});
+                        }
+                        if (l.customer_po_line) {
+                            c.push('PO line ' + l.customer_po_line);
+                        }
+                        var want = iso(l.js_desired_date) ||
+                            iso(d.shipping_date);
+                        if (want && lineOpen(l) && d.id) {
+                            c.push(want < today ? {text: 'late, wanted ' +
+                                UI.date(want), tone: 'bad'} : 'wanted ' +
+                                UI.date(want));
+                        }
+                        if (l.promise_date) {
+                            c.push('promised ' + UI.date(l.promise_date));
+                        }
+                        (l.link_details || []).forEach(function (w) {
+                            c.push({text: 'WO ' + w.number, tone: 'accent'});
+                        });
+                        if (l.js_line_specs) {
+                            c.push('specs');
+                        }
+                        return c;
+                    },
+                    progress: function (l) {
+                        if (!d.id || draft(d)) {
+                            return null;
+                        }
+                        var q = amountOf(l.quantity);
+                        var s = amountOf(l.shipped_quantity);
+                        return {done: s, total: q, label: num(s) + ' of ' +
+                            num(q) + ' shipped'};
+                    },
+                    right: function (l) {
+                        var disc = amountOf(l.trade_discount);
+                        return [money(l.amount), num(l.quantity) + ' × ' +
+                            money(l.gross_unit_price) + (disc ? ' less ' +
+                                num(disc) + '%' : ''), noPrice(l) ? 'warn' :
+                            null];
+                    },
+                    onclick: function (l) {
+                        editLine(d, l);
+                    },
+                    add: d.party && draft(d) && writable(d) ? {placeholder:
+                        'Add a part, service or charge', onclick: function () {
+                            addLine(d);
+                        }} : null,
+                    footer: ['Lines ' + money(d.untaxed_amount),
+                        'Charges ' + money(d.charges_amount),
+                        'Tax ' + money(d.tax_amount),
+                        'Total ' + money(d.order_amount)]
+                });
+                chipTooltips(pane, items, function (l) {
+                    return l.product ? name(l.product) : '';
+                });
+            }}, {title: 'Charges', note: 'Applied charges go on the next ' +
+                'invoice', visible: function (d) {
+                    return Boolean((d.charges || []).length);
+                }, render: function (pane, d) {
+                    UI.docLines(pane, {
+                        items: d.charges || [],
+                        kind: function () {
+                            return {icon: 'charge', tone: 'charge'};
+                        },
+                        title: function (c) {
+                            return c.description || name(c.service_charge);
+                        },
+                        chips: function (c) {
+                            return [codeOf(c.service_charge), c.invoice ?
+                                {text: 'invoiced ' + (name(c.invoice) || ''),
+                                    tone: 'ok'} : c.apply ? {text:
+                                    'on the next invoice', tone: 'accent'} :
+                                'not applied'];
+                        },
+                        right: function (c) {
+                            return [money(c.amount), c.applied_amount ?
+                                'applied ' + money(c.applied_amount) : ''];
+                        },
+                        onclick: function (c) {
+                            editCharge(d, c);
+                        },
+                        empty: 'No charge.',
+                        add: d.party && writable(d) && can.charges ?
+                            {placeholder: 'Add a service charge',
+                                onclick: function () {
+                                    addCharge(d);
+                                }} : null,
+                        footer: ['Charges ' + money(d.charges_amount)]
+                    });
+                }}],
+            cards: [
+                {title: 'Sold to', rows: function (d) {
+                    return [['Customer', idSpan(d.party && {rec_name:
+                        (d.customer_code ? d.customer_code + ' - ' : '') +
+                        (d.customer_name || name(d.party))})],
+                        ['Customer PO', d.reference]].concat(addressRows(
+                            soSoldParts(d)));
+                }, fields: [{name: 'reference', label: 'Customer PO',
+                    type: 'char'}].concat(addressFieldsOf('js_sold_',
+                        soSoldParts)),
+                    editable: function (d) {
+                        return Boolean(d.party) && writable(d);
+                    }},
+                {title: 'Ship to', rows: function (d) {
+                    var p = soShipParts(d);
+                    return addressRows(p).concat([['Ship via',
+                        idSpan(d.ship_via)], ['Carrier', idSpan(d.js_carrier)],
+                        ['Address no', d.shipment_address &&
+                            d.shipment_address.id ? String(
+                                d.shipment_address.id) : null]]);
+                }, fields: [shipAddressField].concat(addressFieldsOf(
+                    'js_ship_', soShipParts)),
+                    editable: function (d) {
+                        return Boolean(d.party) && writable(d);
+                    }},
+                {title: 'Terms', rows: function (d) {
+                    return [['Terms', d.payment_term_ref ? name(
+                        d.payment_term_ref) : d.payment_term_descr],
+                        ['Freight', label(FREIGHT_TERMS, d.freight_terms) ||
+                            null],
+                        ['Tax group', idSpan(d.tax_group)],
+                        ['Discount class', idSpan(d.discount_class)],
+                        ['Receivables', idSpan(d.receivable)],
+                        ['Order date', d.sale_date ? UI.date(d.sale_date) :
+                            null]];
+                }, fields: [
+                    {name: 'payment_term', label: 'Terms (while unreleased)',
+                        type: 'many2one', model:
+                            'account.invoice.payment_term',
+                        value: function (d) {
+                            return d.payment_term_ref || null;
+                        }},
+                    {name: 'freight_terms', label: 'Freight terms',
+                        type: 'selection', options: FREIGHT_TERMS},
+                    {name: 'tax_group', label: 'Tax group', type: 'many2one',
+                        model: 'nline.sales_tax_group'},
+                    {name: 'discount_class', label: 'Discount class',
+                        type: 'many2one', model: 'nline.discount_class'},
+                    {name: 'sale_date', label: 'Order date (while ' +
+                        'unreleased)', type: 'date', value: function (d) {
+                            return iso(d.sale_date);
+                        }}],
+                    editable: function (d) {
+                        return Boolean(d.party) && writable(d);
+                    }},
+                {title: 'Sales rep and delivery', rows: function (d) {
+                    return [['Sales rep', idSpan(d.sales_rep)],
+                        ['Territory', idSpan(d.territory)],
+                        ['Desired ship', d.shipping_date ? UI.date(
+                            d.shipping_date) : null],
+                        ['Promised', d.promise_date ? UI.date(
+                            d.promise_date) : null],
+                        ['Last shipped', d.last_shipped_date ? UI.date(
+                            d.last_shipped_date) : null],
+                        ['FOB', idSpan(d.fob_point)]];
+                }, fields: [
+                    {name: 'sales_rep', label: 'Sales rep', type: 'many2one',
+                        model: 'nline.sales_rep'},
+                    {name: 'territory', label: 'Territory', type: 'many2one',
+                        model: 'nline.territory'},
+                    {name: 'shipping_date', label: 'Desired ship date',
+                        type: 'date', value: function (d) {
+                            return iso(d.shipping_date);
+                        }},
+                    {name: 'promise_date', label: 'Promised', type: 'date',
+                        value: function (d) {
+                            return iso(d.promise_date);
+                        }},
+                    {name: 'ship_via', label: 'Ship via', type: 'many2one',
+                        model: 'nline.ship_via'},
+                    {name: 'js_carrier', label: 'Carrier', type: 'many2one',
+                        model: 'nline.carrier'},
+                    {name: 'fob_point', label: 'FOB point', type: 'many2one',
+                        model: 'nline.fob_point'}],
+                    editable: function (d) {
+                        return Boolean(d.party) && writable(d);
+                    }},
+                {title: 'Specs and notes', rows: function (d) {
+                    return [['Specs', d.js_specs ? String(d.js_specs)
+                        .slice(0, 160) : null],
+                        ['Memo', d.description],
+                        ['Copy notes to shipper', d.js_copy_notes ? 'Yes' :
+                            'No'],
+                        ['Quote', d.js_quote]];
+                }, fields: [
+                    {name: 'js_specs', label: 'Specs', type: 'text'},
+                    {name: 'description', label: 'Memo', type: 'char'},
+                    {name: 'js_copy_notes', label: 'Copy notes to shipper',
+                        type: 'boolean'}],
+                    editable: function (d) {
+                        return Boolean(d.party) && writable(d);
+                    }}
+            ],
+            trail: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var out = [];
+                if (d.js_quote) {
+                    out.push({done: true, text: 'Quote ' + d.js_quote,
+                        when: 'won'});
+                }
+                out.push({done: true, text: 'Order entered', when:
+                    d.created_by || UI.date(d.sale_date)});
+                out.push({done: ['released', 'closed'].indexOf(d.js_status) >=
+                    0 || ['confirmed', 'processing', 'done'].indexOf(
+                        d.state) >= 0, text: 'Released', when:
+                    label(JS_STATUS, d.js_status)});
+                out.push({done: Boolean(d.js_printed_date), text:
+                    'Acknowledgement printed', when: d.js_printed_date ?
+                    UI.date(d.js_printed_date) : 'not yet'});
+                var shippers = (d.shippers || []).filter(function (s) {
+                    return s.model !== 'account.invoice';
+                });
+                shippers.forEach(function (s) {
+                    out.push({done: s.state === 'done', text: (s.type ===
+                        'Return' ? 'Return ' : 'Shipper ') + s.number +
+                        (s.amount ? ' · ' + money(s.amount) : ''),
+                        when: s.shipped_date ? UI.date(s.shipped_date) :
+                            s.state, onclick: s.model ===
+                            'stock.shipment.out' && screens.shipping ?
+                            function () {
+                                UI.openScreen('shipping/' + s.id,
+                                    'Shipper ' + s.number);
+                            } : null});
+                });
+                if (!shippers.length) {
+                    out.push({done: false, text: 'Shippers', when:
+                        'none yet'});
+                }
+                var invoices = invoicesOf(d);
+                invoices.forEach(function (inv) {
+                    out.push({done: inv.posted, text: 'Invoice ' +
+                        (inv.number || '(draft)') + (inv.amount ? ' · ' +
+                            money(inv.amount) : ''), when: inv.date ?
+                        UI.date(inv.date) : 'draft', onclick: function () {
+                            openInvoice(inv.id, inv.number);
+                        }});
+                });
+                if (!invoices.length) {
+                    out.push({done: false, text: 'Invoices', when:
+                        'none yet'});
+                }
+                out.push({done: d.invoice_state === 'paid', text: 'Paid',
+                    when: d.paid_amount !== undefined ? money(d.paid_amount) :
+                        d.invoice_state === 'paid' ? '' : 'not yet'});
+                out.push({done: d.js_status === 'closed' || d.state ===
+                    'done', text: 'Closed', when: d.js_status === 'closed' ?
+                    '' : 'open'});
+                out.push({text: 'Notes', onclick: function () {
+                    notesDialog('sale.sale', d.id, 'SO ' + (d.number ||
+                        d.id), can.save);
+                }});
+                return out;
+            },
+            keys: pageKeys(main, token, {
+                p: {label: 'print', run: function (d) {
+                    if (d.id) {
+                        print(d);
+                    }
+                }},
+                r: {label: 'release', run: function (d) {
+                    if (d.id && can.save && soAllowedNext(d).indexOf(
+                            'released') >= 0) {
+                        setStatus(d, 'released');
+                    }
+                }},
+                s: {label: 'ship', run: function (d) {
+                    if (d.js_status === 'released' && screens.shipping) {
+                        ship(d);
+                    }
+                }},
+                a: {label: 'add a line', run: function (d) {
+                    addLine(d);
+                }}
+            }),
+            classic: function (d) {
+                UI.setDocView('so', 'classic');
+                Screens.salesOrder(main, d && d.id ? [d.id] : []);
+            }
+        });
+        /* New order for a customer (the Customers page's New order) */
+        if (!openId && presetCustomer && can.create) {
+            Rpc.model('party.party', 'read', [[presetCustomer.id],
+                ['rec_name']]).then(function (rows) {
+                    var d = page.data();
+                    if (d && !d.id && rows[0]) {
+                        d.party = {id: rows[0].id, rec_name:
+                            rows[0].rec_name};
+                        chooseCustomer(d);
+                    }
+                }, function () {});
+        }
+        token.root = main.querySelector('.dp-page');
+        return page;
+    }
+
+    /* The Customer Order Entry window: the modern page (default) or
+     * Jobshop's classic window */
+    Screens.salesOrder = function (main, params) {
+        startPage(main);
+        var openId = params && params[0] ? parseInt(params[0], 10) : null;
+        if (UI.docPage && UI.docView('so') === 'modern') {
+            injectCss();
+            var preset = queryParam('customer');
+            soModern(main, openId, preset && /^\d+$/.test(preset) ?
+                {id: parseInt(preset, 10)} : null);
+            return;
+        }
+        main._salesPage = null;
+        classicSalesOrder(main, params);
+    };
+
+    /* ---- Shipping: the shipper as a document ----------------------------- */
+
+    var SHIP_STATE = {draft: 'Draft', waiting: 'Waiting for stock',
+        assigned: 'Stock assigned', picked: 'Picked', packed: 'Packed',
+        done: 'Shipped', cancelled: 'Cancelled'};
+    var SHIP_ORDER = ['draft', 'waiting', 'assigned', 'picked', 'packed',
+        'done'];
+
+    function shipperModern(main, openId, isReturn) {
+        var token = startPage(main);
+        var model = isReturn ? 'stock.shipment.out.return' :
+            'stock.shipment.out';
+        var can = {write: true, returns: true, sale: true};
+        var screens = {orders: false, invoicing: false};
+        var page;
+        rights(['stock.shipment.out', 'stock.shipment.out.return',
+            'sale.sale']).then(function (r) {
+                can.write = r['stock.shipment.out'].write;
+                can.returns = r['stock.shipment.out.return'].write;
+                can.sale = r['sale.sale'].create;
+                if (page) {
+                    page.render();
+                }
+            }, function () {});
+        Object.keys(screens).forEach(function (s) {
+            UI.screenAllowed(s).then(function (ok) {
+                screens[s] = ok;
+                if (page && ok) {
+                    page.render();
+                }
+            });
+        });
+
+        function open(d) {
+            return ['done', 'cancelled'].indexOf(d.state) < 0;
+        }
+
+        /* Quantities change while the stock is not picked */
+        function qtyEditable(d) {
+            return can.write && !d['return'] && ['draft', 'waiting',
+                'assigned'].indexOf(d.state) >= 0;
+        }
+
+        function headEditable(d) {
+            return can.write && !d['return'] && d.state !== 'cancelled';
+        }
+
+        function total(d) {
+            return (d.lines || []).reduce(function (s, l) {
+                return s + amountOf(l.quantity) * amountOf(l.unit_price);
+            }, 0);
+        }
+
+        function short(l) {
+            var have = l.could_ship === undefined ? l.available :
+                l.could_ship;
+            var want = l.stock_quantity === undefined ? l.quantity :
+                l.stock_quantity;
+            return amountOf(have) < amountOf(want) - 0.00001;
+        }
+
+        function ownInvoice(d) {
+            var numbers = String(d.invoice_id || '').split(', ')
+                .filter(Boolean);
+            return (d.invoices || []).filter(function (i) {
+                return i.number && numbers.indexOf(i.number) >= 0;
+            })[0] || (d.js_shipper_status !== 'approved' ? (d.invoices ||
+                []).filter(function (i) {
+                    return i.state === 'draft';
+                })[0] : null) || null;
+        }
+
+        function openInvoice(inv) {
+            if (screens.invoicing) {
+                UI.openScreen('invoicing/' + inv.id, 'Invoice ' +
+                    (inv.number || inv.id));
+            } else {
+                UI.openRecord('account.invoice', inv.id, inv.number);
+            }
+        }
+
+        /* The payload of sales_ship: the Details overrides, the ship
+         * quantities (less than ordered back orders the rest), charges */
+        function values(d) {
+            var v = {id: d.id, ship: false,
+                fob_point: idOf(d.fob_point), ship_via: idOf(d.ship_via),
+                js_carrier: idOf(d.js_carrier),
+                freight_terms: d.freight_terms || null,
+                js_specs: d.js_specs || null,
+                js_tracking_number: d.js_tracking_number || null,
+                charges: (d.charges || []).filter(function (c) {
+                    return c.id;
+                }).map(function (c) {
+                    return {id: c.id, amount: c.amount === null ||
+                        c.amount === undefined ? null : String(c.amount),
+                        apply: Boolean(c.apply)};
+                }),
+                lines: (d.lines || []).map(function (l) {
+                    return {move: l.move, quantity: amountOf(l.quantity),
+                        close_short: Boolean(l.close_short)};
+                })};
+            if (iso(d.effective_date)) {
+                v.effective_date = iso(d.effective_date);
+            }
+            return v;
+        }
+
+        function packingList(d) {
+            Rpc.report('stock.shipment.out.delivery_note', [d.id]).then(
+                function (x) {
+                    UI.openReport(x, 'Packing List');
+                }, UI.showError);
+        }
+
+        function ship(d) {
+            if (d['return']) {
+                Rpc.desk('sales_return_receive', [d.id]).then(function () {
+                    UI.toast('Return ' + d.number + ' received', 'ok');
+                    page.reload();
+                }, UI.showError);
+                return;
+            }
+            page.save({ship: true}).then(function (r) {
+                UI.confirm('Packing List', 'Print the Pack List for ' +
+                    'shipper ' + r.number + '?').then(function (ok) {
+                        if (ok) {
+                            packingList(r);
+                        }
+                    });
+            }, function () {});
+        }
+
+        function step(d, s) {
+            Rpc.model('stock.shipment.out', s[0], [[d.id]]).then(function () {
+                UI.toast('Shipper ' + d.number + ': ' + s[1], 'ok');
+                page.reload();
+            }, UI.showError);
+        }
+
+        /* Marking a Sales Order for Return: the quantities to return */
+        function returnDialog(sale) {
+            Rpc.desk('sale_order_get', [sale.id]).then(function (order) {
+                var lines = order.lines.filter(function (l) {
+                    return l.shipped_quantity > 0;
+                });
+                if (!lines.length) {
+                    UI.toast('Nothing shipped on this order', 'error');
+                    return;
+                }
+                UI.docEdit('Return parts of order ' + (order.number ||
+                    order.id), lines.map(function (l) {
+                        return {name: 'l' + l.id, label: 'Line ' + l.line_no +
+                            ' · ' + (l.description || name(l.product)) +
+                            ' (shipped ' + num(l.shipped_quantity) + ')',
+                            type: 'float', wide: true};
+                    }), {}, el('p.dp-muted', 'Makes a return order and its ' +
+                        'return shipper; receive it on Shipping, its credit ' +
+                        'memo waits on Invoicing.')).then(function (v) {
+                        var out = lines.map(function (l) {
+                            return {line: l.id, quantity: amountOf(
+                                v['l' + l.id])};
+                        }).filter(function (l) {
+                            return l.quantity > 0;
+                        });
+                        if (!out.length) {
+                            return;
+                        }
+                        Rpc.desk('sales_return', [{sale: order.id, lines:
+                            out}]).then(function (result) {
+                                UI.toast('Return order ' +
+                                    result.sale.number + ' made', 'ok');
+                                page.reload();
+                            }, UI.showError);
+                    }, function () {});
+            }, UI.showError);
+        }
+
+        function editLine(d, l) {
+            var ro = !qtyEditable(d);
+            UI.docEdit('Shipper line ' + l.line_no + (l.product ? ' · ' +
+                UI.shortName('product.product', name(l.product)) : ''), [
+                {name: 'quantity', label: 'Ship qty (' + (l.unit || '') +
+                    '; less back orders the rest, 0 the whole line)',
+                    type: 'float', wide: true, readonly: ro},
+                {name: 'close_short', label: 'Close short (the rest is ' +
+                    'not back ordered, the order line closes)',
+                    type: 'boolean', wide: true, readonly: ro},
+                {name: 'could_ship', label: 'Could ship (stock U/M)',
+                    type: 'float', readonly: true},
+                {name: 'available', label: 'On hand at ' + (l.location ||
+                    'the warehouse'), type: 'float', readonly: true},
+                {name: 'ordered', label: 'Ordered', type: 'float',
+                    readonly: true},
+                {name: 'lot', label: 'Lot', type: 'char', readonly: true},
+                {name: 'specs', label: 'Line specs', type: 'text',
+                    wide: true, readonly: true}], l).then(function (v) {
+                    if (ro) {
+                        return;
+                    }
+                    l.quantity = v.quantity === null ? l.quantity :
+                        v.quantity;
+                    l.close_short = v.close_short;
+                    page.save({}).then(null, function () {});
+                }, function () {});
+        }
+
+        function editCharge(d, c) {
+            var locked = !can.write || d['return'] || d.state === 'done' ||
+                Boolean(c.invoice);
+            UI.docEdit('Charge ' + codeOf(c.service_charge), [
+                {name: 'amount', label: 'Amount', type: 'float',
+                    readonly: locked},
+                {name: 'apply', label: 'Apply (on this shipment\'s ' +
+                    'invoice)', type: 'boolean', readonly: locked}], c).then(
+                function (v) {
+                    if (!locked) {
+                        Object.assign(c, v);
+                        page.save({}).then(null, function () {});
+                    }
+                }, function () {});
+        }
+
+        page = UI.docPage(main, {
+            title: isReturn ? 'Return' : 'Shipper',
+            crumbs: ['Sales', 'Shipping'],
+            model: model, label: isReturn ? 'Return ID' : 'Shipper ID',
+            order: [['id', 'DESC']],
+            openId: openId,
+            load: function (id) {
+                return Rpc.desk('sales_shipper_get', [id, model]);
+            },
+            values: values,
+            save: function (v) {
+                return UI.service('sales_ship', v);
+            },
+            head: function (d) {
+                var sales = (d.sales || []).map(function (s) {
+                    return s.number;
+                }).join(', ');
+                return {
+                    title: name(d.customer) || d.customer_code,
+                    chips: d.customer_code ? [d.customer_code] : [],
+                    sub: [(d['return'] ? 'Return ' : 'Shipper ') + d.number,
+                        sales ? 'for SO ' + sales : null,
+                        d.reference ? 'PO ' + d.reference : null,
+                        d.state === 'done' ? (d['return'] ? 'received ' :
+                            'shipped ') + UI.date(d.effective_date) +
+                            (d.shipped_by ? ' by ' + d.shipped_by : '') :
+                            dueSub('ship', d.planned_date, open(d))],
+                    amount: {value: money(total(d)), label: (d.lines ||
+                        []).length + ' lines' + (d.payment_term ? ' · ' +
+                            d.payment_term : '')}
+                };
+            },
+            status: function (d) {
+                var tone = {done: 'ok', cancelled: 'bad', waiting: 'warn',
+                    assigned: 'accent', picked: 'accent', packed: 'accent'};
+                return [{text: d['return'] && d.state === 'done' ?
+                    'Received' : SHIP_STATE[d.state] || d.state,
+                    tone: tone[d.state]},
+                    {text: label(SHIPPER_STATUS, d.js_shipper_status) ||
+                        'Unapproved', tone: d.js_shipper_status ===
+                        'approved' ? 'ok' : null},
+                    {text: d.invoice_id ? 'Invoice ' + d.invoice_id :
+                        'Not invoiced'}];
+            },
+            actions: function (d) {
+                var out = [];
+                if (!d['return'] && open(d) && can.write) {
+                    out.push({label: 'Ship', key: 's', primary: true,
+                        title: 'Ship it (assigns the stock, picks, packs ' +
+                            'and ships)', onclick: ship});
+                }
+                if (d['return'] && open(d) && can.returns) {
+                    out.push({label: 'Receive return', key: 's',
+                        primary: true, onclick: ship});
+                }
+                if (!d['return']) {
+                    out.push({label: 'Packing list', key: 'p',
+                        onclick: packingList});
+                }
+                var inv = ownInvoice(d);
+                if (inv && d.state === 'done') {
+                    out.push({label: 'Invoice', key: 'i', primary: !out.some(
+                        function (a) {
+                            return a.primary;
+                        }) && inv.state === 'draft', title: 'Open invoice ' +
+                        (inv.number || '(draft)'), onclick: function () {
+                            openInvoice(inv);
+                        }});
+                }
+                return out;
+            },
+            more: function (d) {
+                var items = [];
+                if (!d['return'] && can.write) {
+                    (SHIP_STEPS[d.state] || []).forEach(function (s) {
+                        if (s[0] !== 'done') {
+                            items.push({label: s[1], onclick: function () {
+                                step(d, s);
+                            }});
+                        }
+                    });
+                }
+                if (!d['return']) {
+                    items.push({label: 'Picking list', onclick: function () {
+                        Rpc.report('stock.shipment.out.picking_list',
+                            [d.id]).then(function (x) {
+                                UI.openReport(x, 'Picking List');
+                            }, UI.showError);
+                    }});
+                }
+                if (!d['return'] && d.state === 'done' && can.sale &&
+                        (d.sales || []).length) {
+                    items.push({label: 'Return parts...', onclick:
+                        function () {
+                            returnDialog(d.sales[0]);
+                        }});
+                }
+                (d.sales || []).forEach(function (s) {
+                    if (screens.orders) {
+                        items.push({label: 'Open sales order ' + s.number,
+                            onclick: function () {
+                                openOrder(s.id, s.number);
+                            }});
+                    }
+                });
+                if ((d.sales || []).length) {
+                    items.push({label: 'Sales order lines...', onclick:
+                        function () {
+                            orderLinesDialog('Sales Order Lines - ' +
+                                d.sales[0].number, {sale: d.sales[0].id},
+                                null);
+                        }});
+                }
+                items.push({label: 'Notes', onclick: function () {
+                    notesDialog(model, d.id, (d['return'] ? 'Return ' :
+                        'Shipper ') + d.number, can.write);
+                }}, {label: 'Shipping activity', onclick: function () {
+                    global.location.hash = '#/shipping';
+                }}, '-', {label: 'Classic view', onclick: function () {
+                    UI.setDocView('shipper', 'classic');
+                    Screens.shipping(main, [d.id], d['return']);
+                }});
+                return items;
+            },
+            attention: function (d) {
+                var out = [];
+                if (d.sales_hold) {
+                    out.push({tone: 'bad', icon: 'bad', title: 'The order is ' +
+                        'on hold', detail: 'It ships once the order is ' +
+                        'released again.', action: screens.orders &&
+                        (d.sales || []).length ? {label: 'Open order',
+                            onclick: function () {
+                                openOrder(d.sales[0].id, d.sales[0].number);
+                            }} : null});
+                }
+                if (d.credit_status === 'hold_shipments' && open(d)) {
+                    out.push({tone: 'bad', icon: 'bad', title: 'Credit hold: ' +
+                        'shipments', detail: 'Shipping asks to accept the ' +
+                        'customer\'s hold.'});
+                } else if (d.credit_status === 'hold_orders' && open(d)) {
+                    out.push({tone: 'warn', title: 'Credit hold: orders',
+                        detail: 'The customer is on a hold type credit ' +
+                            'status.'});
+                }
+                if (open(d) && iso(d.planned_date) && iso(d.planned_date) <
+                        UI.today()) {
+                    out.push({tone: 'bad', icon: 'clock', title: 'Past the ' +
+                        'desired ship date', detail: 'Wanted ' +
+                        UI.date(d.planned_date) + '.', action: can.write &&
+                        !d['return'] ? {label: 'Ship', onclick: ship} :
+                        null});
+                }
+                var shortLines = open(d) && !d['return'] ? (d.lines || [])
+                    .filter(short) : [];
+                if (shortLines.length > 2) {
+                    out.push({tone: 'warn', title: shortLines.length +
+                        ' lines are short of stock', detail: shortLines.map(
+                            function (l) {
+                                return 'line ' + l.line_no + ': ' + num(
+                                    l.could_ship === undefined ? l.available :
+                                    l.could_ship) + ' of ' + num(
+                                    l.stock_quantity === undefined ?
+                                    l.quantity : l.stock_quantity);
+                            }).join(', ') + '. Ship less to back order the ' +
+                            'rest, or ship anyway (Jobshop ships what is on ' +
+                            'hand).', action: can.write && d.state ===
+                            'waiting' ? {label: 'Assign stock', onclick:
+                                function () {
+                                    step(d, ['assign_try', 'Assign Stock']);
+                                }} : null});
+                } else if (shortLines.length) {
+                    shortLines.forEach(function (l) {
+                        if (short(l)) {
+                            out.push({tone: 'warn', title: 'Line ' +
+                                l.line_no + ': ' + num(l.could_ship ===
+                                    undefined ? l.available : l.could_ship) +
+                                ' of ' + num(l.stock_quantity === undefined ?
+                                    l.quantity : l.stock_quantity) + ' ' +
+                                (l.stock_unit || l.unit || '') + ' in stock',
+                                detail: 'Ship less to back order the rest, ' +
+                                    'or ship it all anyway (Jobshop ships ' +
+                                    'what is on hand).', action:
+                                    qtyEditable(d) ? {label: 'Ship less',
+                                        onclick: function () {
+                                            editLine(d, l);
+                                        }} : null});
+                        }
+                    });
+                }
+                (d.lines || []).forEach(function (l) {
+                    if (!amountOf(l.unit_price) && d.state !== 'cancelled') {
+                        out.push({tone: 'warn', title: 'Line ' + l.line_no +
+                            ' has no price', detail: 'It would invoice at ' +
+                            '$0: price it on the order, or on Invoicing ' +
+                            '(Set Shipper Line Unit Price).'});
+                    }
+                });
+                if (d.state === 'done' && !d['return'] &&
+                        !d.js_tracking_number) {
+                    out.push({tone: 'info', title: 'No tracking number',
+                        detail: 'The packing list and the invoice print it.',
+                        action: headEditable(d) ? {label: 'Add tracking',
+                            onclick: function () {
+                                UI.docEdit('Tracking', [{name:
+                                    'js_tracking_number', label:
+                                    'Shipment tracking no', type: 'char'}],
+                                    d).then(function (v) {
+                                        page.save(v).then(null,
+                                            function () {});
+                                    }, function () {});
+                            }} : null});
+                }
+                var inv = ownInvoice(d);
+                if (d.state === 'done' && d.js_shipper_status !== 'approved') {
+                    out.push({tone: 'info', title: d['return'] ?
+                        'Credit memo not posted yet' : 'Invoice not posted ' +
+                        'yet', detail: 'Post it on Invoicing.', action: inv ?
+                        {label: 'Open invoice', onclick: function () {
+                            openInvoice(inv);
+                        }} : null});
+                }
+                return out;
+            },
+            tracker: function (d) {
+                if (d['return']) {
+                    return {title: 'Return', steps: [
+                        {label: 'Marked for return', value: money(total(d)),
+                            state: 'done'},
+                        {label: 'Received', value: d.state === 'done' ?
+                            UI.date(d.effective_date) : 'no', state:
+                            d.state === 'done' ? 'done' : 'now'},
+                        {label: 'Credited', value: d.invoice_id || 'no',
+                            state: d.js_shipper_status === 'approved' ?
+                                'done' : d.state === 'done' ? 'now' :
+                                'todo'}]};
+                }
+                var at = SHIP_ORDER.indexOf(d.state);
+                var st = function (i) {
+                    return d.state === 'cancelled' ? 'bad' : at >= i ?
+                        'done' : at === i - 1 ? 'now' : 'todo';
+                };
+                return {title: 'Pick, pack, ship and invoice', steps: [
+                    {label: 'Stock assigned', value: d.state === 'waiting' ?
+                        'waiting' : at >= 2 ? 'yes' : 'no', state: st(2)},
+                    {label: 'Picked', state: st(3)},
+                    {label: 'Packed', state: st(4)},
+                    {label: 'Shipped', value: d.state === 'done' ?
+                        UI.date(d.effective_date) : money(total(d)),
+                        state: st(5)},
+                    {label: 'Invoiced', value: d.invoice_id || 'no', state:
+                        d.js_shipper_status === 'approved' ? 'done' :
+                            d.state === 'done' ? 'now' : 'todo'}]};
+            },
+            sections: [{title: isReturn ? 'What comes back' :
+                'What ships', note: function (d) {
+                    return qtyEditable(d) ? 'Click a line to ship less or ' +
+                        'close it short' : 'Click a line for its stock';
+                }, render: function (pane, d) {
+                    var items = d.lines || [];
+                    var today = UI.today();
+                    UI.docLines(pane, {
+                        items: items,
+                        kind: function () {
+                            return {icon: 'part', tone: 'part'};
+                        },
+                        title: function (l) {
+                            return plainTitle(l.description ||
+                                name(l.product));
+                        },
+                        chips: function (l) {
+                            var c = [UI.shortName('product.product',
+                                name(l.product))];
+                            if (l.sale) {
+                                c.push('SO ' + l.sale + (l.so_line_no ?
+                                    ' line ' + l.so_line_no : ''));
+                            }
+                            var want = iso(l.desired_date);
+                            if (want && open(d)) {
+                                c.push(want < today ? {text: 'late, wanted ' +
+                                    UI.date(want), tone: 'bad'} : 'wanted ' +
+                                    UI.date(want));
+                            }
+                            if (!amountOf(l.unit_price)) {
+                                c.push({text: 'no price', tone: 'warn'});
+                            }
+                            if (l.close_short) {
+                                c.push({text: 'close short', tone: 'warn'});
+                            }
+                            if (l.lot) {
+                                c.push('lot ' + l.lot);
+                            }
+                            if (l.linked) {
+                                c.push({text: 'WO linked', tone: 'accent'});
+                            }
+                            if (l.ship_via) {
+                                c.push(codeOf(l.ship_via));
+                            }
+                            return c;
+                        },
+                        progress: function (l) {
+                            var want = amountOf(l.stock_quantity ===
+                                undefined ? l.quantity : l.stock_quantity);
+                            if (!open(d)) {
+                                return {done: amountOf(l.quantity), total:
+                                    amountOf(l.ordered), label: num(
+                                        l.quantity) + ' of ' + num(l.ordered) +
+                                    ' ordered'};
+                            }
+                            var have = amountOf(l.could_ship === undefined ?
+                                l.available : l.could_ship);
+                            return {done: Math.min(have, want), total: want,
+                                label: num(have) + ' of ' + num(want) +
+                                    ' in stock'};
+                        },
+                        right: function (l) {
+                            return [money(amountOf(l.quantity) *
+                                amountOf(l.unit_price)), num(l.quantity) +
+                                ' ' + (l.unit || '') + ' × ' +
+                                money(l.unit_price), !amountOf(l.unit_price) ?
+                                    'warn' : null];
+                        },
+                        onclick: function (l) {
+                            editLine(d, l);
+                        },
+                        empty: 'No shipper line.',
+                        footer: ['Lines ' + money(total(d))]
+                    });
+                    chipTooltips(pane, items, function (l) {
+                        return name(l.product);
+                    });
+                }}, {title: 'Charges', note: 'The order\'s charges still ' +
+                    'to invoice', visible: function (d) {
+                        return Boolean((d.charges || []).length);
+                    }, render: function (pane, d) {
+                        UI.docLines(pane, {
+                            items: d.charges || [],
+                            kind: function () {
+                                return {icon: 'charge', tone: 'charge'};
+                            },
+                            title: function (c) {
+                                return c.description || name(c.service_charge);
+                            },
+                            chips: function (c) {
+                                return [codeOf(c.service_charge), c.apply ?
+                                    {text: 'on this invoice', tone:
+                                        'accent'} : 'not applied'];
+                            },
+                            right: function (c) {
+                                return [money(c.amount), ''];
+                            },
+                            onclick: function (c) {
+                                editCharge(d, c);
+                            }
+                        });
+                    }}],
+            cards: [
+                {title: 'Sold to', rows: function (d) {
+                    return [['Customer', idSpan(d.customer && {rec_name:
+                        (d.customer_code ? d.customer_code + ' - ' : '') +
+                        name(d.customer)})]].concat(addressRows(
+                            addressParts(d.sold_to)));
+                }},
+                {title: 'Ship to', rows: function (d) {
+                    return addressRows(addressParts(d.ship_to));
+                }},
+                {title: 'Delivery', rows: function (d) {
+                    return [['Ship via', idSpan(d.ship_via)],
+                        ['Carrier', idSpan(d.js_carrier)],
+                        ['Tracking no', d.js_tracking_number],
+                        ['FOB', idSpan(d.fob_point)],
+                        ['Freight', label(FREIGHT_TERMS, d.freight_terms) ||
+                            null],
+                        [d['return'] ? 'Received' : 'Shipped',
+                            d.effective_date ? UI.date(d.effective_date) +
+                            (d.shipped_by ? ' by ' + d.shipped_by : '') :
+                            null]];
+                }, fields: [
+                    {name: 'ship_via', label: 'Ship via', type: 'many2one',
+                        model: 'nline.ship_via'},
+                    {name: 'js_carrier', label: 'Carrier', type: 'many2one',
+                        model: 'nline.carrier'},
+                    {name: 'js_tracking_number', label: 'Shipment ' +
+                        'tracking no', type: 'char'},
+                    {name: 'fob_point', label: 'FOB point', type: 'many2one',
+                        model: 'nline.fob_point'},
+                    {name: 'freight_terms', label: 'Freight terms',
+                        type: 'selection', options: FREIGHT_TERMS},
+                    {name: 'effective_date', label: 'Shipped date',
+                        type: 'date', value: function (d) {
+                            return iso(d.effective_date);
+                        }}],
+                    editable: headEditable},
+                {title: 'Terms and accounting', rows: function (d) {
+                    return [['Terms', d.payment_term_descr ||
+                        d.payment_term],
+                        ['Tax group', idSpan(d.tax_group)],
+                        ['Discount class', idSpan(d.discount_class)],
+                        ['Receivables', idSpan(d.receivable)],
+                        ['Order date', d.order_date ? UI.date(d.order_date) :
+                            null],
+                        ['Payment due', d.payment_due ? UI.date(
+                            d.payment_due) : null]];
+                }},
+                {title: 'Specs', rows: function (d) {
+                    return [['Printed on the shipper', d.js_specs ?
+                        String(d.js_specs).slice(0, 300) : null]];
+                }, fields: [{name: 'js_specs', label: 'Specs', type: 'text'}],
+                    editable: headEditable}
+            ],
+            trail: function (d) {
+                var out = (d.sales || []).map(function (s) {
+                    return {done: true, text: 'Sales order ' + s.number,
+                        when: label(JS_STATUS, s.js_status), onclick:
+                            screens.orders ? function () {
+                                openOrder(s.id, s.number);
+                            } : null};
+                });
+                out.push({done: true, text: (d['return'] ? 'Return ' :
+                    'Shipper ') + 'made', when: d.created_by});
+                out.push({done: d.state === 'done', text: d['return'] ?
+                    'Received' : 'Shipped', when: d.state === 'done' ?
+                    UI.date(d.effective_date) : SHIP_STATE[d.state] ||
+                    d.state});
+                var inv = ownInvoice(d);
+                out.push({done: d.js_shipper_status === 'approved', text:
+                    (d['return'] ? 'Credit memo ' : 'Invoice ') +
+                    (d.invoice_id || (inv ? '(draft)' : '')), when:
+                    d.invoiced_date ? UI.date(d.invoiced_date) : inv ?
+                    'draft' : 'not yet', onclick: inv ? function () {
+                        openInvoice(inv);
+                    } : null});
+                if (d.printed_date) {
+                    out.push({done: true, text: 'Invoice printed', when:
+                        UI.date(d.printed_date)});
+                }
+                if (d.payment_due) {
+                    out.push({done: false, text: 'Payment due', when:
+                        UI.date(d.payment_due)});
+                }
+                out.push({text: 'Notes', onclick: function () {
+                    notesDialog(model, d.id, (d['return'] ? 'Return ' :
+                        'Shipper ') + d.number, can.write);
+                }});
+                return out;
+            },
+            keys: pageKeys(main, token, {
+                s: {label: isReturn ? 'receive' : 'ship', run: function (d) {
+                    if (open(d) && (d['return'] ? can.returns : can.write)) {
+                        ship(d);
+                    }
+                }},
+                p: {label: 'packing list', run: function (d) {
+                    if (!d['return']) {
+                        packingList(d);
+                    }
+                }},
+                i: {label: 'invoice', run: function (d) {
+                    var inv = ownInvoice(d);
+                    if (inv) {
+                        openInvoice(inv);
+                    }
+                }}
+            }),
+            classic: function (d) {
+                UI.setDocView('shipper', 'classic');
+                Screens.shipping(main, d && d.id ? [d.id] : [], isReturn);
+            }
+        });
+        token.root = main.querySelector('.dp-page');
+        return page;
+    }
+
+    /* The Shipping window: the Shipping Activity (Jobshop's window) lists
+     * the work; a shipper opens as its modern page (default) or in the
+     * classic window */
+    Screens.shipping = function (main, params, isReturn) {
+        startPage(main);
+        var openId = params && params[0] ? parseInt(params[0], 10) : null;
+        isReturn = Boolean(isReturn || queryParam('return') === '1');
+        if (openId && UI.docPage && UI.docView('shipper') === 'modern') {
+            injectCss();
+            shipperModern(main, openId, isReturn);
+            return;
+        }
+        main._salesPage = null;
+        classicShipping(main, params, isReturn);
+    };
+
+    /* ---- Invoicing: the invoice as a document ---------------------------- */
+
+    var INVOICE_STATE = {draft: 'Draft', validated: 'Validated',
+        posted: 'Posted', paid: 'Paid', cancelled: 'Cancelled'};
+
+    function invoiceModern(main, openId) {
+        var token = startPage(main);
+        var can = {write: true, create: true};
+        var screens = {orders: false, shipping: false};
+        var page;
+        rights(['account.invoice']).then(function (r) {
+            can.write = r['account.invoice'].write;
+            can.create = r['account.invoice'].create;
+            if (page) {
+                page.render();
+            }
+        }, function () {});
+        Object.keys(screens).forEach(function (s) {
+            UI.screenAllowed(s).then(function (ok) {
+                screens[s] = ok;
+                if (page && ok) {
+                    page.render();
+                }
+            });
+        });
+
+        function draft(d) {
+            return d.state === 'draft' && can.write;
+        }
+
+        function posted(d) {
+            return d.state === 'posted' || d.state === 'paid';
+        }
+
+        function memo(d) {
+            return amountOf(d.total_amount) < 0;
+        }
+
+        function noun(d) {
+            return memo(d) ? 'Credit memo' : 'Invoice';
+        }
+
+        /* The payload of sales_invoice_save (a draft invoice) */
+        function values(d) {
+            return {id: d.id, invoice_date: iso(d.invoice_date),
+                reference: d.reference || null,
+                description: d.description || null,
+                comment: d.comment || null,
+                payment_term: idOf(d.payment_term),
+                lines: (d.lines || []).map(function (l) {
+                    return {id: l.id, quantity: amountOf(l.quantity),
+                        unit_price: String(amountOf(l.unit_price)),
+                        description: l.description || null};
+                }),
+                charges: (d.charges || []).map(function (c) {
+                    return {id: c.id || null, service_charge:
+                        c.service_charge, description: c.description || '',
+                        amount: c.amount === null || c.amount === undefined ?
+                            null : String(c.amount), tax_group:
+                            idOf(c.tax_group)};
+                })};
+        }
+
+        function markPrinted(id) {
+            Rpc.desk('sales_invoice_printed', [[id]]).then(function () {
+                page.reload();
+            }, function () {});
+        }
+
+        function print(d) {
+            Rpc.report('account.invoice', [d.id]).then(function (r) {
+                UI.openReport(r, noun(d));
+                markPrinted(d.id);
+            }, UI.showError);
+        }
+
+        function post(d) {
+            UI.confirm('Post', 'Post ' + noun(d).toLowerCase() + ' of ' +
+                money(d.total_amount) + ' to ' + (name(d.party) ||
+                    d.customer_code) + ' and print it?').then(function (ok) {
+                    if (!ok) {
+                        return;
+                    }
+                    Rpc.model('account.invoice', 'post', [[d.id]]).then(
+                        function () {
+                            UI.toast(noun(d) + ' posted', 'ok');
+                            Rpc.report('account.invoice', [d.id]).then(
+                                function (r) {
+                                    UI.openReport(r, noun(d));
+                                    markPrinted(d.id);
+                                }, function () {
+                                    page.reload();
+                                });
+                        }, UI.showError);
+                });
+        }
+
+        function creditMemo(d) {
+            UI.confirm('Credit memo', 'Issue a credit memo for invoice ' +
+                d.number + '?').then(function (ok) {
+                    if (!ok) {
+                        return;
+                    }
+                    Rpc.desk('sales_credit_memo', [d.id]).then(function (m) {
+                        UI.toast('Credit memo made: check and post it', 'ok');
+                        global.history.replaceState(null, '',
+                            '#/invoicing/' + m.id);
+                        page.load(m.id);
+                    }, UI.showError);
+                });
+        }
+
+        function editLine(d, l) {
+            var ro = !draft(d);
+            UI.docEdit('Line ' + l.line_no + (l.product ? ' · ' +
+                UI.shortName('product.product', name(l.product)) : ''), [
+                {name: 'description', label: 'Description', type: 'char',
+                    wide: true, readonly: ro},
+                {name: 'quantity', label: 'Ship qty (from the shipper)',
+                    type: 'float', readonly: true},
+                {name: 'unit_price', label: 'Unit price', type: 'float',
+                    readonly: ro},
+                {name: 'trade_discount', label: 'Trade disc % (the ' +
+                    'order line\'s)', type: 'float', readonly: true},
+                {name: 'po_line', label: 'Customer PO line', type: 'char',
+                    readonly: true}], l).then(function (v) {
+                    if (ro) {
+                        return;
+                    }
+                    l.description = v.description;
+                    l.unit_price = v.unit_price === null ? 0 : v.unit_price;
+                    page.save({}).then(null, function () {});
+                }, function () {});
+        }
+
+        function editCharge(d, c) {
+            var ro = !draft(d);
+            UI.docEdit('Charge ' + codeOf(c.service_charge), [
+                {name: 'amount', label: 'Amount', type: 'float',
+                    readonly: ro},
+                ro ? null : {name: '_remove', label: 'Remove it (it waits ' +
+                    'for the next invoice)', type: 'boolean'}].filter(
+                Boolean), c).then(function (v) {
+                    if (ro) {
+                        return;
+                    }
+                    if (v._remove) {
+                        d.charges = d.charges.filter(function (x) {
+                            return x !== c;
+                        });
+                    } else {
+                        c.amount = v.amount;
+                    }
+                    page.save({}).then(null, function () {});
+                }, function () {});
+        }
+
+        function addCharge(d) {
+            UI.docEdit('Add a service charge', [
+                {name: 'service_charge', label: 'Service charge',
+                    type: 'many2one', model: 'nline.service_charge'},
+                {name: 'description', label: 'Description (empty: the ' +
+                    'charge\'s)', type: 'char', wide: true},
+                {name: 'amount', label: 'Amount (empty: the charge\'s)',
+                    type: 'float'}], {}).then(function (v) {
+                    if (!v.service_charge) {
+                        UI.toast('Choose the service charge', 'error');
+                        return;
+                    }
+                    d.charges = (d.charges || []).concat([{id: null,
+                        service_charge: v.service_charge, description:
+                            v.description || '', amount: v.amount}]);
+                    page.save({}).then(null, function () {});
+                }, function () {});
+        }
+
+        function openOrderOf(d) {
+            var s = (d.sales || [])[0];
+            if (s && screens.orders) {
+                openOrder(s.id, s.number);
+            }
+        }
+
+        page = UI.docPage(main, {
+            title: 'Invoice',
+            crumbs: ['Sales', 'Invoicing'],
+            model: 'account.invoice', label: 'Invoice ID',
+            domain: [['type', '=', 'out']],
+            order: [['invoice_date', 'DESC'], ['id', 'DESC']],
+            openId: openId,
+            load: function (id) {
+                return Rpc.desk('sales_invoice_get', [id]);
+            },
+            values: values,
+            save: function (v) {
+                return UI.service('sales_invoice_save', v);
+            },
+            head: function (d) {
+                var sales = (d.sales || []).map(function (s) {
+                    return s.number;
+                }).join(', ');
+                var due = amountOf(d.amount_to_pay);
+                return {
+                    title: name(d.party) || d.customer_code,
+                    chips: d.customer_code ? [d.customer_code] : [],
+                    sub: [d.number ? noun(d) + ' ' + d.number : 'Draft ' +
+                        noun(d).toLowerCase(),
+                        d.invoice_date ? 'dated ' + UI.date(d.invoice_date) :
+                            null,
+                        sales ? 'for SO ' + sales : null,
+                        d.reference ? 'PO ' + d.reference : null,
+                        posted(d) && due > 0 ? dueSub('due', d.payment_due,
+                            true) : null],
+                    amount: posted(d) ? {value: money(due), label:
+                        (d.state === 'paid' ? 'paid in full, ' : 'due of ') +
+                        money(d.total_amount)} : {value: money(
+                            d.total_amount), label: d.state === 'cancelled' ?
+                            'cancelled' : 'total, not posted'}
+                };
+            },
+            status: function (d) {
+                var tone = {posted: 'accent', paid: 'ok', cancelled: 'bad',
+                    draft: 'warn'};
+                var out = [{text: INVOICE_STATE[d.state] || d.state,
+                    tone: tone[d.state]}];
+                if (memo(d)) {
+                    out.push({text: 'Credit memo', tone: 'accent'});
+                }
+                out.push({text: d.js_printed_date ? 'Printed ' +
+                    UI.date(d.js_printed_date) : 'Not printed'});
+                if (d.exported) {
+                    out.push({text: 'Exported' + (d.exported_date ? ' ' +
+                        UI.date(d.exported_date) : ''), tone: 'ok'});
+                }
+                return out;
+            },
+            actions: function (d) {
+                return [
+                    draft(d) ? {label: 'Post', key: 'o', primary: true,
+                        title: 'Post and print', onclick: post} : null,
+                    {label: 'Print', key: 'p', onclick: print},
+                    posted(d) && !memo(d) && can.create ? {label: 'Credit ' +
+                        'memo', onclick: creditMemo} : null];
+            },
+            more: function (d) {
+                var items = [];
+                (d.sales || []).forEach(function (s) {
+                    if (screens.orders) {
+                        items.push({label: 'Open sales order ' + s.number,
+                            onclick: function () {
+                                openOrder(s.id, s.number);
+                            }});
+                    }
+                });
+                (d.shippers || []).forEach(function (s) {
+                    if (screens.shipping) {
+                        items.push({label: 'Open ' + (s.model ===
+                            'stock.shipment.out.return' ? 'return ' :
+                            'shipper ') + s.number, onclick: function () {
+                                UI.openScreen('shipping/' + s.id + (s.model ===
+                                    'stock.shipment.out.return' ?
+                                    '?return=1' : ''), 'Shipper ' +
+                                    s.number);
+                            }});
+                    }
+                });
+                items.push({label: 'Notes', onclick: function () {
+                    notesDialog('account.invoice', d.id, noun(d) + ' ' +
+                        (d.number || '(draft)'), can.write);
+                }}, {label: 'Invoicing activity', onclick: function () {
+                    global.location.hash = '#/invoicing';
+                }}, '-', {label: 'Classic view', onclick: function () {
+                    UI.setDocView('invoice', 'classic');
+                    Screens.invoicing(main, [d.id]);
+                }});
+                return items;
+            },
+            attention: function (d) {
+                var out = [];
+                if (d.state === 'draft') {
+                    (d.lines || []).forEach(function (l) {
+                        if (!amountOf(l.unit_price)) {
+                            out.push({tone: 'warn', title: 'Line ' +
+                                l.line_no + ' has no price', detail:
+                                'It would invoice at $0.', action: draft(d) ?
+                                {label: 'Set price', onclick: function () {
+                                    editLine(d, l);
+                                }} : null});
+                        }
+                    });
+                    if (!d.reference && !memo(d)) {
+                        out.push({tone: 'warn', title: 'No customer PO ' +
+                            'reference', detail: 'Most customers pay ' +
+                            'against their PO number.', action: draft(d) ?
+                            {label: 'Add PO', onclick: function () {
+                                UI.docEdit('Customer PO', [{name: 'reference',
+                                    label: 'Purchase order no', type:
+                                    'char'}], d).then(function (v) {
+                                        page.save(v).then(null,
+                                            function () {});
+                                    }, function () {});
+                            }} : null});
+                    }
+                    out.push({tone: 'info', title: memo(d) ? 'Credit memo ' +
+                        'to check and post' : 'Not posted yet', detail:
+                        'The customer owes nothing until it is posted.',
+                        action: draft(d) ? {label: 'Post', onclick:
+                            function () {
+                                post(d);
+                            }} : null});
+                }
+                var due = iso(d.payment_due);
+                if (posted(d) && amountOf(d.amount_to_pay) > 0 && due &&
+                        due < UI.today()) {
+                    out.push({tone: 'bad', icon: 'clock', title: 'Overdue',
+                        detail: money(d.amount_to_pay) + ' was due ' +
+                            UI.date(due) + '.'});
+                }
+                if (posted(d) && !d.js_printed_date) {
+                    out.push({tone: 'info', title: 'Not printed or sent',
+                        action: {label: 'Print', onclick: function () {
+                            print(d);
+                        }}});
+                }
+                return out;
+            },
+            tracker: function (d) {
+                var paid = amountOf(d.paid_amount);
+                return {title: memo(d) ? 'Credit' : 'Invoice and payment',
+                    steps: [
+                        {label: 'Drafted', value: money(d.total_amount),
+                            state: d.state === 'cancelled' ? 'bad' : 'done'},
+                        {label: 'Posted', value: d.exported_date ? UI.date(
+                            d.exported_date) : posted(d) ? 'yes' : 'no',
+                            state: posted(d) ? 'done' : d.state ===
+                                'cancelled' ? 'todo' : 'now'},
+                        {label: 'Printed', value: d.js_printed_date ?
+                            UI.date(d.js_printed_date) : 'no', state:
+                            d.js_printed_date ? 'done' : 'todo'},
+                        {label: memo(d) ? 'Applied' : 'Paid', value:
+                            money(paid), state: d.state === 'paid' ? 'done' :
+                                paid ? 'now' : 'todo'}]};
+            },
+            sections: [{title: 'What is invoiced', note:
+                function (d) {
+                    return draft(d) ? 'Click a line to price it' :
+                        'Posted: the lines are fixed';
+                }, render: function (pane, d) {
+                    var items = d.lines || [];
+                    UI.docLines(pane, {
+                        items: items,
+                        kind: function (l) {
+                            return l.product ? {icon: 'part', tone: 'part'} :
+                                {icon: 'charge', tone: 'charge'};
+                        },
+                        title: function (l) {
+                            return plainTitle(l.description ||
+                                name(l.product));
+                        },
+                        chips: function (l) {
+                            var c = [];
+                            if (l.product) {
+                                c.push(UI.shortName('product.product',
+                                    name(l.product)));
+                            }
+                            if (l.sale) {
+                                c.push('SO ' + l.sale);
+                            }
+                            if (l.po_line) {
+                                c.push('PO line ' + l.po_line);
+                            }
+                            if (!amountOf(l.unit_price)) {
+                                c.push({text: 'no price', tone: 'warn'});
+                            }
+                            if (l.transacted) {
+                                c.push({text: 'shipped', tone: 'ok'});
+                            }
+                            return c;
+                        },
+                        right: function (l) {
+                            var disc = amountOf(l.trade_discount);
+                            return [money(l.amount), num(l.quantity) + ' ' +
+                                (l.unit || '') + ' × ' + money(l.unit_price) +
+                                (disc ? ' (disc ' + num(disc) + '%)' : ''),
+                                !amountOf(l.unit_price) ? 'warn' : null];
+                        },
+                        onclick: function (l) {
+                            editLine(d, l);
+                        },
+                        empty: 'No invoice line.',
+                        footer: ['Lines ' + money(amountOf(d.untaxed_amount) -
+                            amountOf(d.charges_amount)), 'Charges ' +
+                            money(d.charges_amount), 'Tax ' +
+                            money(d.tax_amount), 'Total ' +
+                            money(d.total_amount)]
+                    });
+                    chipTooltips(pane, items, function (l) {
+                        return l.product ? name(l.product) : '';
+                    });
+                }}, {title: 'Charges', visible: function (d) {
+                    return Boolean((d.charges || []).length || draft(d));
+                }, render: function (pane, d) {
+                    UI.docLines(pane, {
+                        items: d.charges || [],
+                        kind: function () {
+                            return {icon: 'charge', tone: 'charge'};
+                        },
+                        title: function (c) {
+                            return c.description || name(c.service_charge);
+                        },
+                        chips: function (c) {
+                            return [codeOf(c.service_charge)];
+                        },
+                        right: function (c) {
+                            return [money(c.amount), ''];
+                        },
+                        onclick: function (c) {
+                            editCharge(d, c);
+                        },
+                        empty: 'No charge.',
+                        add: draft(d) ? {placeholder: 'Add a service charge',
+                            onclick: function () {
+                                addCharge(d);
+                            }} : null,
+                        footer: ['Charges ' + money(d.charges_amount)]
+                    });
+                }}, {title: 'Taxes', visible: function (d) {
+                    return Boolean((d.taxes || []).length);
+                }, render: function (pane, d) {
+                    UI.docLines(pane, {
+                        items: d.taxes || [],
+                        kind: function () {
+                            return {icon: 'doc', tone: 'muted'};
+                        },
+                        title: function (t) {
+                            return t.description || 'Tax';
+                        },
+                        chips: function (t) {
+                            return [t.percent !== null && t.percent !==
+                                undefined ? num(t.percent) + '%' : null,
+                                t.account ? codeOf(t.account) : null];
+                        },
+                        right: function (t) {
+                            return [money(t.amount), 'on ' + money(t.base)];
+                        },
+                        footer: ['Tax ' + money(d.tax_amount)]
+                    });
+                }}],
+            cards: [
+                {title: 'Bill to', rows: function (d) {
+                    return [['Customer', idSpan(d.party && {rec_name:
+                        (d.customer_code ? d.customer_code + ' - ' : '') +
+                        name(d.party)})]].concat(addressRows(addressParts(
+                            d.bill_to, d.customer_mobile)));
+                }},
+                {title: 'Ship to', rows: function (d) {
+                    return addressRows(addressParts(d.ship_to));
+                }},
+                {title: 'Terms', rows: function (d) {
+                    return [['Terms', d.payment_term_descr ||
+                        name(d.payment_term)],
+                        ['Invoice date', d.invoice_date ? UI.date(
+                            d.invoice_date) : null],
+                        ['Customer PO', d.reference],
+                        ['Payment due', d.payment_due ? UI.date(
+                            d.payment_due) : null],
+                        ['Paid', money(d.paid_amount)],
+                        ['Receivables', idSpan(d.receivable)]];
+                }, fields: [
+                    {name: 'payment_term', label: 'Terms', type: 'many2one',
+                        model: 'account.invoice.payment_term'},
+                    {name: 'invoice_date', label: 'Invoice date (empty: ' +
+                        'the posting day)', type: 'date', value: function (d) {
+                            return iso(d.invoice_date);
+                        }},
+                    {name: 'reference', label: 'Customer PO', type: 'char'}],
+                    editable: draft},
+                {title: 'Delivery', rows: function (d) {
+                    return [['Shipped', (d.shippers || []).map(function (s) {
+                        return s.number + (s.date ? ' ' + UI.date(s.date) :
+                            '');
+                    }).join(', ') || null],
+                        ['Ship via', idSpan(d.ship_via)],
+                        ['Carrier', idSpan(d.js_carrier)],
+                        ['FOB', idSpan(d.fob_point)],
+                        ['Freight', label(FREIGHT_TERMS, d.freight_terms) ||
+                            null],
+                        ['Tax group', idSpan(d.tax_group)]];
+                }},
+                {title: 'Specs and notes', rows: function (d) {
+                    return [['Printed on the invoice', d.comment ?
+                        String(d.comment).slice(0, 300) : null],
+                        ['Memo', d.description]];
+                }, fields: [
+                    {name: 'comment', label: 'Specs (printed)', type: 'text'},
+                    {name: 'description', label: 'Memo', type: 'char'}],
+                    editable: draft}
+            ],
+            trail: function (d) {
+                var out = (d.sales || []).map(function (s) {
+                    return {done: true, text: 'Sales order ' + s.number,
+                        when: UI.date(s.sale_date), onclick: screens.orders ?
+                            function () {
+                                openOrder(s.id, s.number);
+                            } : null};
+                });
+                (d.shippers || []).forEach(function (s) {
+                    out.push({done: Boolean(s.date), text: (s.model ===
+                        'stock.shipment.out.return' ? 'Return ' :
+                        'Shipper ') + s.number, when: s.date ?
+                        UI.date(s.date) : '', onclick: screens.shipping ?
+                        function () {
+                            UI.openScreen('shipping/' + s.id + (s.model ===
+                                'stock.shipment.out.return' ? '?return=1' :
+                                ''), 'Shipper ' + s.number);
+                        } : null});
+                });
+                out.push({done: true, text: noun(d) + ' drafted', when:
+                    d.created_by});
+                out.push({done: posted(d), text: 'Posted', when: posted(d) ?
+                    (d.exported_date ? UI.date(d.exported_date) : '') :
+                    'not yet'});
+                out.push({done: Boolean(d.js_printed_date), text:
+                    'Printed / sent', when: d.js_printed_date ?
+                    UI.date(d.js_printed_date) : 'not yet'});
+                if (posted(d)) {
+                    out.push({done: false, text: 'Payment due', when:
+                        d.payment_due ? UI.date(d.payment_due) : ''});
+                }
+                out.push({done: d.state === 'paid', text: 'Paid', when:
+                    d.state === 'paid' ? money(d.paid_amount) :
+                    amountOf(d.paid_amount) ? money(d.paid_amount) +
+                    ' so far' : 'not yet'});
+                out.push({text: 'Notes', onclick: function () {
+                    notesDialog('account.invoice', d.id, noun(d) + ' ' +
+                        (d.number || '(draft)'), can.write);
+                }});
+                return out;
+            },
+            keys: pageKeys(main, token, {
+                p: {label: 'print', run: function (d) {
+                    print(d);
+                }},
+                o: {label: 'post', run: function (d) {
+                    if (draft(d)) {
+                        post(d);
+                    }
+                }}
+            }),
+            classic: function (d) {
+                UI.setDocView('invoice', 'classic');
+                Screens.invoicing(main, d && d.id ? [d.id] : []);
+            }
+        });
+        token.root = main.querySelector('.dp-page');
+        return page;
+    }
+
+    /* The Invoicing window: the Invoicing Activity (Jobshop's window)
+     * lists the work; an invoice opens as its modern page (default) or in
+     * the classic window */
+    Screens.invoicing = function (main, params) {
+        startPage(main);
+        var openId = params && params[0] ? parseInt(params[0], 10) : null;
+        if (openId && UI.docPage && UI.docView('invoice') === 'modern') {
+            injectCss();
+            invoiceModern(main, openId);
+            return;
+        }
+        main._salesPage = null;
+        classicInvoicing(main, params);
+    };
+
+    /* ---- Customers: the customer as a master record ---------------------- */
+
+    var CUSTOMER_REFS = ['sold_to_subdivision', 'sold_to_country',
+        'sales_rep', 'territory', 'customer_fob_point', 'customer_ship_via',
+        'carrier', 'customer_sic_code', 'discount_class',
+        'customer_tax_group', 'customer_payment_term', 'account_receivable',
+        'create_uid', 'write_uid'];
+    var CUSTOMER_FIELDS = ['code', 'name', 'customer_inactive',
+        'customer_exported', 'customer_exported_date', 'customer_contact',
+        'contact_title', 'customer_phone', 'customer_fax', 'customer_email',
+        'customer_mobile', 'sold_to_name', 'sold_to_address_1',
+        'sold_to_address_2', 'sold_to_city', 'sold_to_postal_code',
+        'customer_open_date', 'customer_last_order_date',
+        'customer_open_orders', 'customer_open_order_count',
+        'our_supplier_id', 'customer_freight_terms', 'credit_status',
+        'credit_limit', 'customer_tax_id_number', 'customer_tax_exempt',
+        'quote_instructions', 'sales_instructions', 'customer_specs',
+        'create_date', 'write_date'];
+
+    function customerModern(main, openId) {
+        var token = startPage(main);
+        var can = {write: true, create: true, address: true, contact: true,
+            order: true};
+        var screens = {orders: false, invoicing: false, quotes: false};
+        var page;
+        rights(['party.party', 'party.address', 'party.contact_mechanism',
+            'sale.sale']).then(function (r) {
+                can.write = r['party.party'].write;
+                can.create = r['party.party'].create;
+                can.address = r['party.address'].write &&
+                    r['party.address'].create;
+                can.contact = r['party.contact_mechanism'].write &&
+                    r['party.contact_mechanism'].create;
+                can.order = r['sale.sale'].create;
+                if (page) {
+                    page.render();
+                }
+            }, function () {});
+        Object.keys(screens).forEach(function (s) {
+            UI.screenAllowed(s).then(function (ok) {
+                screens[s] = ok;
+                if (page && ok) {
+                    page.render();
+                }
+            });
+        });
+
+        function load(id) {
+            var fields = CUSTOMER_FIELDS.concat(CUSTOMER_REFS,
+                CUSTOMER_REFS.map(function (n) {
+                    return n + '.rec_name';
+                }));
+            return Promise.all([
+                Rpc.model('party.party', 'read', [[id], fields]),
+                Rpc.model('party.party', 'read', [[id], ['receivable']])
+                    .then(function (rows) {
+                        return rows[0] ? rows[0].receivable : null;
+                    }, function () {
+                        return null;
+                    }),
+                Rpc.searchRead('sale.sale', [['party', '=', id],
+                    ['js_status', 'in', ['unreleased', 'firm', 'released',
+                        'hold']]], ['number', 'js_status', 'reference',
+                    'sale_date', 'shipping_date', 'promise_date',
+                    'total_amount', 'js_shipped_amount'], {limit: 100,
+                        order: [['shipping_date', 'ASC'], ['id', 'ASC']]})
+                    .then(null, function () {
+                        return null;
+                    }),
+                Rpc.searchRead('account.invoice', [['party', '=', id],
+                    ['type', '=', 'out'], ['state', 'in', ['draft',
+                        'posted']]], ['number', 'invoice_date', 'state',
+                    'reference', 'total_amount', 'amount_to_pay'],
+                    {limit: 100, order: [['invoice_date', 'ASC'],
+                        ['id', 'ASC']]}).then(null, function () {
+                        return null;
+                    }),
+                Rpc.searchRead('party.contact_mechanism', [['party', '=',
+                    id]], ['type', 'value', 'name'], {order: [['sequence',
+                        'ASC'], ['id', 'ASC']]}).then(null, function () {
+                        return [];
+                    }),
+                Rpc.searchRead('party.address', [['party', '=', id]],
+                    ['party_name', 'street', 'city', 'postal_code',
+                        'subdivision', 'country', 'ship_to_default',
+                        'ship_to_contact', 'ship_to_phone', 'ship_to_email',
+                        'invoice', 'delivery'], {order: [['sequence', 'ASC'],
+                            ['id', 'ASC']]}).then(null, function () {
+                        return [];
+                    })
+            ]).then(function (all) {
+                var d = all[0][0];
+                CUSTOMER_REFS.forEach(function (n) {
+                    d[n] = d[n] ? {id: d[n], rec_name: (d[n + '.'] || {})
+                        .rec_name || ''} : null;
+                });
+                d.receivable = all[1];
+                d._orders = all[2];
+                d._invoices = all[3];
+                d._contacts = all[4];
+                d._addresses = all[5];
+                d.number = d.code;
+                return d;
+            });
+        }
+
+        function editable() {
+            return can.write;
+        }
+
+        function newOrder(d) {
+            UI.openScreen('orders/new?customer=' + d.id, 'New order');
+        }
+
+        function overLimit(d) {
+            var limit = amountOf(d.credit_limit);
+            var used = amountOf(d.customer_open_orders) +
+                amountOf(d.receivable);
+            return limit > 0 && used > limit ? used : 0;
+        }
+
+        function editContact(d, c) {
+            UI.docEdit(c.id ? 'Contact' : 'Add a contact', [
+                {name: 'type', label: 'Type', type: 'selection',
+                    options: CONTACT_TYPES},
+                {name: 'value', label: 'Number or address', type: 'char',
+                    wide: true},
+                {name: 'name', label: 'Person', type: 'char'},
+                c.id ? {name: '_remove', label: 'Remove it',
+                    type: 'boolean'} : null].filter(Boolean), c).then(
+                function (v) {
+                    var remove = v._remove;
+                    delete v._remove;
+                    var call = c.id ? remove ? Rpc.model(
+                        'party.contact_mechanism', 'delete', [[c.id]]) :
+                        Rpc.model('party.contact_mechanism', 'write',
+                            [[c.id], v]) : Rpc.model(
+                        'party.contact_mechanism', 'create', [[Object.assign(
+                            {party: d.id}, v)]]);
+                    call.then(function () {
+                        page.reload();
+                    }, UI.showError);
+                }, function () {});
+        }
+
+        function editAddress(d, a) {
+            UI.docEdit(a.id ? 'Address ' + a.id : 'Add a ship to address', [
+                {name: 'party_name', label: 'Name', type: 'char',
+                    wide: true},
+                {name: 'street', label: 'Street', type: 'text', wide: true},
+                {name: 'city', label: 'City', type: 'char'},
+                {name: 'postal_code', label: 'Postal code', type: 'char'},
+                {name: 'subdivision', label: 'State', type: 'many2one',
+                    model: 'country.subdivision', value: function (x) {
+                        return x.subdivision ? {id: x.subdivision, rec_name:
+                            x['subdivision.rec_name'] || ''} : null;
+                    }},
+                {name: 'country', label: 'Country', type: 'many2one',
+                    model: 'country.country', value: function (x) {
+                        return x.country ? {id: x.country, rec_name:
+                            x['country.rec_name'] || ''} : null;
+                    }},
+                {name: 'ship_to_contact', label: 'Contact', type: 'char'},
+                {name: 'ship_to_phone', label: 'Contact phone',
+                    type: 'char'},
+                {name: 'ship_to_email', label: 'Contact e-mail',
+                    type: 'char'},
+                {name: 'ship_to_default', label: 'Default ship to',
+                    type: 'boolean'},
+                {name: 'delivery', label: 'Ships here', type: 'boolean'},
+                {name: 'invoice', label: 'Bills here', type: 'boolean'}],
+                a.id ? a : {delivery: true}).then(function (v) {
+                    var call = a.id ? Rpc.model('party.address', 'write',
+                        [[a.id], v]) : Rpc.model('party.address', 'create',
+                        [[Object.assign({party: d.id}, v)]]);
+                    call.then(function () {
+                        page.reload();
+                    }, UI.showError);
+                }, function () {});
+        }
+
+        function nameIt(d) {
+            UI.docEdit('New customer', [
+                {name: 'code', label: 'Customer ID (empty: automatic)',
+                    type: 'char'},
+                {name: 'name', label: 'Name', type: 'char', wide: true}], d)
+                .then(function (v) {
+                    if (!v.name) {
+                        UI.toast('Type the name', 'error');
+                        return;
+                    }
+                    if (!v.code) {
+                        delete v.code;
+                    }
+                    page.save(v).then(null, function () {});
+                }, function () {});
+        }
+
+        var refField = function (n, caption, model, extra) {
+            return Object.assign({name: n, label: caption, type: 'many2one',
+                model: model}, extra || {});
+        };
+
+        page = UI.docPage(main, {
+            title: 'Customer',
+            crumbs: ['Sales', 'Customers'],
+            model: 'party.party', label: 'Customer ID',
+            order: [['name', 'ASC']],
+            openId: openId,
+            load: load,
+            /* Only the changes are written (a master record) */
+            values: function () {
+                return {};
+            },
+            save: function (v, d) {
+                Object.keys(v).forEach(function (k) {
+                    if (k.charAt(0) === '_') {
+                        delete v[k];
+                    }
+                });
+                if (!d.id) {
+                    if (!v.name && !d.name) {
+                        return Promise.reject({message: 'Type the ' +
+                            'customer\'s name first.'});
+                    }
+                    return Rpc.model('party.party', 'create', [[Object.assign(
+                        {name: d.name}, v)]]).then(function (ids) {
+                            global.history.replaceState(null, '',
+                                '#/customer-window/' + ids[0]);
+                            return load(ids[0]);
+                        });
+                }
+                return Rpc.model('party.party', 'write', [[d.id], v]).then(
+                    function () {
+                        return load(d.id);
+                    });
+            },
+            blank: function () {
+                return can.create ? {id: null, name: '', code: '',
+                    credit_status: 'approved', _orders: [], _invoices: [],
+                    _contacts: [], _addresses: []} : null;
+            },
+            head: function (d) {
+                return {
+                    title: d.name || 'New customer',
+                    chips: d.code ? [d.code] : [],
+                    sub: [d.id ? null : 'Not saved yet',
+                        d.customer_open_date ? 'customer since ' +
+                            UI.date(d.customer_open_date) : null,
+                        d.customer_last_order_date ? 'last order ' +
+                            UI.date(d.customer_last_order_date) : null,
+                        d.sales_rep ? 'rep ' + codeOf(d.sales_rep) : null,
+                        d.customer_phone || null],
+                    amount: d.id ? {value: money(d.receivable), label:
+                        'open balance · ' + (d.customer_open_order_count ||
+                            0) + ' open orders ' +
+                        money(d.customer_open_orders)} : null
+                };
+            },
+            status: function (d) {
+                var tone = {approved: 'ok', hold_orders: 'bad',
+                    hold_shipments: 'warn'};
+                var out = [{text: 'Credit ' + (label(CREDIT_STATUS,
+                    d.credit_status) || 'Approved').toLowerCase(),
+                    tone: tone[d.credit_status || 'approved']},
+                    d.customer_inactive ? {text: 'Inactive', tone: 'muted'} :
+                        {text: 'Active', tone: 'accent'}];
+                if (d.customer_exported) {
+                    out.push({text: 'Exported', tone: 'ok'});
+                }
+                if (d.customer_tax_exempt) {
+                    out.push({text: 'Tax exempt'});
+                }
+                return out;
+            },
+            actions: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                return [can.order && screens.orders ? {label: 'New order',
+                    key: 'n', primary: true, onclick: newOrder} : null];
+            },
+            more: function (d) {
+                var items = [];
+                if (d.id) {
+                    items.push({label: 'Sales order lines...', onclick:
+                        function () {
+                            orderLinesDialog('Sales Order Lines - ' + d.name,
+                                {party: d.id}, null);
+                        }});
+                    items.push({label: 'Notes', onclick: function () {
+                        notesDialog('party.party', d.id, d.name, can.write);
+                    }});
+                }
+                items.push('-', {label: 'Classic view (prices, quotes, ' +
+                    'footers)', onclick: function () {
+                        UI.setDocView('customer', 'classic');
+                        Screens.customerWindow(main, d.id ? [d.id] : []);
+                    }});
+                return items;
+            },
+            attention: function (d) {
+                var out = [];
+                if (!d.id) {
+                    out.push({tone: 'info', title: 'Name the new customer',
+                        action: can.create ? {label: 'Name it', onclick:
+                            function () {
+                                nameIt(d);
+                            }} : null});
+                    return out;
+                }
+                if (d.credit_status === 'hold_orders' ||
+                        d.credit_status === 'hold_shipments') {
+                    out.push({tone: 'bad', icon: 'bad', title: 'Credit hold: ' +
+                        label(CREDIT_STATUS, d.credit_status), detail:
+                        d.credit_status === 'hold_orders' ? 'New orders ask ' +
+                        'to accept the hold.' : 'Shipping asks to accept ' +
+                        'the hold.', action: editable() ? {label: 'Approve',
+                            onclick: function () {
+                                UI.confirm('Credit status', 'Approve the ' +
+                                    'credit of ' + d.name + '?').then(
+                                    function (ok) {
+                                        if (ok) {
+                                            page.save({credit_status:
+                                                'approved'}).then(null,
+                                                function () {});
+                                        }
+                                    });
+                            }} : null});
+                }
+                var used = overLimit(d);
+                if (used) {
+                    out.push({tone: 'warn', title: 'Over the order limit',
+                        detail: money(used) + ' open (orders and balance) ' +
+                            'against a limit of ' +
+                            money(d.credit_limit) + '.', action: editable() ?
+                            {label: 'Change limit', onclick: function () {
+                                UI.docEdit('Order limit', [{name:
+                                    'credit_limit', label: 'Order limit ' +
+                                    '(0: none)', type: 'money'}], d).then(
+                                    function (v) {
+                                        page.save(v).then(null,
+                                            function () {});
+                                    }, function () {});
+                            }} : null});
+                }
+                if (!d.customer_payment_term) {
+                    out.push({tone: 'warn', title: 'No payment terms',
+                        detail: 'New orders and invoices take the terms ' +
+                            'from here.', action: editable() ? {label:
+                            'Set terms', onclick: function () {
+                                UI.docEdit('Terms', [refField(
+                                    'customer_payment_term', 'Terms',
+                                    'account.invoice.payment_term')], d).then(
+                                    function (v) {
+                                        page.save(v).then(null,
+                                            function () {});
+                                    }, function () {});
+                            }} : null});
+                }
+                if (!d.customer_phone && !d.customer_email) {
+                    out.push({tone: 'info', title: 'No phone or e-mail',
+                        action: editable() ? {label: 'Add', onclick:
+                            function () {
+                                UI.docEdit('Contact', [
+                                    {name: 'customer_contact', label:
+                                        'Contact', type: 'char'},
+                                    {name: 'customer_phone', label: 'Phone',
+                                        type: 'char'},
+                                    {name: 'customer_email', label: 'E-mail',
+                                        type: 'char'}], d).then(function (v) {
+                                        page.save(v).then(null,
+                                            function () {});
+                                    }, function () {});
+                            }} : null});
+                }
+                if (d.customer_inactive) {
+                    out.push({tone: 'info', title: 'Inactive', detail:
+                        'Left out of the lists and lookups.', action:
+                        editable() ? {label: 'Make active', onclick:
+                            function () {
+                                page.save({customer_inactive: false}).then(
+                                    null, function () {});
+                            }} : null});
+                }
+                var late = (d._orders || []).filter(function (o) {
+                    return o.js_status === 'released' && iso(o.shipping_date) &&
+                        iso(o.shipping_date) < UI.today();
+                });
+                if (late.length) {
+                    out.push({tone: 'warn', icon: 'clock', title: late.length +
+                        ' released order(s) past the desired ship date',
+                        detail: late.map(function (o) {
+                            return o.number;
+                        }).join(', ')});
+                }
+                return out;
+            },
+            sections: [{title: 'Open orders', note: function (d) {
+                return (d._orders || []).length + ' unreleased, firm, ' +
+                    'released or on hold';
+            }, visible: function (d) {
+                return Boolean(d.id && d._orders);
+            }, render: function (pane, d) {
+                var today = UI.today();
+                UI.docLines(pane, {
+                    items: d._orders,
+                    kind: function () {
+                        return {icon: 'doc', tone: 'part'};
+                    },
+                    title: function (o) {
+                        return 'SO ' + (o.number || o.id) + (o.reference ?
+                            ' · PO ' + o.reference : '');
+                    },
+                    chips: function (o) {
+                        var want = iso(o.shipping_date);
+                        return [{text: label(JS_STATUS, o.js_status), tone:
+                            SO_STATUS_TONE[o.js_status]}, 'ordered ' +
+                            UI.date(o.sale_date), want ? want < today &&
+                            o.js_status === 'released' ? {text: 'late, ' +
+                                'wanted ' + UI.date(want), tone: 'bad'} :
+                            'wanted ' + UI.date(want) : null];
+                    },
+                    progress: function (o) {
+                        var t = amountOf(o.total_amount);
+                        var s = amountOf(o.js_shipped_amount);
+                        return {done: s, total: t, label: money(s) +
+                            ' shipped'};
+                    },
+                    right: function (o) {
+                        return [money(o.total_amount), ''];
+                    },
+                    onclick: screens.orders ? function (o) {
+                        openOrder(o.id, o.number);
+                    } : null,
+                    empty: 'No open order.',
+                    add: can.order && screens.orders ? {placeholder:
+                        'New order', onclick: function () {
+                            newOrder(d);
+                        }} : null,
+                    footer: ['Open orders ' + money(d.customer_open_orders)]
+                });
+            }}, {title: 'Open invoices', visible: function (d) {
+                return Boolean(d.id && (d._invoices || []).length);
+            }, render: function (pane, d) {
+                UI.docLines(pane, {
+                    items: d._invoices,
+                    kind: function () {
+                        return {icon: 'doc', tone: 'charge'};
+                    },
+                    title: function (i) {
+                        return (i.number ? 'Invoice ' + i.number :
+                            'Draft invoice') + (i.reference ? ' · PO ' +
+                                i.reference : '');
+                    },
+                    chips: function (i) {
+                        return [{text: INVOICE_STATE[i.state] || i.state,
+                            tone: i.state === 'draft' ? 'warn' : 'accent'},
+                            i.invoice_date ? 'dated ' + UI.date(
+                                i.invoice_date) : null];
+                    },
+                    right: function (i) {
+                        return [money(i.state === 'draft' ? i.total_amount :
+                            i.amount_to_pay), i.state === 'draft' ?
+                            'not posted' : 'due of ' + money(i.total_amount)];
+                    },
+                    onclick: function (i) {
+                        if (screens.invoicing) {
+                            UI.openScreen('invoicing/' + i.id, 'Invoice ' +
+                                (i.number || i.id));
+                        } else {
+                            UI.openRecord('account.invoice', i.id, i.number);
+                        }
+                    },
+                    footer: ['Open balance ' + money(d.receivable)]
+                });
+            }}, {title: 'Contacts', visible: function (d) {
+                return Boolean(d.id);
+            }, render: function (pane, d) {
+                UI.docLines(pane, {
+                    items: d._contacts || [],
+                    kind: function () {
+                        return {icon: 'person', tone: 'muted'};
+                    },
+                    title: function (c) {
+                        return c.value;
+                    },
+                    chips: function (c) {
+                        return [label(CONTACT_TYPES, c.type), c.name || null];
+                    },
+                    onclick: can.contact ? function (c) {
+                        editContact(d, c);
+                    } : null,
+                    empty: 'No contact.',
+                    add: can.contact ? {placeholder: 'Add a phone, e-mail ' +
+                        'or other contact', onclick: function () {
+                            editContact(d, {type: 'phone'});
+                        }} : null
+                });
+            }}, {title: 'Addresses', note: 'The sold to address and the ' +
+                'ship to addresses', visible: function (d) {
+                return Boolean(d.id);
+            }, render: function (pane, d) {
+                var items = (d._addresses || []).map(function (a) {
+                    return Object.assign({}, a, {
+                        'subdivision.rec_name': (a['subdivision.'] || {})
+                            .rec_name, 'country.rec_name': (a['country.'] ||
+                                {}).rec_name});
+                });
+                UI.docLines(pane, {
+                    items: items,
+                    kind: function () {
+                        return {icon: 'truck', tone: 'muted'};
+                    },
+                    title: function (a) {
+                        return [a.party_name || d.name, String(a.street ||
+                            '').split(/\r?\n/)[0], a.city].filter(Boolean)
+                            .join(', ');
+                    },
+                    chips: function (a) {
+                        return ['No ' + a.id, a.ship_to_default ? {text:
+                            'default ship to', tone: 'accent'} : null,
+                            a.invoice ? 'bills' : null, a.delivery ?
+                                'ships' : null, a.ship_to_contact || null];
+                    },
+                    onclick: can.address ? function (a) {
+                        editAddress(d, a);
+                    } : null,
+                    empty: 'No address.',
+                    add: can.address ? {placeholder: 'Add a ship to address',
+                        onclick: function () {
+                            editAddress(d, {});
+                        }} : null
+                });
+            }}],
+            cards: [
+                {title: 'Main address', rows: function (d) {
+                    return [['Name', d.sold_to_name || d.name],
+                        ['Address', [d.sold_to_address_1, d.sold_to_address_2,
+                            [d.sold_to_city, codeOf(d.sold_to_subdivision),
+                                d.sold_to_postal_code].filter(Boolean)
+                                .join(' '), name(d.sold_to_country)]
+                            .filter(Boolean).join(', ')]];
+                }, fields: [
+                    {name: 'name', label: 'Customer name', type: 'char'},
+                    {name: 'sold_to_address_1', label: 'Address',
+                        type: 'char'},
+                    {name: 'sold_to_address_2', label: 'Address 2',
+                        type: 'char'},
+                    {name: 'sold_to_city', label: 'City', type: 'char'},
+                    refField('sold_to_subdivision', 'State',
+                        'country.subdivision'),
+                    {name: 'sold_to_postal_code', label: 'Postal code',
+                        type: 'char'},
+                    refField('sold_to_country', 'Country', 'country.country'),
+                    {name: 'sold_to_name', label: 'Etc.', type: 'char'}],
+                    editable: editable},
+                {title: 'Contact', rows: function (d) {
+                    return [['Contact', [d.customer_contact, d.contact_title]
+                        .filter(Boolean).join(', ')],
+                        ['Phone', d.customer_phone], ['Fax', d.customer_fax],
+                        ['E-mail', d.customer_email],
+                        ['Mobile', d.customer_mobile]];
+                }, fields: [
+                    {name: 'customer_contact', label: 'Contact',
+                        type: 'char'},
+                    {name: 'contact_title', label: 'Title', type: 'char'},
+                    {name: 'customer_phone', label: 'Phone', type: 'char'},
+                    {name: 'customer_fax', label: 'Fax', type: 'char'},
+                    {name: 'customer_email', label: 'E-mail', type: 'char'},
+                    {name: 'customer_mobile', label: 'Mobile', type: 'char'}],
+                    editable: editable},
+                {title: 'Credit and terms', rows: function (d) {
+                    return [['Credit status', label(CREDIT_STATUS,
+                        d.credit_status) || 'Approved'],
+                        ['Order limit', amountOf(d.credit_limit) ?
+                            money(d.credit_limit) : 'none'],
+                        ['Terms', name(d.customer_payment_term) || null],
+                        ['Freight', label(FREIGHT_TERMS,
+                            d.customer_freight_terms) || null],
+                        ['Receivables', idSpan(d.account_receivable)],
+                        ['Account opened', d.customer_open_date ? UI.date(
+                            d.customer_open_date) : null]];
+                }, fields: [
+                    {name: 'credit_status', label: 'Credit status',
+                        type: 'selection', options: CREDIT_STATUS},
+                    {name: 'credit_limit', label: 'Order limit (0: none)',
+                        type: 'money'},
+                    refField('customer_payment_term', 'Terms',
+                        'account.invoice.payment_term'),
+                    {name: 'customer_freight_terms', label: 'Freight terms',
+                        type: 'selection', options: FREIGHT_TERMS},
+                    refField('account_receivable', 'Receivables account',
+                        'account.account', {domain: [['type.receivable', '=',
+                            true]]}),
+                    {name: 'customer_open_date', label: 'Account opened',
+                        type: 'date', value: function (d) {
+                            return iso(d.customer_open_date);
+                        }}],
+                    editable: editable},
+                {title: 'Sales and delivery', rows: function (d) {
+                    return [['Sales rep', idSpan(d.sales_rep)],
+                        ['Territory', idSpan(d.territory)],
+                        ['Discount class', idSpan(d.discount_class)],
+                        ['Ship via', idSpan(d.customer_ship_via)],
+                        ['FOB', idSpan(d.customer_fob_point)],
+                        ['Carrier', idSpan(d.carrier)],
+                        ['SIC code', idSpan(d.customer_sic_code)]];
+                }, fields: [
+                    refField('sales_rep', 'Sales rep', 'nline.sales_rep'),
+                    refField('territory', 'Territory', 'nline.territory'),
+                    refField('discount_class', 'Discount class',
+                        'nline.discount_class'),
+                    refField('customer_ship_via', 'Ship via',
+                        'nline.ship_via'),
+                    refField('customer_fob_point', 'FOB point',
+                        'nline.fob_point'),
+                    refField('carrier', 'Carrier', 'nline.carrier'),
+                    refField('customer_sic_code', 'SIC code',
+                        'nline.sic_code')],
+                    editable: editable},
+                {title: 'Tax', rows: function (d) {
+                    return [['Tax group', idSpan(d.customer_tax_group)],
+                        ['Tax ID number', d.customer_tax_id_number],
+                        ['Tax exempt', d.customer_tax_exempt ? 'Yes' : 'No'],
+                        ['Our supplier ID', d.our_supplier_id]];
+                }, fields: [
+                    refField('customer_tax_group', 'Tax group',
+                        'nline.sales_tax_group'),
+                    {name: 'customer_tax_id_number', label: 'Tax ID number',
+                        type: 'char'},
+                    {name: 'customer_tax_exempt', label: 'Tax exempt',
+                        type: 'boolean'},
+                    {name: 'our_supplier_id', label: 'Our supplier ID (at ' +
+                        'this customer)', type: 'char'}],
+                    editable: editable},
+                {title: 'Specs and instructions', rows: function (d) {
+                    return [['Specs', d.customer_specs ?
+                        String(d.customer_specs).slice(0, 200) : null],
+                        ['Sales order instructions', d.sales_instructions ?
+                            String(d.sales_instructions).slice(0, 200) :
+                            null],
+                        ['Quote instructions', d.quote_instructions ?
+                            String(d.quote_instructions).slice(0, 200) :
+                            null]];
+                }, fields: [
+                    {name: 'customer_specs', label: 'Specs (copied onto ' +
+                        'new orders)', type: 'text'},
+                    {name: 'sales_instructions', label: 'Sales order ' +
+                        'instructions', type: 'text'},
+                    {name: 'quote_instructions', label: 'Quote ' +
+                        'instructions', type: 'text'}],
+                    editable: editable}
+            ],
+            trail: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                return [
+                    {done: true, text: 'Created', when: whoText(d.create_uid,
+                        d.create_date)},
+                    {done: Boolean(d.customer_open_date), text: 'Account ' +
+                        'opened', when: d.customer_open_date ? UI.date(
+                            d.customer_open_date) : 'not set'},
+                    {done: Boolean(d.customer_last_order_date), text: 'Last ' +
+                        'order', when: d.customer_last_order_date ? UI.date(
+                            d.customer_last_order_date) : 'none'},
+                    {done: Boolean(d.customer_exported), text: 'Exported to ' +
+                        'the accounting', when: d.customer_exported_date ?
+                        UI.date(d.customer_exported_date) : d.customer_exported ?
+                        '' : 'not yet'},
+                    {done: Boolean(d.write_date), text: 'Last modified',
+                        when: d.write_date ? whoText(d.write_uid,
+                            d.write_date) : ''},
+                    {text: 'Notes', onclick: function () {
+                        notesDialog('party.party', d.id, d.name, can.write);
+                    }}];
+            },
+            keys: pageKeys(main, token, {
+                n: {label: 'new order', run: function (d) {
+                    if (d.id && can.order && screens.orders) {
+                        newOrder(d);
+                    }
+                }}
+            }),
+            classic: function (d) {
+                UI.setDocView('customer', 'classic');
+                Screens.customerWindow(main, d && d.id ? [d.id] : []);
+            }
+        });
+        token.root = main.querySelector('.dp-page');
+        return page;
+    }
+
+    /* The Customers window: the modern page (default) or Jobshop's
+     * classic window (its prices, quotes and footers) */
+    Screens.customerWindow = function (main, params) {
+        startPage(main);
+        var openId = params && params[0] ? parseInt(params[0], 10) : null;
+        if (UI.docPage && UI.docView('customer') === 'modern') {
+            injectCss();
+            customerModern(main, openId);
+            return;
+        }
+        main._salesPage = null;
+        classicCustomerWindow(main, params);
     };
 }(window));

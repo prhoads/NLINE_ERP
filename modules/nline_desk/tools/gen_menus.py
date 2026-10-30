@@ -76,6 +76,7 @@ SCREENS = {
     'accounts': ('Chart of Accounts', 'accounts', False, ACC),
     'journal': ('Make General Journal Entries', 'journal/new', True, ACC),
     'reports': ('Report Center', 'reports', False, None),
+    'menu_layout': ('Menu Layout', 'menu-layout', True, None),
 }
 
 # Folders: (id, name, icon, [(item id, 'screen:<id>' or action, groups)])
@@ -128,12 +129,18 @@ FOLDERS = [
             [ACC]),
         ('aged_balance', 'account.act_aged_balance_list', [ACC]),
         ]),
+    # Everyone's own settings (the Settings tab): the menu pane's items,
+    # colours and icons, saved on the user (res.user nline_menu_prefs)
+    ('personal', 'My Settings', 'tryton-preferences', [
+        ('menu_layout', 'screen:menu_layout', []),
+        ]),
 ]
 
 # The icons (tools/gen_icons.py): each folder a tile in its colour, each
 # item the same colour with its own symbol
 FOLDER_SYMBOL = {'customers': 'people', 'vendors': 'tryton-party',
-    'banking': 'tryton-bank', 'company': 'tryton-company'}
+    'banking': 'tryton-bank', 'company': 'tryton-company',
+    'personal': 'tune'}
 ITEM_SYMBOL = {
     'customers': {'customers': 'people', 'income_tracker': 'trend',
         'invoices': 'tryton-invoice', 'sales_receipts': 'receipt',
@@ -152,6 +159,7 @@ ITEM_SYMBOL = {
         'accounts': 'tryton-account', 'journal': 'doc', 'moves': 'list',
         'general_ledger': 'report', 'balance_sheet': 'report',
         'income_statement': 'trend', 'aged_balance': 'clock'},
+    'personal': {'menu_layout': 'grid'},
 }
 HOME_ICON = gen_icons.icon('home', 'home')
 # The standard top menus kept (accounting, administration): their icons in

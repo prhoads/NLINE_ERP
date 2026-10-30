@@ -444,6 +444,9 @@
             return;
         }
         var main = UI.clear(document.getElementById('main'));
+        /* (a document page's look and keys end with its screen) */
+        main.classList.remove('dp-main');
+        main.dpPage = null;
         renderNav(hash);
         showArea(hash);
         var routes = allRoutes();

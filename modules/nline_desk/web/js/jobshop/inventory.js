@@ -1332,7 +1332,982 @@
         return tabs;
     }
 
+    /* ---- Parts, modern view (UI.docPage; owner's review 29 Oct 2026) ----- */
+
+    function isoToday() {
+        var d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2,
+            '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function qty(value) {
+        var n = parseFloat(value);
+        return isNaN(n) ? 0 : n;
+    }
+
+    /* A value as the server compares it: a many2one's id, a Decimal's
+     * number, a date's ISO text */
+    function plain(v) {
+        if (v === undefined || v === '' || v === null) {
+            return null;
+        }
+        if (typeof v === 'object') {
+            if (v.__class__ === 'Decimal') {
+                return parseFloat(v.decimal);
+            }
+            if (v.__class__ === 'date') {
+                return v.year + '-' + String(v.month).padStart(2, '0') + '-' +
+                    String(v.day).padStart(2, '0');
+            }
+            if ('id' in v) {
+                return v.id;
+            }
+        }
+        return v;
+    }
+
+    /* Only what changed (a card's Save sends all its fields; Tryton
+     * refuses some writes even unchanged, e.g. a part's Stock U/M once it
+     * has moves) */
+    function changedValues(data, values) {
+        var out = {};
+        Object.keys(values).forEach(function (k) {
+            var a = plain(values[k]), b = plain(data[k]);
+            if (typeof a === 'number' && typeof b === 'number' ?
+                    Math.abs(a - b) > 1e-9 : a !== b) {
+                out[k] = values[k];
+            }
+        });
+        return out;
+    }
+
+    /* Read one record: many2ones as {id, rec_name} */
+    function readRecord(model, id, names, m2os) {
+        var read = names.slice();
+        m2os.forEach(function (n) {
+            read.push(n, n + '.rec_name');
+        });
+        return Rpc.model(model, 'read', [[id], read]).then(function (rows) {
+            var r = rows[0];
+            if (!r) {
+                throw {message: 'The record no longer exists.'};
+            }
+            m2os.forEach(function (n) {
+                var related = r[n + '.'];
+                r[n] = r[n] ? {id: r[n], rec_name: related ?
+                    related.rec_name : String(r[n])} : null;
+            });
+            return r;
+        });
+    }
+
+    var PART_TEXT = ['code', 'name', 'inactive', 'producible', 'purchasable',
+        'stocked', 'salable', 'tool_or_fixture', 'consumable', 'auto_issue',
+        'lot_tracked', 'piece_tracked', 'drawing_number',
+        'drawing_revision', 'drawing_file', 'mfg_name', 'mfg_part_id',
+        'engineering_revision', 'unit_material_cost', 'unit_labor_cost',
+        'unit_burden_cost', 'unit_service_cost', 'fixed_cost', 'unit_cost',
+        'cost_price', 'cost_price_method', 'list_price',
+        'preserve_unit_costs', 'update_costs_from_po', 'lead_time_days',
+        'safety_stock', 'order_point', 'maximum_stock_qty',
+        'minimum_order_qty', 'multiple_order_qty', 'maximum_order_qty',
+        'supplier_name_1', 'account_set_description',
+        'expense_account_code', 'expense_account_description',
+        'record_created', 'record_modified', 'create_date', 'write_date',
+        'specifications', 'quantity_on_hand', 'quantity_on_hold', 'type',
+        'weight', 'ship_dimensions', 'products'];
+    var PART_M2O = ['default_uom', 'purchase_uom', 'sale_uom', 'usage_uom',
+        'primary_location', 'issue_from_location', 'product_code',
+        'commodity_code', 'preferred_supplier', 'account_category',
+        'weight_uom'];
+
+    var UPDATE_COSTS = [['system', 'System Setting'], ['always', 'Always'],
+        ['ask', 'Ask'], ['never', 'Never']];
+
+    function partsModern(main, openId, access, known, allowed) {
+        var page;
+        var writable = can(access, 'product.template', 'write');
+        var seeMoves = can(access, 'stock.move', 'read');
+        function has(name) {
+            return Boolean(known[name]);
+        }
+        function money(v) {
+            return v === null || v === undefined || v === '' ? null :
+                '$' + UI.money(qty(v));
+        }
+        function q(v, d) {
+            return v === null || v === undefined ? null : num(v) +
+                (d && d.unit ? ' ' + d.unit : '');
+        }
+        function onlyKnown(fields) {
+            return fields.filter(function (f) {
+                return has(f.name);
+            });
+        }
+
+        function load(id) {
+            var names = PART_TEXT.filter(has);
+            var m2os = PART_M2O.filter(has);
+            var none = function () {
+                return null;
+            };
+            return Promise.all([
+                readRecord('product.template', id, names, m2os),
+                seeMoves ? Rpc.desk('part_availability', [id]).catch(none) :
+                    null,
+                seeMoves ? Rpc.desk('part_supply_demand', [id]).catch(none) :
+                    null,
+                seeMoves ? Rpc.desk('inventory_transactions', [id, null, 300])
+                    .catch(none) : null,
+                can(access, 'production.bom', 'read') ? Rpc.desk(
+                    'part_where_used', [id, true, false, false]).catch(none) :
+                    null,
+                can(access, 'production.bom', 'read') ? Rpc.searchRead(
+                    'production.bom', [['outputs.product.template', '=', id]],
+                    ['rec_name'], {order: [['id', 'DESC']], limit: 20})
+                    .catch(none) : null,
+                can(access, 'nline.js.part_location', 'read') ?
+                    Rpc.searchRead('nline.js.part_location', [['template',
+                        '=', id]], ['location', 'location.rec_name',
+                        'location_name', 'quantity', 'primary', 'issue_from',
+                        'hold', 'last_counted', 'inactive']).catch(none) :
+                    null
+            ]).then(function (r) {
+                var d = r[0];
+                d.number = d.code;
+                d.avail = r[1];
+                d.sd = r[2];
+                d.moves = r[3] || [];
+                d.used = r[4];
+                d.masters = r[5];
+                d.locations = (r[6] || []).filter(function (l) {
+                    return !l.inactive || qty(l.quantity);
+                });
+                d.unit = (d.avail && d.avail.unit) || (d.sd && d.sd.unit) ||
+                    (d.default_uom ? UI.shortName('product.uom',
+                        d.default_uom.rec_name) : '');
+                return d;
+            });
+        }
+
+        function save(values, data) {
+            if (!data.id) {
+                var create = Object.assign({type: 'goods'}, values);
+                if (!create.code || !create.name || !create.default_uom) {
+                    return Promise.reject({message: 'A new part needs its ' +
+                        'Part ID, description and Stock U/M.'});
+                }
+                if (create.purchasable && !create.purchase_uom) {
+                    create.purchase_uom = create.default_uom;
+                }
+                if (create.salable && !create.sale_uom) {
+                    create.sale_uom = create.default_uom;
+                }
+                return Rpc.model('product.template', 'create', [[create]])
+                    .then(function (ids) {
+                        return load(ids[0]);
+                    });
+            }
+            var changes = changedValues(data, values);
+            /* Tryton needs the purchase / selling units of a purchased /
+             * sold part: the stock unit by default */
+            if (changes.purchasable && !data.purchase_uom && data.default_uom) {
+                changes.purchase_uom = data.default_uom.id;
+            }
+            if (changes.salable && !data.sale_uom && data.default_uom) {
+                changes.sale_uom = data.default_uom.id;
+            }
+            var call = Object.keys(changes).length ? Rpc.model(
+                'product.template', 'write', [[data.id], changes]) :
+                Promise.resolve();
+            return call.then(function () {
+                return load(data.id);
+            });
+        }
+
+        function newPart() {
+            UI.docEdit('New part', [
+                {name: 'code', label: 'Part ID', type: 'char'},
+                {name: 'name', label: 'Description', type: 'char',
+                    wide: true},
+                {name: 'default_uom', label: 'Stock U/M', type: 'many2one',
+                    model: 'product.uom'},
+                {name: 'producible', label: 'Fabricated', type: 'boolean'},
+                {name: 'purchasable', label: 'Purchased', type: 'boolean'},
+                {name: 'stocked', label: 'Stocked', type: 'boolean'}].filter(
+                function (f) {
+                    return has(f.name);
+                }), {stocked: true}).then(function (v) {
+                    page.save(v);
+                }, function () {});
+        }
+
+        function openMaster(d) {
+            var rev = d.engineering_revision;
+            var bom = (d.masters || []).filter(function (b) {
+                return rev && b.rec_name.indexOf('Rev ' + rev) >= 0;
+            })[0] || (d.masters || [])[0];
+            if (bom) {
+                UI.openScreen('masters/' + bom.id, bom.rec_name);
+            } else if (allowed.masters) {
+                UI.openScreen('masters', 'Engineering Master');
+                UI.toast('The part has no engineering master: create one.');
+            }
+        }
+
+        function orderMore(d) {
+            UI.openScreen('purchase-orders/new' + (d.preferred_supplier ?
+                '?supplier=' + d.preferred_supplier.id : ''),
+                'Purchase Order');
+        }
+
+        function copyPart(d) {
+            UI.docEdit('Copy to a new Part ID', [{name: 'code', label:
+                'New Part ID', type: 'char'}], {}).then(function (v) {
+                    if (!(v.code || '').trim()) {
+                        return;
+                    }
+                    Rpc.desk('part_copy', [d.id, v.code.trim()]).then(
+                        function (newId) {
+                            UI.toast('Part ' + v.code.trim() + ' created',
+                                'ok');
+                            page.load(newId);
+                        }, failed);
+                }, function () {});
+        }
+
+        function deletePart(d) {
+            UI.confirm('Delete Document', 'Delete part ' + d.code +
+                '? It cannot be recovered.').then(function (ok) {
+                    if (ok) {
+                        Rpc.desk('part_delete', [d.id]).then(function () {
+                            UI.toast('Part deleted', 'ok');
+                            page.clear();
+                        }, failed);
+                    }
+                });
+        }
+
+        function editCard(title, fields, d) {
+            UI.docEdit(title, onlyKnown(fields), d).then(function (v) {
+                page.save(v);
+            }, function () {});
+        }
+
+        var COST_FIELDS = [
+            {name: 'unit_material_cost', label: 'Material', type: 'money'},
+            {name: 'unit_labor_cost', label: 'Labor', type: 'money'},
+            {name: 'unit_burden_cost', label: 'Burden', type: 'money'},
+            {name: 'unit_service_cost', label: 'Service', type: 'money'},
+            {name: 'fixed_cost', label: 'Fixed cost', type: 'money'},
+            {name: 'list_price', label: 'Unit price (Stk UM)',
+                type: 'money'},
+            {name: 'preserve_unit_costs', label: 'Preserve unit costs',
+                type: 'boolean'},
+            {name: 'update_costs_from_po', label: 'Update on receipt',
+                type: 'selection', options: UPDATE_COSTS}];
+        var PLANNING_FIELDS = [
+            {name: 'lead_time_days', label: 'Leadtime (days)',
+                type: 'integer'},
+            {name: 'safety_stock', label: 'Safety stock qty',
+                type: 'float'},
+            {name: 'order_point', label: 'Order point qty', type: 'float'},
+            {name: 'maximum_stock_qty', label: 'Restocking level',
+                type: 'float'},
+            {name: 'minimum_order_qty', label: 'Minimum order qty',
+                type: 'float'},
+            {name: 'multiple_order_qty', label: 'Order in multiples of',
+                type: 'float'},
+            {name: 'maximum_order_qty', label: 'Maximum order qty',
+                type: 'float'},
+            {name: 'primary_location', label: 'Primary location',
+                type: 'many2one', model: 'stock.location', domain: STORAGE},
+            {name: 'issue_from_location', label: 'Issue from location',
+                type: 'many2one', model: 'stock.location', domain: STORAGE}];
+        var SUPPLIER_FIELD = {name: 'preferred_supplier', label:
+            'Preferred supplier', type: 'many2one', model: 'party.party',
+            readonly: !can(access, 'purchase.product_supplier', 'create')};
+        var PURCHASING_FIELDS = [SUPPLIER_FIELD,
+            {name: 'purchase_uom', label: 'Purchase U/M', type: 'many2one',
+                model: 'product.uom'},
+            {name: 'mfg_name', label: 'Manufacturer', type: 'char'},
+            {name: 'mfg_part_id', label: 'Manufacturer\'s part ID',
+                type: 'char'}];
+        var ENGINEERING_FIELDS = [
+            {name: 'drawing_number', label: 'Drawing ID', type: 'char'},
+            {name: 'drawing_revision', label: 'Drawing rev', type: 'char'},
+            {name: 'drawing_file', label: 'Drawing file', type: 'char'},
+            {name: 'engineering_revision', label: 'Eng master revision',
+                type: 'char'},
+            {name: 'usage_uom', label: 'Usage U/M', type: 'many2one',
+                model: 'product.uom'},
+            {name: 'weight', label: 'Net weight', type: 'float'},
+            {name: 'weight_uom', label: 'Weight U/M', type: 'many2one',
+                model: 'product.uom'},
+            {name: 'ship_dimensions', label: 'Ship dimensions',
+                type: 'char'}];
+
+        /* What is wrong with the part, from its data */
+        function attention(d) {
+            var out = [];
+            if (!d.id) {
+                out.push({tone: 'info', title: 'Enter the new part',
+                    detail: 'A part needs its Part ID, description and ' +
+                        'Stock U/M before it can be saved.',
+                    action: {label: 'Enter', onclick: newPart}});
+                return out;
+            }
+            var a = d.avail;
+            var open = d.sd ? d.sd.sales.length + d.sd.work_orders.length +
+                d.sd.purchases.length : 0;
+            if (d.inactive && open) {
+                out.push({tone: 'bad', title: 'Inactive, but on ' + open +
+                    ' open order line(s)', detail: 'Close or change those ' +
+                    'orders, or make the part active again.', action:
+                    writable ? {label: 'Make active', onclick: function () {
+                        page.save({inactive: false});
+                    }} : null});
+            }
+            if (!d.inactive && !qty(d.unit_cost) && has('unit_cost') &&
+                    !d.tool_or_fixture) {
+                out.push({tone: 'warn', title: 'No unit cost', detail:
+                    'Issues and receipts of the part would be costed at $0.',
+                    action: writable ? {label: 'Set costs', onclick:
+                        function () {
+                            editCard('Costs', COST_FIELDS, d);
+                        }} : null});
+            }
+            if (a && !d.inactive) {
+                var safety = qty(d.safety_stock);
+                if (safety && qty(a.available) < safety) {
+                    out.push({tone: 'bad', title: 'Below safety stock',
+                        detail: num(a.available) + ' ' + d.unit +
+                            ' available, safety stock ' + num(safety) + '.',
+                        action: d.purchasable && allowed.purchase ? {label:
+                            'Order more', onclick: function () {
+                                orderMore(d);
+                            }} : {label: 'Supply & demand', onclick:
+                            function () {
+                                supplyDemand(d.id);
+                            }}});
+                } else if (a.below_order_point) {
+                    out.push({tone: 'warn', title: 'At or below the order ' +
+                        'point', detail: 'Projected ' + num(a.projected) +
+                        ' ' + d.unit + ', order point ' + num(a.order_point) +
+                        ': replenish the part.', action: d.purchasable &&
+                        allowed.purchase ? {label: 'Order more', onclick:
+                            function () {
+                                orderMore(d);
+                            }} : {label: 'Supply & demand', onclick:
+                            function () {
+                                supplyDemand(d.id);
+                            }}});
+                }
+                if (qty(a.on_hand) < 0) {
+                    out.push({tone: 'bad', title: 'Negative quantity on hand',
+                        detail: num(a.on_hand) + ' ' + d.unit + ': more was ' +
+                            'issued or shipped than received.', action: {
+                            label: 'Transactions', onclick: function () {
+                                inventoryTxs(d.id);
+                            }}});
+                }
+            }
+            if (d.producible && !d.inactive && d.masters &&
+                    !d.masters.length) {
+                out.push({tone: 'warn', title: 'No engineering master',
+                    detail: 'A fabricated part needs a master to make work ' +
+                        'orders from.', action: allowed.masters ? {label:
+                        'Create master', onclick: function () {
+                            openMaster(d);
+                        }} : null});
+            }
+            if (d.purchasable && !d.inactive && has('preferred_supplier') &&
+                    !d.preferred_supplier) {
+                out.push({tone: 'info', title: 'No preferred supplier',
+                    detail: 'Purchasing and planning suggest the preferred ' +
+                        'supplier on a new order.', action: writable &&
+                        !SUPPLIER_FIELD.readonly ? {label: 'Set supplier',
+                        onclick: function () {
+                            editCard('Preferred supplier', [SUPPLIER_FIELD],
+                                d);
+                        }} : null});
+            }
+            if (d.stocked && !d.inactive && has('primary_location') &&
+                    !d.primary_location) {
+                out.push({tone: 'info', title: 'No primary location',
+                    detail: 'Receipts of a stocked part go to its primary ' +
+                        'location.', action: writable ? {label:
+                        'Set location', onclick: function () {
+                            editCard('Planning', PLANNING_FIELDS, d);
+                        }} : null});
+            }
+            return out;
+        }
+
+        /* The open order lines: SO and WO demand, PO and WO supply */
+        function orderItems(d) {
+            var sd = d.sd;
+            if (!sd) {
+                return [];
+            }
+            return sd.sales.map(function (r) {
+                return {kind: 'sale', row: r, qty: -qty(r.demand)};
+            }).concat(sd.work_orders.map(function (r) {
+                return {kind: 'production', row: r, qty: qty(r.supply) -
+                    qty(r.demand)};
+            }), sd.purchases.map(function (r) {
+                return {kind: 'purchase', row: r, qty: qty(r.supply)};
+            })).sort(function (a, b) {
+                return String(a.row.date || '9999').localeCompare(
+                    String(b.row.date || '9999'));
+            });
+        }
+
+        function lastMove(d, test) {
+            var found = null;
+            (d.moves || []).forEach(function (m) {
+                if (m.state === 'done' && test(m) && (!found ||
+                        String(m.date) > String(found.date))) {
+                    found = m;
+                }
+            });
+            return found;
+        }
+
+        page = UI.docPage(main, {
+            title: 'Part',
+            crumbs: ['Inventory', 'Parts'],
+            model: 'product.template', label: 'Part ID',
+            domain: [['active', 'in', [true, false]]],
+            order: [['code', 'ASC']],
+            openId: openId,
+            load: load,
+            save: save,
+            values: function () {
+                return {};
+            },
+            blank: can(access, 'product.template', 'create') ? function () {
+                return {id: null, code: '', name: '', moves: [],
+                    locations: [], stocked: true};
+            } : null,
+            head: function (d) {
+                if (!d.id) {
+                    return {title: 'New part', sub: ['Not saved yet']};
+                }
+                var unitCost = has('unit_cost') ? d.unit_cost : d.cost_price;
+                return {
+                    title: d.name || d.code,
+                    chips: [d.code],
+                    sub: [d.product_code ? 'Product code ' + UI.shortName(
+                        'nline.product_code', d.product_code.rec_name) : null,
+                        d.unit ? 'U/M ' + d.unit : null,
+                        d.drawing_number ? 'Drawing ' + d.drawing_number +
+                            (d.drawing_revision ? ' rev ' +
+                                d.drawing_revision : '') : null],
+                    amount: {value: money(unitCost) || '$0.00', label:
+                        'unit cost per ' + (d.unit || 'unit')}
+                };
+            },
+            status: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                return [
+                    d.inactive ? {text: 'Inactive', tone: 'bad'} :
+                        {text: 'Active', tone: 'ok'},
+                    d.producible ? {text: 'Fabricated', tone: 'accent'} :
+                        null,
+                    d.purchasable ? {text: 'Purchased', tone: 'accent'} :
+                        null,
+                    d.stocked ? {text: 'Stocked', tone: 'accent'} : null,
+                    d.tool_or_fixture ? {text: 'Tool/fixture'} : null,
+                    d.lot_tracked ? {text: 'Lot/serial tracked'} : null
+                ].filter(Boolean);
+            },
+            actions: function (d) {
+                if (!d.id) {
+                    return [{label: 'Enter the part', primary: true, onclick:
+                        newPart}];
+                }
+                var low = d.avail && !d.inactive && (d.avail
+                    .below_order_point || (qty(d.safety_stock) &&
+                        qty(d.avail.available) < qty(d.safety_stock)));
+                var needMaster = d.producible && d.masters &&
+                    !d.masters.length;
+                var primary = low && d.purchasable && allowed.purchase ?
+                    'order' : needMaster && allowed.masters ? 'master' :
+                    'sd';
+                return [
+                    seeMoves ? {label: 'Supply & demand', key: 's',
+                        primary: primary === 'sd', onclick: function () {
+                            supplyDemand(d.id);
+                        }} : null,
+                    allowed.masters && d.producible ? {label: d.masters &&
+                        d.masters.length ? 'Engineering master' :
+                        'Create master', key: 'e', primary: primary ===
+                        'master', onclick: openMaster} : null,
+                    d.purchasable && allowed.purchase ? {label: 'Order more',
+                        primary: primary === 'order', onclick: orderMore} :
+                        null];
+            },
+            more: function (d) {
+                var items = [];
+                if (d.id && seeMoves) {
+                    items.push({label: 'Inventory Txs', onclick: function () {
+                        inventoryTxs(d.id);
+                    }});
+                }
+                if (d.id && (can(access, 'production.bom', 'read') ||
+                        can(access, 'production', 'read'))) {
+                    items.push({label: 'Where Used...', onclick: function () {
+                        whereUsed(d.id);
+                    }});
+                }
+                if (d.id && seeMoves) {
+                    items.push({label: 'Material Availability...', onclick:
+                        function () {
+                            materialAvailability(d.id);
+                        }}, {label: 'Inventory Pieces...', onclick:
+                        function () {
+                            inventoryPieces(d.id);
+                        }});
+                }
+                if (d.id && can(access, 'stock.move', 'write') &&
+                        can(access, 'production', 'write')) {
+                    items.push({label: 'Reset Material Costs...', onclick:
+                        function () {
+                            resetMaterialCosts(d.id);
+                        }});
+                }
+                if (d.id && (d.drawing_file || '').trim()) {
+                    items.push({label: 'Open drawing file', onclick:
+                        function () {
+                            openLink(d.drawing_file);
+                        }});
+                }
+                items.push('-');
+                if (d.id && can(access, 'product.template', 'create')) {
+                    items.push({label: 'Copy to a new Part ID...', onclick:
+                        function () {
+                            copyPart(d);
+                        }});
+                }
+                if (d.id && can(access, 'product.template', 'delete')) {
+                    items.push({label: 'Delete part...', onclick: function () {
+                        deletePart(d);
+                    }});
+                }
+                items.push('-', {label: 'Classic view', onclick: function () {
+                    toClassic(d);
+                }});
+                return items;
+            },
+            attention: attention,
+            tracker: function (d) {
+                var a = d.avail;
+                if (!d.id || !a) {
+                    return null;
+                }
+                var available = qty(a.projected);
+                var safety = qty(d.safety_stock);
+                return {title: 'Supply and demand', note: 'in ' + d.unit +
+                    (qty(a.on_hold) ? ' · ' + num(a.on_hold) + ' on hold' :
+                        ''), steps: [
+                    {label: 'On hand', value: num(a.on_hand), state:
+                        qty(a.on_hand) < 0 ? 'bad' : 'done'},
+                    {label: 'On order', value: num(a.supply), state:
+                        qty(a.supply) ? 'now' : 'todo'},
+                    {label: 'Allocated', value: num(a.demand), state:
+                        qty(a.demand) ? 'now' : 'todo'},
+                    {label: 'Available', value: num(available), state:
+                        available < 0 || (safety && available < safety) ?
+                            'bad' : a.below_order_point ? 'warn' : 'done'}]};
+            },
+            sections: [
+                {title: 'Open orders', visible: function (d) {
+                    return Boolean(d.id && d.sd);
+                }, note: 'Sales, work and purchase order lines; click to ' +
+                    'open', render: function (pane, d) {
+                    var kinds = {
+                        sale: {icon: 'truck', tone: 'service', name:
+                            'Sales order', open: 'sale'},
+                        production: {icon: 'factory', tone: 'op', name:
+                            'Work order', open: 'production'},
+                        purchase: {icon: 'doc', tone: 'part', name:
+                            'Purchase order', open: 'purchase'}};
+                    var items = orderItems(d);
+                    var inQty = 0, outQty = 0;
+                    items.forEach(function (i) {
+                        if (i.qty > 0) {
+                            inQty += i.qty;
+                        } else {
+                            outQty -= i.qty;
+                        }
+                    });
+                    UI.docLines(pane, {
+                        items: items.slice(0, 30),
+                        kind: function (i) {
+                            return kinds[i.kind];
+                        },
+                        title: function (i) {
+                            return kinds[i.kind].name + ' ' + i.row.number +
+                                (i.row.sequence ? ' / ' + i.row.sequence :
+                                    '');
+                        },
+                        chips: function (i) {
+                            var late = i.row.date && i.row.date < isoToday();
+                            return [i.row.status, i.row.date ? {text: (i.kind ===
+                                'sale' ? 'ship ' : i.kind === 'purchase' ?
+                                'due ' : 'want ') + UI.date(i.row.date) +
+                                (late ? ', late' : ''), tone: late ? 'bad' :
+                                null} : null, i.row.linked ? 'linked' : null];
+                        },
+                        right: function (i) {
+                            return [(i.qty > 0 ? '+' : '') + num(i.qty) + ' ' +
+                                d.unit, i.qty > 0 ? 'supply' : 'demand',
+                                i.qty < 0 ? 'warn' : 'ok'];
+                        },
+                        onclick: function (i) {
+                            openDocument(kinds[i.kind].open, i.row.id,
+                                i.row.number, allowed[kinds[i.kind].open]);
+                        },
+                        empty: 'No open orders for this part.',
+                        footer: [items.length > 30 ? 'first 30 of ' +
+                            items.length + ' (S: all)' : '', 'Supply ' +
+                            num(inQty), 'Demand ' +
+                            num(outQty), 'Net ' + num(inQty - outQty) + ' ' +
+                            d.unit]
+                    });
+                }},
+                {title: 'Where used', visible: function (d) {
+                    return Boolean(d.id && d.used && d.used.length);
+                }, note: 'Engineering masters with this part as a material',
+                render: function (pane, d) {
+                    UI.docLines(pane, {
+                        items: d.used.slice(0, 50),
+                        kind: function () {
+                            return {icon: 'factory', tone: 'op'};
+                        },
+                        title: function (r) {
+                            return r.description || r.document;
+                        },
+                        chips: function (r) {
+                            return [r.part, r.revision ? 'rev ' + r.revision :
+                                null, r.operation ? 'op ' + r.operation : null,
+                                r.inactive ? {text: 'inactive', tone:
+                                    'muted'} : null];
+                        },
+                        right: function (r) {
+                            return [num(r.quantity) + ' ' + (r.unit || ''),
+                                'per'];
+                        },
+                        onclick: function (r) {
+                            openDocument(r.model, r.id, r.document,
+                                allowed[r.model]);
+                        },
+                        footer: d.used.length > 50 ? ['first 50 of ' +
+                            d.used.length + ': More > Where Used'] : []
+                    });
+                }},
+                {title: 'Locations', visible: function (d) {
+                    return Boolean(d.id && d.locations.length);
+                }, note: function (d) {
+                    return d.locations.length + ' location(s)';
+                }, render: function (pane, d) {
+                    var total = 0;
+                    d.locations.forEach(function (l) {
+                        total += qty(l.quantity);
+                    });
+                    UI.docLines(pane, {
+                        items: d.locations,
+                        kind: function (l) {
+                            return {icon: 'part', tone: l.hold ? 'warn' :
+                                'part'};
+                        },
+                        title: function (l) {
+                            return l.location_name || (l['location.'] ?
+                                l['location.'].rec_name : '');
+                        },
+                        chips: function (l) {
+                            return [l['location.'] ? UI.shortName(
+                                'stock.location', l['location.'].rec_name) :
+                                null, l.primary ? {text: 'primary', tone:
+                                    'accent'} : null, l.issue_from ?
+                                'issue from' : null, l.hold ? {text: 'on hold',
+                                    tone: 'warn'} : null, l.inactive ? {text:
+                                    'inactive', tone: 'muted'} : null];
+                        },
+                        right: function (l) {
+                            return [num(l.quantity) + ' ' + d.unit,
+                                l.last_counted ? 'counted ' +
+                                    UI.date(l.last_counted) : 'not counted'];
+                        },
+                        footer: ['On hand ' + num(total) + ' ' + d.unit]
+                    });
+                }}],
+            cards: [
+                {title: 'Part', rows: function (d) {
+                    return [['Part ID', d.code], ['Description', d.name],
+                        ['Stock U/M', d.default_uom && d.default_uom
+                            .rec_name],
+                        ['Kind', ['producible', 'purchasable', 'stocked',
+                            'tool_or_fixture', 'consumable'].filter(
+                            function (k) {
+                                return d[k];
+                            }).map(function (k) {
+                                return {producible: 'Fabricated',
+                                    purchasable: 'Purchased', stocked:
+                                    'Stocked', tool_or_fixture: 'Tool/fixture',
+                                    consumable: 'R+D/consumable'}[k];
+                            }).join(', ')],
+                        ['Inactive', d.inactive ? 'Yes' : 'No']];
+                }, fields: onlyKnown([
+                    {name: 'name', label: 'Description', type: 'char'},
+                    {name: 'default_uom', label: 'Stock U/M',
+                        type: 'many2one', model: 'product.uom'},
+                    {name: 'producible', label: 'Fabricated',
+                        type: 'boolean'},
+                    {name: 'purchasable', label: 'Purchased',
+                        type: 'boolean'},
+                    {name: 'stocked', label: 'Stocked', type: 'boolean'},
+                    {name: 'salable', label: 'Sold (ERP)', type: 'boolean'},
+                    {name: 'tool_or_fixture', label: 'Tool/fixture',
+                        type: 'boolean'},
+                    {name: 'consumable', label: 'R+D/consumable',
+                        type: 'boolean'},
+                    {name: 'auto_issue', label: 'Auto issue',
+                        type: 'boolean'},
+                    {name: 'inactive', label: 'Inactive', type: 'boolean'}]),
+                    editable: function (d) {
+                        return writable && Boolean(d.id);
+                    }},
+                {title: 'Costs', rows: function (d) {
+                    return [['Material', money(d.unit_material_cost)],
+                        d.producible ? ['Labor', money(d.unit_labor_cost)] :
+                            null,
+                        d.producible ? ['Burden', money(d.unit_burden_cost)] :
+                            null,
+                        d.producible ? ['Service',
+                            money(d.unit_service_cost)] : null,
+                        qty(d.fixed_cost) ? ['Fixed cost',
+                            money(d.fixed_cost)] : null,
+                        ['Unit cost', money(d.unit_cost)],
+                        ['Inventory cost (average)', money(d.cost_price)],
+                        ['Unit price', money(d.list_price)],
+                        ['Update on receipt', (UPDATE_COSTS.filter(
+                            function (o) {
+                                return o[0] === d.update_costs_from_po;
+                            })[0] || [])[1]]];
+                }, fields: onlyKnown(COST_FIELDS), editable: function (d) {
+                    return writable && Boolean(d.id);
+                }},
+                {title: 'Planning', rows: function (d) {
+                    return [['Leadtime', d.lead_time_days ?
+                        d.lead_time_days + ' days' : null],
+                        ['Safety stock', q(d.safety_stock, d)],
+                        ['Order point', q(d.order_point, d)],
+                        ['Restocking level', q(d.maximum_stock_qty, d)],
+                        ['Order qty', [d.minimum_order_qty ? 'min ' +
+                            num(d.minimum_order_qty) : '',
+                            qty(d.multiple_order_qty) > 1 ? 'multiples of ' +
+                                num(d.multiple_order_qty) : '',
+                            d.maximum_order_qty ? 'max ' +
+                                num(d.maximum_order_qty) : ''].filter(Boolean)
+                            .join(', ') || null],
+                        ['Primary location', d.primary_location &&
+                            d.primary_location.rec_name],
+                        ['Issue from', d.issue_from_location &&
+                            d.issue_from_location.rec_name]];
+                }, fields: onlyKnown(PLANNING_FIELDS), editable: function (d) {
+                    return writable && Boolean(d.id);
+                }},
+                {title: 'Purchasing', rows: function (d) {
+                    return [['Preferred supplier', d.preferred_supplier ?
+                        (d.supplier_name_1 || d.preferred_supplier.rec_name)
+                        : null],
+                        ['Purchase U/M', d.purchase_uom &&
+                            d.purchase_uom.rec_name],
+                        ['Manufacturer', d.mfg_name],
+                        ['Mfg part ID', d.mfg_part_id]];
+                }, fields: onlyKnown(PURCHASING_FIELDS), editable:
+                    function (d) {
+                        return writable && Boolean(d.id);
+                    }},
+                {title: 'Engineering and drawing', rows: function (d) {
+                    return [['Drawing', d.drawing_number ? d.drawing_number +
+                        (d.drawing_revision ? ' rev ' + d.drawing_revision :
+                            '') : null],
+                        ['Drawing file', d.drawing_file ? el('a', {href: '#',
+                            onclick: function (event) {
+                                event.preventDefault();
+                                openLink(d.drawing_file);
+                            }}, d.drawing_file) : null],
+                        ['Eng master', d.masters && d.masters.length ?
+                            d.masters.length + ' (' + (d.engineering_revision ?
+                                'rev ' + d.engineering_revision :
+                                'latest') + ')' : d.producible ? 'none' :
+                            null],
+                        ['Usage U/M', d.usage_uom && d.usage_uom.rec_name],
+                        ['Net weight', d.weight ? num(d.weight) + ' ' +
+                            (d.weight_uom ? UI.shortName('product.uom',
+                                d.weight_uom.rec_name) : '') : null],
+                        ['Ship dimensions', d.ship_dimensions]];
+                }, fields: onlyKnown(ENGINEERING_FIELDS), editable:
+                    function (d) {
+                        return writable && Boolean(d.id);
+                    }},
+                {title: 'Accounting', rows: function (d) {
+                    var set = d.account_category ? UI.shortName(
+                        'product.category', d.account_category.rec_name) :
+                        null;
+                    return [['Account set', set && d.account_set_description &&
+                        d.account_set_description !== set ? set + ' ' +
+                        d.account_set_description : set],
+                        ['Expense account', d.expense_account_code ?
+                            d.expense_account_code + ' ' +
+                            (d.expense_account_description || '') : null],
+                        ['Product code', d.product_code &&
+                            d.product_code.rec_name],
+                        ['Commodity code', d.commodity_code &&
+                            d.commodity_code.rec_name],
+                        ['Cost method', {fixed: 'Fixed', average: 'Average',
+                            fifo: 'FIFO'}[d.cost_price_method]]];
+                }, fields: onlyKnown([
+                    {name: 'account_category', label: 'Account set',
+                        type: 'many2one', model: 'product.category',
+                        domain: [['accounting', '=', true]]},
+                    {name: 'product_code', label: 'Product code',
+                        type: 'many2one', model: 'nline.product_code'},
+                    {name: 'commodity_code', label: 'Commodity code',
+                        type: 'many2one', model: 'nline.commodity_code'},
+                    {name: 'cost_price_method', label: 'Cost method',
+                        type: 'selection', options: [['fixed', 'Fixed'],
+                            ['average', 'Average'], ['fifo', 'FIFO']]}]),
+                    editable: function (d) {
+                        return writable && Boolean(d.id);
+                    }},
+                {title: 'Specs', rows: function (d) {
+                    return [['Specifications', d.specifications ?
+                        String(d.specifications).slice(0, 240) : null]];
+                }, fields: onlyKnown([{name: 'specifications', label:
+                    'Specifications', type: 'text'}]), editable: function (d) {
+                    return writable && Boolean(d.id);
+                }}],
+            trail: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var received = lastMove(d, function (m) {
+                    return m.type === 'In' && (m['class'] === 'PO_RECEIPT' ||
+                        m['class'] === 'WO_RECEIPT');
+                });
+                var issued = lastMove(d, function (m) {
+                    return m.type === 'Out' && m['class'] === 'ISSUE';
+                });
+                var shipped = lastMove(d, function (m) {
+                    return m.type === 'Out' && m['class'] === 'SHIPMENT';
+                });
+                var counted = null;
+                d.locations.forEach(function (l) {
+                    if (l.last_counted && (!counted || l.last_counted >
+                            counted)) {
+                        counted = l.last_counted;
+                    }
+                });
+                function moveText(m) {
+                    return m ? UI.date(m.date) + ' · ' + num(m.quantity) +
+                        ' ' + (m.unit || '') + (m.document ? ' · ' +
+                            m.document : '') : 'never';
+                }
+                return [
+                    {done: true, text: 'Created', when: d.record_created ||
+                        (d.create_date ? UI.date(d.create_date) : '')},
+                    d.record_modified ? {done: true, text: 'Last modified',
+                        when: d.record_modified} : null,
+                    seeMoves ? {done: Boolean(received), text:
+                        'Last received', when: moveText(received)} : null,
+                    seeMoves ? {done: Boolean(issued), text: 'Last issued',
+                        when: moveText(issued)} : null,
+                    seeMoves && (shipped || d.salable) ? {done:
+                        Boolean(shipped), text: 'Last shipped', when:
+                        moveText(shipped)} : null,
+                    {done: Boolean(counted), text: 'Last counted', when:
+                        counted ? UI.date(counted) : 'never'},
+                    seeMoves ? {text: 'Inventory transactions', onclick:
+                        function () {
+                            inventoryTxs(d.id);
+                        }} : null,
+                    {text: 'Notes', onclick: function () {
+                        var pane = el('div', {style: {minWidth: '480px'}});
+                        UI.modal('Notes: part ' + d.code, pane);
+                        UI.notesTab(pane, 'product.template', d.id, true);
+                    }}];
+            },
+            keys: {
+                s: {label: 'supply & demand', run: function (d) {
+                    if (d.id && seeMoves && alive()) {
+                        supplyDemand(d.id);
+                    }
+                }},
+                w: {label: 'where used', run: function (d) {
+                    if (d.id && alive()) {
+                        whereUsed(d.id);
+                    }
+                }},
+                t: {label: 'transactions', run: function (d) {
+                    if (d.id && seeMoves && alive()) {
+                        inventoryTxs(d.id);
+                    }
+                }},
+                e: {label: 'engineering master', run: function (d) {
+                    if (d.id && allowed.masters && alive()) {
+                        openMaster(d);
+                    }
+                }}
+            },
+            classic: function (d) {
+                toClassic(d);
+            }
+        });
+        /* (docPage's key listener outlives the page: only this one) */
+        main.nlInvPage = page;
+        function alive() {
+            /* (and shown: not a hidden tab's page) */
+            return main.nlInvPage === page &&
+                main.classList.contains('dp-main') &&
+                main.offsetParent !== null;
+        }
+        function toClassic(d) {
+            UI.setDocView('part', 'classic');
+            main.nlInvPage = null;
+            Screens.parts(main, d && d.id ? [d.id] : []);
+        }
+        return page;
+    }
+
+    /* The Parts window: the modern page (default) or Jobshop's classic
+     * window (More > Classic view; its ribbon's New View goes back) */
     Screens.parts = function (main, params) {
+        injectStyle();
+        var openId = params && params[0] ? parseInt(params[0], 10) : null;
+        UI.clear(main);
+        main.classList.remove('dp-main');
+        main.nlInvPage = null;
+        if (UI.docPage && UI.docView('part') === 'modern') {
+            Promise.all([UI.access(['product.template', 'stock.move',
+                'production', 'production.bom', 'nline.js.part_location',
+                'purchase.product_supplier']), screens(),
+                Rpc.model('product.template', 'fields_get', [[]])]).then(
+                function (r) {
+                    partsModern(main, openId, r[0] || {}, r[2] || {}, r[1]);
+                }, failed);
+            return;
+        }
+        classicParts(main, params);
+    };
+
+    /* The classic Parts window (Jobshop's layout) */
+    function classicParts(main, params) {
         injectStyle();
         var openId = params && params[0] ? parseInt(params[0], 10) : null;
         var models = ['product.template', 'stock.move', 'sale.line',
@@ -1475,7 +2450,13 @@
                     });
             }
 
-            var extra = [];
+            /* New View: back to the modern page */
+            var extra = [{label: 'New View', title: 'The modern part page',
+                onclick: function (record) {
+                    UI.setDocView('part', 'modern');
+                    Screens.parts(main, record && record.id ? [record.id] :
+                        []);
+                }}];
             var view = viewItems(), tools = toolItems();
             if (view.length) {
                 extra.push({label: 'View ▾', onclick: function () {
@@ -1722,7 +2703,7 @@
                 }
             });
         }
-    };
+    }
 
     /* ---- The table windows (Units, Unit Conversions, Locations) ---------- */
 

@@ -1382,11 +1382,981 @@
             }}]);
     }
 
+    /* ---- Modern pages (UI.docPage; owner's review 29 Oct 2026) --------- */
+
+    function isoDay(offset) {
+        var d = new Date();
+        d.setDate(d.getDate() + (offset || 0));
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2,
+            '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function n0(v) {
+        var n = parseFloat(v);
+        return isNaN(n) ? 0 : n;
+    }
+
+    /* A value as the server compares it: a many2one's id, a Decimal's
+     * number, a date's ISO text */
+    function plain(v) {
+        if (v === undefined || v === '' || v === null) {
+            return null;
+        }
+        if (typeof v === 'object') {
+            if (v.__class__ === 'Decimal') {
+                return parseFloat(v.decimal);
+            }
+            if (v.__class__ === 'date') {
+                return v.year + '-' + String(v.month).padStart(2, '0') + '-' +
+                    String(v.day).padStart(2, '0');
+            }
+            if ('id' in v) {
+                return v.id;
+            }
+        }
+        return v;
+    }
+
+    /* Only what changed (a card's Save sends all its fields) */
+    function changedValues(data, values) {
+        var out = {};
+        Object.keys(values).forEach(function (k) {
+            var a = plain(values[k]), b = plain(data[k]);
+            if (typeof a === 'number' && typeof b === 'number' ?
+                    Math.abs(a - b) > 1e-9 : String(a) !== String(b)) {
+                out[k] = values[k];
+            }
+        });
+        return out;
+    }
+
+    /* Read one record: many2ones as {id, rec_name} */
+    function readRecord(model, id, names, m2os) {
+        var read = names.slice();
+        m2os.forEach(function (n) {
+            read.push(n, n + '.rec_name');
+        });
+        return Rpc.model(model, 'read', [[id], read]).then(function (rows) {
+            var r = rows[0];
+            if (!r) {
+                throw {message: 'The record no longer exists.'};
+            }
+            m2os.forEach(function (n) {
+                var related = r[n + '.'];
+                r[n] = r[n] ? {id: r[n], rec_name: related ?
+                    related.rec_name : String(r[n])} : null;
+            });
+            return r;
+        });
+    }
+
+    function knownOnly(known, list) {
+        return list.filter(function (x) {
+            return known[typeof x === 'string' ? x : x.name];
+        });
+    }
+
+    /* A weekly calendar as card rows: "Mon  8 h from 07:00" */
+    function calendarRows(week) {
+        var byDay = {};
+        (week || []).forEach(function (r) {
+            byDay[String(r.day_of_week)] = r;
+        });
+        return DAYS.map(function (day) {
+            var r = byDay[day[0]];
+            var hours = r ? n0(r.shift_1) + n0(r.shift_2) + n0(r.shift_3) :
+                0;
+            return [day[1], r && hours ? qty(hours) + ' h' +
+                (r.start_of_day ? ' from ' + timeText(r.start_of_day) : '') :
+                'off'];
+        });
+    }
+
+    var CAL_READ = ['day_of_week', 'start_of_day', 'shift_1', 'shift_2',
+        'shift_3'];
+
+    /* A work order's name: its number (a leg's already ends in /sub) */
+    function woName(number, sub) {
+        number = String(number || '');
+        return (/^WO/i.test(number) ? '' : 'WO ') + number + (sub &&
+            !new RegExp('/' + sub + '$').test(number) ? '/' + sub : '');
+    }
+
+    /* The labor tickets as lines (Employees: recent labor) */
+    function laborLines(pane, rows, openWo, by) {
+        var hours = 0;
+        rows.forEach(function (t) {
+            hours += n0(t.hours);
+        });
+        UI.docLines(pane, {
+            items: rows,
+            kind: function (t) {
+                return t.type === 'indirect' ? {icon: 'clock', tone: 'muted'} :
+                    {icon: 'factory', tone: 'op'};
+            },
+            title: function (t) {
+                return t.number ? woName(t.number, t.sub) +
+                    (t.seq ? ' · op ' + t.seq : '') + (t.operation ?
+                    ' ' + t.operation : '') : (t.description ||
+                    'Indirect labor');
+            },
+            chips: function (t) {
+                return [t.transaction_date ? UI.date(t.transaction_date) :
+                    null, by === 'resource' ? t.clock_no : t.resource,
+                    t.type ? t.type.charAt(0).toUpperCase() +
+                        t.type.slice(1) : null,
+                    t.shift_type && t.shift_type !== 'regular' ?
+                        t.shift_type : null,
+                    t.completed ? {text: 'op completed', tone: 'ok'} : null,
+                    t.reversed ? {text: 'reversed', tone: 'muted'} : null];
+            },
+            right: function (t) {
+                return [qty(t.hours) + ' h', t.completed_qty ? qty(
+                    t.completed_qty) + ' done' : (t.labor_cost ? '$' +
+                        UI.money(t.labor_cost) : '')];
+            },
+            onclick: openWo ? function (t) {
+                if (t.production) {
+                    UI.openScreen('work-orders/' + t.production);
+                }
+            } : null,
+            empty: 'No labor in the last 90 days.',
+            footer: [rows.length + ' ticket(s)', qty(hours) + ' h']
+        });
+    }
+
+    /* The Employees window of one employee, modern view */
+    var EMP_TEXT = ['clock_no', 'employee_name', 'shift_no', 'inactive',
+        'title', 'phone', 'mobile', 'email', 'addr_1', 'addr_2', 'city',
+        'state', 'postal_code', 'country', 'addr_etc', 'start_date',
+        'end_date', 'cost_per_hr', 'setup_cost_per_hr', 'run_cost_per_hr',
+        'cost_per_unit', 'bur_per_hr_setup', 'bur_percent_setup',
+        'bur_per_hr_run', 'bur_percent_run', 'bur_per_unit_run',
+        'create_date', 'write_date'];
+    var EMP_M2O = ['create_uid', 'write_uid'];
+    var SHIFTS = [['1', '1'], ['2', '2'], ['3', '3']];
+
+    function employeeModern(main, id, a, known) {
+        var page;
+        var writable = a.employee.write;
+        function money(v) {
+            return v === null || v === undefined || v === '' ? null :
+                '$' + UI.money(n0(v));
+        }
+        function pct(v) {
+            return v === null || v === undefined || v === '' ? null :
+                qty(v) + '%';
+        }
+
+        function load(eid) {
+            var none = function () {
+                return null;
+            };
+            return Promise.all([
+                readRecord('company.employee', eid, knownOnly(known,
+                    EMP_TEXT), knownOnly(known, EMP_M2O)),
+                a.week.read ? Rpc.searchRead(CAL_WEEK, [['employee', '=',
+                    eid]], CAL_READ).catch(none) : null,
+                a.week.read ? Rpc.searchRead(CAL_WEEK, [['resource', '=',
+                    null], ['employee', '=', null]], CAL_READ).catch(none) :
+                    null,
+                a.change.read ? Rpc.searchRead(CAL_CHANGE, [['employee', '=',
+                    eid], ['end_date', '>=', isoDay(0)]], ['start_date',
+                    'end_date', 'shift_1', 'shift_2', 'shift_3',
+                    'reason_code.rec_name'], {order: [['start_date',
+                    'ASC']]}).catch(none) : null,
+                a.ticket.read ? Rpc.desk('sf_labor_tickets', [{kind:
+                    'employee', employee: eid, from_date: isoDay(-90),
+                    limit: 500}]).catch(none) : null
+            ]).then(function (r) {
+                var d = r[0];
+                d.number = d.clock_no;
+                d.week = r[1];
+                d.shopWeek = r[2];
+                d.exceptions = r[3] || [];
+                d.labor = (r[4] || []).slice().sort(function (x, y) {
+                    return String(y.transaction_date || '').localeCompare(
+                        String(x.transaction_date || ''));
+                });
+                return d;
+            });
+        }
+
+        function save(values, data) {
+            if (values.shift_no !== undefined) {
+                values.shift_no = values.shift_no ? parseInt(values.shift_no,
+                    10) : null;
+            }
+            if (!data.id) {
+                if (!values.clock_no || !values.employee_name) {
+                    return Promise.reject({message: 'A new employee needs ' +
+                        'a clock number and a name.'});
+                }
+                return Rpc.model('company.employee', 'create', [[Object.assign(
+                    {company: Rpc.context().company}, values)]]).then(
+                    function (ids) {
+                        return load(ids[0]);
+                    });
+            }
+            var changes = changedValues(data, values);
+            return (Object.keys(changes).length ? Rpc.model(
+                'company.employee', 'write', [[data.id], changes]) :
+                Promise.resolve()).then(function () {
+                    return load(data.id);
+                });
+        }
+
+        function newEmployee() {
+            UI.docEdit('New employee', knownOnly(known, [
+                {name: 'clock_no', label: 'Clock No', type: 'char'},
+                {name: 'employee_name', label: 'Name', type: 'char',
+                    wide: true},
+                {name: 'shift_no', label: 'Shift No', type: 'selection',
+                    options: SHIFTS},
+                {name: 'title', label: 'Title', type: 'char'}]),
+                {shift_no: '1'}).then(function (v) {
+                    page.save(v);
+                }, function () {});
+        }
+
+        function calendars(d) {
+            var cal = {};
+            var pane = el('div');
+            var editable = a.week.write && a.week.create && a.week.delete &&
+                a.change.write && a.change.create && a.change.delete;
+            UI.modal('Calendars: ' + (d.employee_name || d.clock_no), pane,
+                editable ? [{label: 'Cancel'}, {label: 'Save', primary: true,
+                    onclick: function () {
+                        cal.save(d.id).then(function () {
+                            UI.toast('Calendars saved', 'ok');
+                            page.reload();
+                        }, failed);
+                    }}] : [{label: 'Close', primary: true}]);
+            var boxes = document.querySelectorAll('.overlay .modal');
+            if (boxes.length) {
+                boxes[boxes.length - 1].style.maxWidth = '1100px';
+            }
+            employeeCalendars(pane, {id: d.id}, {week: editable, change:
+                editable}, cal);
+        }
+
+        function attendance(d) {
+            var pane = el('div', {style: {minWidth: '720px'}});
+            UI.modal('Attendance: ' + (d.employee_name || d.clock_no), pane);
+            var boxes = document.querySelectorAll('.overlay .modal');
+            if (boxes.length) {
+                boxes[boxes.length - 1].style.maxWidth = '1200px';
+            }
+            attendanceGrid(pane, {access: a.time, employee: d.id});
+        }
+
+        function ownCalendar(d) {
+            return Boolean(d.week && d.week.length);
+        }
+
+        var PAY_FIELDS = knownOnly(known, [
+            {name: 'cost_per_hr', label: 'Base cost per hr', type: 'decimal'},
+            {name: 'setup_cost_per_hr', label: 'Setup cost per hr',
+                type: 'decimal'},
+            {name: 'run_cost_per_hr', label: 'Run cost per hr',
+                type: 'decimal'},
+            {name: 'cost_per_unit', label: 'Cost per unit', type: 'decimal'},
+            {name: 'bur_per_hr_setup', label: 'Burden/hour (setup)',
+                type: 'decimal'},
+            {name: 'bur_percent_setup', label: 'Burden % (setup)',
+                type: 'decimal'},
+            {name: 'bur_per_hr_run', label: 'Burden/hour (run)',
+                type: 'decimal'},
+            {name: 'bur_percent_run', label: 'Burden % (run)',
+                type: 'decimal'},
+            {name: 'bur_per_unit_run', label: 'Burden/unit (run)',
+                type: 'decimal'}]);
+        page = UI.docPage(main, {
+            title: 'Employee',
+            crumbs: ['Shop Floor', 'Employees'],
+            model: 'company.employee', label: 'Clock No.',
+            order: [['clock_no', 'ASC']],
+            openId: id || null,
+            load: load,
+            save: save,
+            values: function () {
+                return {};
+            },
+            blank: a.employee.create ? function () {
+                return {id: null, labor: [], exceptions: []};
+            } : null,
+            head: function (d) {
+                if (!d.id) {
+                    return {title: 'New employee', sub: ['Not saved yet']};
+                }
+                return {
+                    title: d.employee_name || d.clock_no,
+                    chips: [d.clock_no, d.shift_no ? 'Shift ' + d.shift_no :
+                        null].filter(Boolean),
+                    sub: [d.title, d.phone || d.mobile, d.start_date ?
+                        'hired ' + UI.date(d.start_date) : null, d.end_date ?
+                        {text: 'terminated ' + UI.date(d.end_date), tone:
+                            'bad'} : null],
+                    amount: d.cost_per_hr !== undefined ? {value:
+                        money(d.cost_per_hr) || '$0.00', label:
+                        'base cost per hour'} : null
+                };
+            },
+            status: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                return [d.inactive ? {text: 'Inactive', tone: 'bad'} :
+                    {text: 'Active', tone: 'ok'},
+                    d.week ? (ownCalendar(d) ? {text: 'Own calendar',
+                        tone: 'accent'} : {text: 'Shop calendar'}) : null,
+                    d.exceptions.length ? {text: d.exceptions.length +
+                        ' calendar exception(s)', tone: 'warn'} : null]
+                    .filter(Boolean);
+            },
+            actions: function (d) {
+                if (!d.id) {
+                    return a.employee.create ? [{label: 'Enter the employee',
+                        primary: true, onclick: newEmployee}] : [];
+                }
+                return [
+                    a.time.read ? {label: 'Attendance', key: 't',
+                        primary: ownCalendar(d) || !d.week, onclick:
+                        attendance} : null,
+                    a.week.read ? {label: 'Calendars', key: 'c', primary:
+                        Boolean(d.week) && !ownCalendar(d), onclick:
+                        calendars} : null];
+            },
+            more: function (d) {
+                return [
+                    d.id && a.time.create ? {label: 'Employee Clock In/Out...',
+                        onclick: function () {
+                            clockDialog(null);
+                        }} : null,
+                    {label: 'All employees', onclick: function () {
+                        UI.openScreen('employees', 'Employees');
+                    }},
+                    '-',
+                    {label: 'Classic view', onclick: function () {
+                        toClassic(d);
+                    }}].filter(Boolean);
+            },
+            attention: function (d) {
+                var out = [];
+                if (!d.id) {
+                    out.push({tone: 'info', title: 'Enter the new employee',
+                        detail: 'An employee needs a clock number and a ' +
+                            'name.', action: a.employee.create ? {label:
+                            'Enter', onclick: newEmployee} : null});
+                    return out;
+                }
+                var recent = d.labor.filter(function (t) {
+                    return String(t.transaction_date || '') >= isoDay(-30);
+                }).length;
+                if (d.inactive && recent) {
+                    out.push({tone: 'warn', title: 'Inactive, but has ' +
+                        'labor in the last 30 days', detail: recent +
+                        ' ticket(s): check the clock number used on the ' +
+                        'floor.', action: writable ? {label: 'Make active',
+                            onclick: function () {
+                                page.save({inactive: false});
+                            }} : null});
+                } else if (!d.inactive && d.end_date && d.end_date <=
+                        isoDay(0)) {
+                    out.push({tone: 'warn', title: 'Terminated ' +
+                        UI.date(d.end_date) + ' but still active', detail:
+                        'An active employee can still clock in.', action:
+                        writable ? {label: 'Make inactive', onclick:
+                            function () {
+                                page.save({inactive: true});
+                            }} : null});
+                }
+                if (!d.inactive && d.week && !ownCalendar(d)) {
+                    out.push({tone: 'info', title: 'No calendar of their own',
+                        detail: (d.shopWeek && d.shopWeek.length ?
+                            'Works the shop calendar' : 'No shop calendar ' +
+                            'either') + '; attendance and capacity use it.',
+                        action: {label: 'Calendars', onclick: calendars}});
+                }
+                if (!d.inactive && known.cost_per_hr && !n0(d.cost_per_hr) &&
+                        !n0(d.setup_cost_per_hr) && !n0(d.run_cost_per_hr)) {
+                    out.push({tone: 'warn', title: 'No labor cost',
+                        detail: 'Labor of this employee is costed at $0 ' +
+                            'unless the resource has a rate.', action:
+                            writable ? {label: 'Set pay', onclick:
+                                function () {
+                                    UI.docEdit('Pay and burden', PAY_FIELDS,
+                                        d).then(function (v) {
+                                            page.save(v);
+                                        }, function () {});
+                                }} : null});
+                }
+                return out;
+            },
+            sections: [{title: 'Recent labor', visible: function (d) {
+                return Boolean(d.id) && a.ticket.read;
+            }, note: 'last 90 days, newest first; click to open the work ' +
+                'order', render: function (pane, d) {
+                laborLines(pane, d.labor.slice(0, 25), true, 'employee');
+            }}],
+            cards: [
+                {title: 'Personal', rows: function (d) {
+                    return [['Name', d.employee_name], ['Title', d.title],
+                        ['Address', [d.addr_1, d.addr_2, [d.city, d.state,
+                            d.postal_code].filter(Boolean).join(' '),
+                            d.country, d.addr_etc].filter(Boolean)
+                            .join(', ')],
+                        ['Phone', d.phone], ['Mobile', d.mobile],
+                        ['E-mail', d.email],
+                        ['Hired', d.start_date ? UI.date(d.start_date) : null],
+                        d.end_date ? ['Terminated', UI.date(d.end_date)] :
+                            null];
+                }, fields: knownOnly(known, [
+                    {name: 'employee_name', label: 'Name', type: 'char'},
+                    {name: 'clock_no', label: 'Clock No', type: 'char'},
+                    {name: 'shift_no', label: 'Shift No', type: 'selection',
+                        options: SHIFTS, value: function (d) {
+                            return d.shift_no ? String(d.shift_no) : null;
+                        }},
+                    {name: 'title', label: 'Title', type: 'char'},
+                    {name: 'phone', label: 'Phone', type: 'char'},
+                    {name: 'mobile', label: 'Mobile', type: 'char'},
+                    {name: 'email', label: 'E-mail', type: 'char'},
+                    {name: 'addr_1', label: 'Address', type: 'char'},
+                    {name: 'addr_2', label: 'Address 2', type: 'char'},
+                    {name: 'city', label: 'City', type: 'char'},
+                    {name: 'state', label: 'State', type: 'char'},
+                    {name: 'postal_code', label: 'Postal', type: 'char'},
+                    {name: 'country', label: 'Country', type: 'char'},
+                    {name: 'addr_etc', label: 'Etc.', type: 'char'},
+                    {name: 'start_date', label: 'Hire date', type: 'date'},
+                    {name: 'end_date', label: 'Termination date',
+                        type: 'date'},
+                    {name: 'inactive', label: 'Inactive', type: 'boolean'}]),
+                    editable: function (d) {
+                        return writable && Boolean(d.id);
+                    }},
+                {title: 'Pay and burden', rows: function (d) {
+                    return [['Base cost/hr', money(d.cost_per_hr)],
+                        ['Setup cost/hr', money(d.setup_cost_per_hr)],
+                        ['Run cost/hr', money(d.run_cost_per_hr)],
+                        ['Cost/unit', money(d.cost_per_unit)],
+                        ['Burden setup', [money(d.bur_per_hr_setup) ?
+                            money(d.bur_per_hr_setup) + '/hr' : '',
+                            pct(d.bur_percent_setup) || ''].filter(Boolean)
+                            .join(' + ') || null],
+                        ['Burden run', [money(d.bur_per_hr_run) ?
+                            money(d.bur_per_hr_run) + '/hr' : '',
+                            pct(d.bur_percent_run) || ''].filter(Boolean)
+                            .join(' + ') || null],
+                        ['Burden/unit (run)', money(d.bur_per_unit_run)]];
+                }, fields: PAY_FIELDS, editable: function (d) {
+                    return writable && Boolean(d.id);
+                }},
+                {title: 'Calendar', rows: function (d) {
+                    if (!d.week) {
+                        return [['Calendar', null]];
+                    }
+                    var own = ownCalendar(d);
+                    return [['Calendar', own ? 'Own' : 'Shop calendar']]
+                        .concat(calendarRows(own ? d.week : d.shopWeek))
+                        .concat(d.exceptions.slice(0, 3).map(function (x) {
+                            return ['Exception', UI.date(x.start_date) + '–' +
+                                UI.date(x.end_date) + ' ' + qty(n0(x.shift_1) +
+                                n0(x.shift_2) + n0(x.shift_3)) + ' h' +
+                                (x['reason_code.'] ? ' · ' +
+                                    x['reason_code.'].rec_name : '')];
+                        }));
+                }}],
+            trail: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                var last = d.labor[0];
+                return [
+                    {done: true, text: 'Created', when: (d.create_uid ?
+                        d.create_uid.rec_name + ' ' : '') + (d.create_date ?
+                        UI.date(d.create_date) : '')},
+                    d.write_date ? {done: true, text: 'Last modified', when:
+                        (d.write_uid ? d.write_uid.rec_name + ' ' : '') +
+                        UI.date(d.write_date)} : null,
+                    d.start_date ? {done: true, text: 'Hired', when:
+                        UI.date(d.start_date)} : null,
+                    a.ticket.read ? {done: Boolean(last), text: 'Last labor',
+                        when: last ? UI.date(last.transaction_date) :
+                            'none in 90 days'} : null,
+                    d.end_date ? {done: true, text: 'Terminated', when:
+                        UI.date(d.end_date)} : null,
+                    {text: 'Notes', onclick: function () {
+                        var pane = el('div', {style: {minWidth: '480px'}});
+                        UI.modal('Notes: ' + (d.employee_name || d.clock_no),
+                            pane);
+                        UI.notesTab(pane, 'company.employee', d.id, true);
+                    }}];
+            },
+            keys: {
+                t: {label: 'attendance', run: function (d) {
+                    if (d.id && a.time.read && alive()) {
+                        attendance(d);
+                    }
+                }},
+                c: {label: 'calendars', run: function (d) {
+                    if (d.id && a.week.read && alive()) {
+                        calendars(d);
+                    }
+                }}
+            },
+            classic: function (d) {
+                toClassic(d);
+            }
+        });
+        main.nlSfPage = page;
+        function alive() {
+            /* (and shown: not a hidden tab's page) */
+            return main.nlSfPage === page &&
+                main.classList.contains('dp-main') &&
+                main.offsetParent !== null;
+        }
+        function toClassic(d) {
+            UI.setDocView('employee', 'classic');
+            main.nlSfPage = null;
+            Screens.jsEmployees(main, [d && d.id ? d.id : 0]);
+        }
+        return page;
+    }
+
+    /* The Shop Resources window, modern view */
+    var RES_TEXT = ['name', 'description', 'inactive', 'resource_type',
+        'schedule_method', 'schedule_type', 'min_segment_size',
+        'exclusivity', 'shift_1_capacity', 'shift_2_capacity',
+        'shift_3_capacity', 'special_instructions', 'setup_per_hr',
+        'run_per_hr', 'run_per_unit', 'bur_per_hr_setup', 'bur_percent_setup',
+        'bur_per_oper', 'bur_per_hr_run', 'bur_percent_run',
+        'bur_per_unit_run', 'cost_price', 'cost_method', 'create_date',
+        'write_date'];
+    var RES_M2O = ['category', 'warehouse', 'create_uid', 'write_uid'];
+    var RES_COST_FIELDS = [
+        {name: 'setup_per_hr', label: 'Labor/hour (setup)', type: 'decimal'},
+        {name: 'run_per_hr', label: 'Labor/hour (run)', type: 'decimal'},
+        {name: 'run_per_unit', label: 'Cost/unit (labor or service)',
+            type: 'decimal'},
+        {name: 'bur_per_hr_setup', label: 'Burden/hour (setup)',
+            type: 'decimal'},
+        {name: 'bur_percent_setup', label: 'Burden % of labor (setup)',
+            type: 'decimal'},
+        {name: 'bur_per_oper', label: 'Fixed burden', type: 'decimal'},
+        {name: 'bur_per_hr_run', label: 'Burden/hour (run)',
+            type: 'decimal'},
+        {name: 'bur_percent_run', label: 'Burden % of labor (run)',
+            type: 'decimal'},
+        {name: 'bur_per_unit_run', label: 'Burden/unit (run)',
+            type: 'decimal'}];
+
+    function resourceModern(main, id, a, known) {
+        var page;
+        var writable = a.center.write;
+        function money(v) {
+            return v === null || v === undefined || v === '' ? null :
+                '$' + UI.money(n0(v));
+        }
+        function label(options, v) {
+            return (options.filter(function (o) {
+                return o[0] === v;
+            })[0] || [null, v])[1];
+        }
+
+        function load(rid) {
+            var none = function () {
+                return null;
+            };
+            return Promise.all([
+                readRecord('production.work.center', rid, knownOnly(known,
+                    RES_TEXT), knownOnly(known, RES_M2O)),
+                Rpc.desk('sf_resource_where_used', [rid, {quotes: false}])
+                    .catch(none),
+                a.week.read ? Rpc.searchRead(CAL_WEEK, [['resource', '=',
+                    rid]], CAL_READ).catch(none) : null,
+                a.week.read ? Rpc.searchRead(CAL_WEEK, [['resource', '=',
+                    null], ['employee', '=', null]], CAL_READ).catch(none) :
+                    null
+            ]).then(function (r) {
+                var d = r[0];
+                d.number = d.name;
+                var rows = r[1] ? r[1].rows : [];
+                d.whereUsedOk = Boolean(r[1]);
+                d.masters = rows.filter(function (x) {
+                    return x.type !== 'Work Order';
+                }).length;
+                d.load = rows.filter(function (x) {
+                    return x.type === 'Work Order' && x.op_status !==
+                        'Closed' && x.status !== 'Closed' && x.status !==
+                        'Cancelled';
+                });
+                d.week = r[2];
+                d.shopWeek = r[3];
+                return d;
+            });
+        }
+
+        function save(values, data) {
+            var call;
+            if (!data.id) {
+                if (!values.name) {
+                    return Promise.reject({message: 'A new resource needs ' +
+                        'its ID.'});
+                }
+                call = Rpc.model('production.work.center', 'create', [[
+                    Object.assign({resource_type: 'machine'}, values)]]).then(
+                    function (ids) {
+                        return ids[0];
+                    });
+            } else {
+                var changes = changedValues(data, values);
+                call = (Object.keys(changes).length ? Rpc.model(
+                    'production.work.center', 'write', [[data.id], changes]) :
+                    Promise.resolve()).then(function () {
+                        return data.id;
+                    });
+            }
+            return call.then(function (rid) {
+                return setupResource(rid).catch(function () {
+                    return null;
+                }).then(function () {
+                    return load(rid);
+                });
+            });
+        }
+
+        function newResource() {
+            UI.docEdit('New shop resource', knownOnly(known, [
+                {name: 'name', label: 'Shop resource ID', type: 'char'},
+                {name: 'description', label: 'Description', type: 'char',
+                    wide: true},
+                {name: 'resource_type', label: 'Type', type: 'selection',
+                    options: RESOURCE_TYPES}]), {resource_type: 'machine'})
+                .then(function (v) {
+                    page.save(v);
+                }, function () {});
+        }
+
+        function capacity(d) {
+            return n0(d.shift_1_capacity) + n0(d.shift_2_capacity) +
+                n0(d.shift_3_capacity);
+        }
+
+        var CAPACITY_FIELDS = knownOnly(known, [
+            {name: 'shift_1_capacity', label: 'Shift 1 capacity',
+                type: 'integer'},
+            {name: 'shift_2_capacity', label: 'Shift 2 capacity',
+                type: 'integer'},
+            {name: 'shift_3_capacity', label: 'Shift 3 capacity',
+                type: 'integer'},
+            {name: 'schedule_method', label: 'Schedule method',
+                type: 'selection', options: [['finite', 'Finite'],
+                    ['infinite', 'Infinite']]},
+            {name: 'schedule_type', label: 'Schedule type',
+                type: 'selection', options: [['normal', 'Normal'],
+                    ['discontinuous', 'Discontinuous']]},
+            {name: 'min_segment_size', label: 'Min segment size (h)',
+                type: 'float'},
+            {name: 'exclusivity', label: 'Group exclusivity',
+                type: 'selection', options: [['exclusive', 'Exclusive'],
+                    ['inclusive', 'Inclusive']]}]);
+        page = UI.docPage(main, {
+            title: 'Shop resource',
+            crumbs: ['Shop Floor', 'Shop resources'],
+            model: 'production.work.center', label: 'Shop Resource ID',
+            order: [['name', 'ASC']],
+            openId: id || null,
+            load: load,
+            save: save,
+            values: function () {
+                return {};
+            },
+            blank: a.center.create ? function () {
+                return {id: null, load: [], masters: 0};
+            } : null,
+            head: function (d) {
+                if (!d.id) {
+                    return {title: 'New shop resource', sub:
+                        ['Not saved yet']};
+                }
+                return {
+                    title: d.description || d.name,
+                    chips: [d.name],
+                    sub: [TYPE_LABELS[d.resource_type] || d.resource_type,
+                        d.schedule_method ? label([['finite', 'Finite'],
+                            ['infinite', 'Infinite']], d.schedule_method) +
+                            ' scheduling' : null,
+                        d.category ? 'category ' + d.category.rec_name :
+                            null],
+                    amount: {value: (money(d.run_per_hr) || '$0.00') + '/hr',
+                        label: 'labor (run)' + (n0(d.bur_per_hr_run) ? ' + ' +
+                            money(d.bur_per_hr_run) + '/hr burden' : '')}
+                };
+            },
+            status: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                return [{text: TYPE_LABELS[d.resource_type] ||
+                    d.resource_type || 'Type not set', tone: 'accent'},
+                    d.inactive ? {text: 'Inactive', tone: 'bad'} :
+                        {text: 'Active', tone: 'ok'},
+                    d.week ? (d.week.length ? {text: 'Own calendar'} :
+                        {text: 'Shop calendar'}) : null].filter(Boolean);
+            },
+            actions: function (d) {
+                if (!d.id) {
+                    return a.center.create ? [{label: 'Enter the resource',
+                        primary: true, onclick: newResource}] : [];
+                }
+                return [{label: 'Where used', key: 'w', primary: true,
+                    onclick: function () {
+                        whereUsed({id: d.id, name: d.name});
+                    }}];
+            },
+            more: function (d) {
+                return [
+                    d.id && writable ? {label: 'Reset Operation Costs...',
+                        onclick: function () {
+                            resetCosts({id: d.id, name: d.name});
+                        }} : null,
+                    '-',
+                    {label: 'Classic view', onclick: function () {
+                        toClassic(d);
+                    }}].filter(Boolean);
+            },
+            attention: function (d) {
+                var out = [];
+                if (!d.id) {
+                    out.push({tone: 'info', title: 'Enter the new resource',
+                        detail: 'A shop resource needs its ID.', action:
+                            a.center.create ? {label: 'Enter', onclick:
+                                newResource} : null});
+                    return out;
+                }
+                if (d.inactive && d.load.length) {
+                    out.push({tone: 'bad', title: 'Inactive, but ' +
+                        d.load.length + ' open operation(s) use it',
+                        detail: 'Move those operations to another resource ' +
+                            'or make it active again.', action: writable ?
+                            {label: 'Make active', onclick: function () {
+                                page.save({inactive: false});
+                            }} : null});
+                }
+                if (!d.inactive && d.resource_type !== 'group' &&
+                        known.shift_1_capacity && !capacity(d)) {
+                    out.push({tone: 'warn', title: 'No capacity',
+                        detail: 'No shift has a capacity: finite ' +
+                            'scheduling cannot load it.', action: writable ?
+                            {label: 'Set capacity', onclick: function () {
+                                UI.docEdit('Capacity', CAPACITY_FIELDS, d)
+                                    .then(function (v) {
+                                        page.save(v);
+                                    }, function () {});
+                            }} : null});
+                }
+                if (!d.inactive && d.resource_type !== 'group' &&
+                        known.run_per_hr && !n0(d.setup_per_hr) &&
+                        !n0(d.run_per_hr) && !n0(d.run_per_unit)) {
+                    out.push({tone: 'warn', title: 'No labor rate',
+                        detail: 'Operations on it are estimated at $0 ' +
+                            'labor.', action: writable ? {label: 'Set rates',
+                            onclick: function () {
+                                UI.docEdit('Costs', knownOnly(known,
+                                    RES_COST_FIELDS), d).then(function (v) {
+                                        page.save(v);
+                                    }, function () {});
+                            }} : null});
+                }
+                if (!d.description) {
+                    out.push({tone: 'info', title: 'No description',
+                        detail: 'Operations and the schedule show the ' +
+                            'description.', action: writable ? {label:
+                            'Describe', onclick: function () {
+                                UI.docEdit('Description', [{name:
+                                    'description', label: 'Description',
+                                    type: 'char', wide: true}], d).then(
+                                    function (v) {
+                                        page.save(v);
+                                    }, function () {});
+                            }} : null});
+                }
+                return out;
+            },
+            sections: [{title: 'Current load', visible: function (d) {
+                return Boolean(d.id && d.whereUsedOk);
+            }, note: function (d) {
+                return d.load.length + ' open operation(s) on unclosed ' +
+                    'work orders';
+            }, render: function (pane, d) {
+                var setup = 0;
+                d.load.forEach(function (x) {
+                    setup += n0(x.setup_hours);
+                });
+                UI.docLines(pane, {
+                    items: d.load.slice(0, 40),
+                    kind: function () {
+                        return {icon: 'factory', tone: 'op'};
+                    },
+                    title: function (x) {
+                        return woName(x.document, x.sub) + ' · op ' + x.seq +
+                            (x.description ? ' ' + x.description : '');
+                    },
+                    chips: function (x) {
+                        return [x.part ? UI.shortName('product.product',
+                            x.part) : null, x.status, x.op_status &&
+                            x.op_status !== x.status ? x.op_status : null];
+                    },
+                    right: function (x) {
+                        return [x.run !== null && x.run !== undefined ?
+                            qty(x.run) + ' ' + (x.run_type || '') : '',
+                            x.setup_hours ? qty(x.setup_hours) + ' h setup' :
+                                ''];
+                    },
+                    onclick: function (x) {
+                        UI.openScreen('work-orders/' + x.id);
+                    },
+                    empty: 'No open operations.',
+                    footer: [d.load.length > 40 ? 'first 40 of ' +
+                        d.load.length + ' (W: all)' : '', 'Setup ' +
+                        qty(setup) + ' h']
+                });
+            }}],
+            cards: [
+                {title: 'Resource', rows: function (d) {
+                    return [['ID', d.name], ['Description', d.description],
+                        ['Type', TYPE_LABELS[d.resource_type]],
+                        ['Category', d.category && d.category.rec_name],
+                        ['Warehouse', d.warehouse && d.warehouse.rec_name],
+                        ['Instructions', d.special_instructions ?
+                            String(d.special_instructions).slice(0, 200) :
+                            null],
+                        ['Inactive', d.inactive ? 'Yes' : 'No']];
+                }, fields: knownOnly(known, [
+                    {name: 'description', label: 'Description',
+                        type: 'char'},
+                    {name: 'resource_type', label: 'Type',
+                        type: 'selection', options: RESOURCE_TYPES},
+                    {name: 'category', label: 'Category', type: 'many2one',
+                        model: 'production.work.center.category'},
+                    {name: 'warehouse', label: 'Warehouse', type: 'many2one',
+                        model: 'stock.location', domain: [['type', '=',
+                            'warehouse']]},
+                    {name: 'special_instructions', label:
+                        'Special instructions', type: 'text'},
+                    {name: 'inactive', label: 'Inactive',
+                        type: 'boolean'}]),
+                    editable: function (d) {
+                        return writable && Boolean(d.id);
+                    }},
+                {title: 'Capacity and scheduling', rows: function (d) {
+                    return [['Shift 1', d.shift_1_capacity],
+                        ['Shift 2', d.shift_2_capacity],
+                        ['Shift 3', d.shift_3_capacity],
+                        ['Schedule method', label([['finite', 'Finite'],
+                            ['infinite', 'Infinite']], d.schedule_method)],
+                        ['Schedule type', label([['normal', 'Normal'],
+                            ['discontinuous', 'Discontinuous']],
+                            d.schedule_type)],
+                        ['Min segment', d.min_segment_size ?
+                            qty(d.min_segment_size) + ' h' : null],
+                        ['Group exclusivity', label([['exclusive',
+                            'Exclusive'], ['inclusive', 'Inclusive']],
+                            d.exclusivity)]];
+                }, fields: CAPACITY_FIELDS, editable: function (d) {
+                    return writable && Boolean(d.id);
+                }},
+                {title: 'Calendar', rows: function (d) {
+                    if (!d.week) {
+                        return [['Calendar', null]];
+                    }
+                    var own = d.week.length > 0;
+                    return [['Calendar', own ? 'Own' : 'Shop calendar']]
+                        .concat(calendarRows(own ? d.week : d.shopWeek));
+                }},
+                {title: 'Costs', rows: function (d) {
+                    return [['Labor/hr setup', money(d.setup_per_hr)],
+                        ['Labor/hr run', money(d.run_per_hr)],
+                        ['Cost/unit', money(d.run_per_unit)],
+                        ['Burden/hr setup', money(d.bur_per_hr_setup)],
+                        ['Burden/hr run', money(d.bur_per_hr_run)],
+                        n0(d.bur_per_oper) ? ['Fixed burden',
+                            money(d.bur_per_oper)] : null,
+                        n0(d.bur_per_unit_run) ? ['Burden/unit run',
+                            money(d.bur_per_unit_run)] : null,
+                        ['Cost rate (ERP)', money(d.cost_price) ?
+                            money(d.cost_price) + (d.cost_method ? ' per ' +
+                                d.cost_method : '') : null]];
+                }, fields: knownOnly(known, RES_COST_FIELDS), editable:
+                    function (d) {
+                        return writable && Boolean(d.id);
+                    }}],
+            trail: function (d) {
+                if (!d.id) {
+                    return [];
+                }
+                return [
+                    {done: true, text: 'Created', when: (d.create_uid ?
+                        d.create_uid.rec_name + ' ' : '') + (d.create_date ?
+                        UI.date(d.create_date) : '')},
+                    d.write_date ? {done: true, text: 'Last modified', when:
+                        (d.write_uid ? d.write_uid.rec_name + ' ' : '') +
+                        UI.date(d.write_date)} : null,
+                    d.whereUsedOk ? {done: d.masters > 0, text:
+                        'Used on masters', when: d.masters + ' operation(s)',
+                        onclick: function () {
+                            whereUsed({id: d.id, name: d.name});
+                        }} : null];
+            },
+            keys: {
+                w: {label: 'where used', run: function (d) {
+                    if (d.id && alive()) {
+                        whereUsed({id: d.id, name: d.name});
+                    }
+                }}
+            },
+            classic: function (d) {
+                toClassic(d);
+            }
+        });
+        main.nlSfPage = page;
+        function alive() {
+            /* (and shown: not a hidden tab's page) */
+            return main.nlSfPage === page &&
+                main.classList.contains('dp-main') &&
+                main.offsetParent !== null;
+        }
+        function toClassic(d) {
+            UI.setDocView('resource', 'classic');
+            main.nlSfPage = null;
+            Screens.jsResources(main, d && d.id ? [d.id] : []);
+        }
+        return page;
+    }
+
+    /* Shop Resources: the modern page (default) or Jobshop's classic
+     * window (More > Classic view; its ribbon's New View goes back) */
     Screens.jsResources = function (main, params) {
         style();
-        rights(['production.work.center']).then(function (r) {
-            resourceWindow(main, params, r['production.work.center'].write);
-        });
+        UI.clear(main);
+        main.classList.remove('dp-main');
+        main.nlSfPage = null;
+        var id = params && params[0] ? parseInt(params[0], 10) : null;
+        var modern = UI.docPage && UI.docView('resource') === 'modern';
+        Promise.all([rights(['production.work.center', CAL_WEEK]),
+            modern ? Rpc.model('production.work.center', 'fields_get', [[]])
+                : null]).then(function (r) {
+                if (modern) {
+                    resourceModern(main, id, {center:
+                        r[0]['production.work.center'], week: r[0][CAL_WEEK]},
+                        r[1] || {});
+                } else {
+                    resourceWindow(main, params,
+                        r[0]['production.work.center'].write);
+                }
+            }, failed);
     };
     Screens.resources = Screens.jsResources;
 
@@ -1395,6 +2365,12 @@
          * Weekly Calendars / Calendar Exceptions are the Scheduling
          * window's Tools: planning area) */
         var extra = [
+            {label: 'New View', title: 'The modern shop resource page',
+                onclick: function (record) {
+                    UI.setDocView('resource', 'modern');
+                    Screens.jsResources(main, record && record.id ?
+                        [record.id] : []);
+                }},
             {label: 'Where Used...', onclick: function (record) {
                 whereUsed(record);
             }}];
@@ -3160,8 +4136,26 @@
     Screens.jsEmployees = function (main, params) {
         style();
         if (params && params[0] !== undefined && params[0] !== null) {
-            /* employees/0: Add Employee */
-            employeeWindow(main, parseInt(params[0], 10));
+            /* employees/0: Add Employee; the modern page (default) or
+             * Jobshop's classic window */
+            var eid = parseInt(params[0], 10);
+            UI.clear(main);
+            main.classList.remove('dp-main');
+            main.nlSfPage = null;
+            if (UI.docPage && UI.docView('employee') === 'modern') {
+                Promise.all([rights(['company.employee', CAL_WEEK,
+                    CAL_CHANGE, 'nline.js.employee_time',
+                    'nline.js.labor_ticket']), Rpc.model('company.employee',
+                    'fields_get', [[]])]).then(function (r) {
+                        employeeModern(main, eid, {employee:
+                            r[0]['company.employee'], week: r[0][CAL_WEEK],
+                            change: r[0][CAL_CHANGE], time:
+                            r[0]['nline.js.employee_time'], ticket:
+                            r[0]['nline.js.labor_ticket']}, r[1] || {});
+                    }, failed);
+                return;
+            }
+            employeeWindow(main, eid);
             return;
         }
         var a = {write: false, create: false};
@@ -3556,6 +4550,12 @@
             idLength: 15,
             order: [['clock_no', 'ASC']],
             open: id || null,
+            extra: [{label: 'New View', title: 'The modern employee page',
+                onclick: function (record) {
+                    UI.setDocView('employee', 'modern');
+                    Screens.jsEmployees(main, [record && record.id ?
+                        record.id : 0]);
+                }}],
             defaults: {company: Rpc.context().company},
             /* (a new employee's person is made by the server) */
             beforeSave: function (values) {

@@ -223,6 +223,16 @@ class Desk(metaclass=PoolMeta):
                 'taxes': cls._sale_taxes(sale),
                 'shippers': cls._sale_documents(sale),
                 })
+        # The modern page's tracker: Ordered, Shipped, Invoiced, Paid
+        posted = [i for i in sale.invoices if i.state in {'posted', 'paid'}]
+        result.update({
+                'invoiced_amount': sum((i.total_amount for i in posted),
+                    Decimal(0)),
+                'paid_amount': sum((i.total_amount - (i.amount_to_pay
+                            or Decimal(0)) for i in posted), Decimal(0)),
+                'draft_invoices': [{'id': i.id, 'number': i.number or ''}
+                    for i in sale.invoices if i.state == 'draft'],
+                })
         for name in HEADER_M2O:
             result[name] = _ref(getattr(sale, name))
         for name in ADDRESS_FIELDS:
@@ -508,6 +518,16 @@ class Desk(metaclass=PoolMeta):
             sale = Sale(values['id'])
         else:
             cls._check_credit(values)
+            if values.get('id'):
+                # The lines left out are deleted first: the desk's save
+                # drops them from the order and then deletes them again
+                # ("records that don't exist")
+                SaleLine = pool.get('sale.line')
+                kept = {l.get('id') for l in lines if l.get('id')}
+                removed = [l for l in Sale(values['id']).lines
+                    if l.type == 'line' and l.id not in kept]
+                if removed:
+                    SaleLine.delete(removed)
             core = {k: v for k, v in values.items() if k in {
                     'id', 'party', 'sale_date', 'shipping_date', 'reference',
                     'description', 'payment_term', 'shipment_address'}}
@@ -1374,6 +1394,8 @@ class Desk(metaclass=PoolMeta):
                     'js_status': s.js_status} for s in sales],
             'customer': _ref(shipment.customer),
             'customer_code': shipment.customer.code or '',
+            'credit_status': shipment.customer.credit_status,
+            'sales_hold': any(s.js_hold for s in sales),
             'payment_term_descr': (getattr(sale.payment_term, 'description',
                     None) or sale.payment_term.rec_name)
             if sale and sale.payment_term else '',
